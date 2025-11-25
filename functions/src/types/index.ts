@@ -8,3 +8,4 @@ export * from "./Auth";
 export * from "./JWTClaims";
 export * from "./APIResponse";
 export * from "./AIProvider";
+export * from "./Route";

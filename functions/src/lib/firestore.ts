@@ -247,6 +247,122 @@ export async function checkAndIncrementRateLimit(
   return { limited: newCount > limit, count: newCount };
 }
 
+// ==================== COST TRACKING OPERATIONS ====================
+
+/**
+ * Cost tracking document structure
+ */
+export interface CostTrackingDocument {
+  license_id: string;
+  month: string;
+  openai_tokens_input: number;
+  openai_tokens_output: number;
+  openai_cost_usd: number;
+  gemini_tokens_input: number;
+  gemini_tokens_output: number;
+  gemini_cost_usd: number;
+  claude_tokens_input: number;
+  claude_tokens_output: number;
+  claude_cost_usd: number;
+  total_cost_usd: number;
+}
+
+/**
+ * Updates cost tracking for a license
+ *
+ * @param {string} licenseId - The license ID
+ * @param {string} provider - The provider used (openai, gemini, claude)
+ * @param {number} tokensInput - Input tokens consumed
+ * @param {number} tokensOutput - Output tokens generated
+ * @param {number} costUsd - Cost in USD
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await updateCostTracking(
+ *   "CREATOR-2024-ABCDE-FGHIJ",
+ *   "openai",
+ *   1000,
+ *   500,
+ *   0.0125
+ * );
+ * ```
+ */
+export async function updateCostTracking(
+  licenseId: string,
+  provider: "openai" | "gemini" | "claude",
+  tokensInput: number,
+  tokensOutput: number,
+  costUsd: number
+): Promise<void> {
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const docId = `${licenseId}_${month}`;
+
+  const docRef = db.collection(COLLECTIONS.COST_TRACKING).doc(docId);
+
+  await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(docRef);
+
+    if (!doc.exists) {
+      // Create new document
+      const newData: CostTrackingDocument = {
+        license_id: licenseId,
+        month,
+        openai_tokens_input: 0,
+        openai_tokens_output: 0,
+        openai_cost_usd: 0,
+        gemini_tokens_input: 0,
+        gemini_tokens_output: 0,
+        gemini_cost_usd: 0,
+        claude_tokens_input: 0,
+        claude_tokens_output: 0,
+        claude_cost_usd: 0,
+        total_cost_usd: 0,
+      };
+
+      // Update the specific provider fields
+      newData[`${provider}_tokens_input` as keyof CostTrackingDocument] = tokensInput as never;
+      newData[`${provider}_tokens_output` as keyof CostTrackingDocument] = tokensOutput as never;
+      newData[`${provider}_cost_usd` as keyof CostTrackingDocument] = costUsd as never;
+      newData.total_cost_usd = costUsd;
+
+      transaction.set(docRef, newData);
+    } else {
+      // Update existing document
+      const updateData: Record<string, unknown> = {};
+      updateData[`${provider}_tokens_input`] = FieldValue.increment(tokensInput);
+      updateData[`${provider}_tokens_output`] = FieldValue.increment(tokensOutput);
+      updateData[`${provider}_cost_usd`] = FieldValue.increment(costUsd);
+      updateData.total_cost_usd = FieldValue.increment(costUsd);
+
+      transaction.update(docRef, updateData);
+    }
+  });
+}
+
+/**
+ * Gets the license by site_token
+ *
+ * @param {string} siteToken - The JWT site token
+ * @returns {Promise<License | null>} The license or null
+ */
+export async function getLicenseBySiteToken(
+  siteToken: string
+): Promise<import("../types/License").License | null> {
+  const snapshot = await db
+    .collection(COLLECTIONS.LICENSES)
+    .where("site_token", "==", siteToken)
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) {
+    return null;
+  }
+
+  return snapshot.docs[0].data() as import("../types/License").License;
+}
+
 // ==================== UTILITY FUNCTIONS ====================
 
 /**
