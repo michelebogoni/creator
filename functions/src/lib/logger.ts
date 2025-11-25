@@ -166,6 +166,22 @@ export class Logger {
 export const logger = new Logger();
 
 /**
+ * Creates a new Logger instance (factory function)
+ *
+ * @param {LogContext} context - Initial context
+ * @returns {Logger} New logger instance
+ *
+ * @example
+ * ```typescript
+ * const log = createLogger().child({ job_id: "job_123" });
+ * log.info("Processing job");
+ * ```
+ */
+export function createLogger(context: LogContext = {}): Logger {
+  return new Logger(context);
+}
+
+/**
  * Creates a request-scoped logger
  *
  * @param {string} requestId - Unique request identifier

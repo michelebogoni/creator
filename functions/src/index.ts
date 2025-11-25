@@ -33,5 +33,34 @@ export { validateLicense } from "./api/auth/validateLicense";
 export { routeRequest } from "./api/ai/routeRequest";
 
 // ==================== TASK ENDPOINTS (Milestone 5) ====================
-// export { submitTask } from "./api/tasks/submitTask";
-// export { getTaskStatus } from "./api/tasks/getStatus";
+
+/**
+ * POST /api/tasks/submit
+ *
+ * Submits an async task for background processing.
+ * Returns a job_id that can be used to poll status.
+ *
+ * @see {@link module:api/tasks/submitTask}
+ */
+export { submitTask } from "./api/tasks/submitTask";
+
+/**
+ * GET /api/tasks/status/:job_id
+ *
+ * Retrieves the current status of an async job.
+ *
+ * @see {@link module:api/tasks/getStatus}
+ */
+export { getTaskStatus } from "./api/tasks/getStatus";
+
+// ==================== FIRESTORE TRIGGERS (Milestone 5) ====================
+
+/**
+ * Firestore trigger: job_queue/{jobId}
+ *
+ * Automatically processes jobs when created in job_queue collection.
+ * Handles retry logic and updates job status.
+ *
+ * @see {@link module:triggers/jobQueueTrigger}
+ */
+export { processJobQueue } from "./triggers/jobQueueTrigger";
