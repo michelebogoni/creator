@@ -22,7 +22,15 @@
 export { validateLicense } from "./api/auth/validateLicense";
 
 // ==================== AI ENDPOINTS (Milestone 4) ====================
-// export { routeRequest } from "./api/ai/routeRequest";
+
+/**
+ * POST /api/ai/route-request
+ *
+ * Routes AI generation requests to the optimal provider with fallback.
+ *
+ * @see {@link module:api/ai/routeRequest}
+ */
+export { routeRequest } from "./api/ai/routeRequest";
 
 // ==================== TASK ENDPOINTS (Milestone 5) ====================
 // export { submitTask } from "./api/tasks/submitTask";

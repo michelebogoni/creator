@@ -13,11 +13,6 @@
 export type ProviderName = "openai" | "gemini" | "claude";
 
 /**
- * Task types for AI routing
- */
-export type TaskType = "TEXT_GEN" | "CODE_GEN" | "DESIGN_GEN" | "ECOMMERCE_GEN";
-
-/**
  * Options for AI generation requests
  *
  * @interface GenerateOptions
