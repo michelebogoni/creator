@@ -53,6 +53,18 @@ export { submitTask } from "./api/tasks/submitTask";
  */
 export { getTaskStatus } from "./api/tasks/getStatus";
 
+// ==================== ANALYTICS ENDPOINTS (Milestone 6) ====================
+
+/**
+ * GET /api/analytics
+ *
+ * Returns cost tracking and usage analytics for a license.
+ * Provides dashboard-ready data including totals and breakdowns.
+ *
+ * @see {@link module:api/analytics/getAnalytics}
+ */
+export { getAnalytics } from "./api/analytics/getAnalytics";
+
 // ==================== FIRESTORE TRIGGERS (Milestone 5) ====================
 
 /**
