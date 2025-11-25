@@ -7,3 +7,4 @@ export * from "./License";
 export * from "./Auth";
 export * from "./JWTClaims";
 export * from "./APIResponse";
+export * from "./AIProvider";
