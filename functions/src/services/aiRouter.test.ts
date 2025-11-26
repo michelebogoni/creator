@@ -332,14 +332,14 @@ describe("sanitizePrompt", () => {
   });
 
   it("should remove event handlers", () => {
-    const input = 'Hello <div onclick="evil()">click</div>';
+    const input = "Hello <div onclick=\"evil()\">click</div>";
     const result = sanitizePrompt(input);
 
-    expect(result).toBe('Hello <div data-removed="evil()">click</div>');
+    expect(result).toBe("Hello <div data-removed=\"evil()\">click</div>");
   });
 
   it("should handle multiple malicious elements", () => {
-    const input = '<script>bad()</script><iframe>x</iframe>Clean text<form>y</form>';
+    const input = "<script>bad()</script><iframe>x</iframe>Clean text<form>y</form>";
     const result = sanitizePrompt(input);
 
     expect(result).toBe("Clean text");

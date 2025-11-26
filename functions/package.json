@@ -13,8 +13,11 @@
     "logs": "firebase functions:log",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "lint": "eslint --ext .ts src/",
-    "lint:fix": "eslint --ext .ts src/ --fix"
+    "lint:fix": "eslint --ext .ts src/ --fix",
+    "docs:generate": "typedoc --options typedoc.json",
+    "docs:serve": "npx http-server ../docs/api -p 8080"
   },
   "engines": {
     "node": "18"
@@ -39,8 +42,10 @@
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
     "firebase-functions-test": "^3.2.0",
+    "http-server": "^14.1.1",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.2",
+    "typedoc": "^0.25.13",
     "typescript": "^5.3.3"
   },
   "private": true
