@@ -206,7 +206,7 @@ export const getAnalytics = onRequest(
       analytics.breakdown_by_task = taskBreakdown as Record<TaskType, { requests: number; tokens: number; cost: number }>;
 
       // 7. Build extended analytics if requested
-      let extendedAnalytics: ExtendedAnalytics = { ...analytics };
+      const extendedAnalytics: ExtendedAnalytics = { ...analytics };
 
       // Add provider stats
       if (costDoc) {

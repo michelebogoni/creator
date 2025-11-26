@@ -20,7 +20,7 @@
     "docs:serve": "npx http-server ../docs/api -p 8080"
   },
   "engines": {
-    "node": "18"
+    "node": "20"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
