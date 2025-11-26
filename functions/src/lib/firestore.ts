@@ -337,7 +337,7 @@ export async function updateCostTracking(
       transaction.set(docRef, newData);
     } else {
       // Update existing document
-      const updateData: Record<string, unknown> = {};
+      const updateData: { [key: string]: FirebaseFirestore.FieldValue } = {};
       updateData[`${provider}_tokens_input`] = FieldValue.increment(tokensInput);
       updateData[`${provider}_tokens_output`] = FieldValue.increment(tokensOutput);
       updateData[`${provider}_cost_usd`] = FieldValue.increment(costUsd);
