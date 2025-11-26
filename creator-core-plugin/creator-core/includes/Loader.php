@@ -1,0 +1,370 @@
+<?php
+/**
+ * Plugin Loader
+ *
+ * @package CreatorCore
+ */
+
+namespace CreatorCore;
+
+defined( 'ABSPATH' ) || exit;
+
+use CreatorCore\Admin\Dashboard;
+use CreatorCore\Admin\Settings;
+use CreatorCore\Admin\SetupWizard;
+use CreatorCore\Chat\ChatInterface;
+use CreatorCore\Backup\SnapshotManager;
+use CreatorCore\Permission\CapabilityChecker;
+use CreatorCore\Audit\AuditLogger;
+use CreatorCore\Integrations\ProxyClient;
+use CreatorCore\Integrations\PluginDetector;
+use CreatorCore\API\REST_API;
+
+/**
+ * Class Loader
+ *
+ * Main plugin loader that initializes all components
+ */
+class Loader {
+
+    /**
+     * Dashboard instance
+     *
+     * @var Dashboard
+     */
+    private Dashboard $dashboard;
+
+    /**
+     * Settings instance
+     *
+     * @var Settings
+     */
+    private Settings $settings;
+
+    /**
+     * Setup wizard instance
+     *
+     * @var SetupWizard
+     */
+    private SetupWizard $setup_wizard;
+
+    /**
+     * Chat interface instance
+     *
+     * @var ChatInterface
+     */
+    private ChatInterface $chat_interface;
+
+    /**
+     * Snapshot manager instance
+     *
+     * @var SnapshotManager
+     */
+    private SnapshotManager $snapshot_manager;
+
+    /**
+     * Capability checker instance
+     *
+     * @var CapabilityChecker
+     */
+    private CapabilityChecker $capability_checker;
+
+    /**
+     * Audit logger instance
+     *
+     * @var AuditLogger
+     */
+    private AuditLogger $audit_logger;
+
+    /**
+     * Proxy client instance
+     *
+     * @var ProxyClient
+     */
+    private ProxyClient $proxy_client;
+
+    /**
+     * Plugin detector instance
+     *
+     * @var PluginDetector
+     */
+    private PluginDetector $plugin_detector;
+
+    /**
+     * REST API instance
+     *
+     * @var REST_API
+     */
+    private REST_API $rest_api;
+
+    /**
+     * Run the loader
+     *
+     * @return void
+     */
+    public function run(): void {
+        $this->init_components();
+        $this->register_hooks();
+    }
+
+    /**
+     * Initialize all components
+     *
+     * @return void
+     */
+    private function init_components(): void {
+        // Core services (order matters - dependencies first)
+        $this->audit_logger       = new AuditLogger();
+        $this->capability_checker = new CapabilityChecker();
+        $this->plugin_detector    = new PluginDetector();
+        $this->proxy_client       = new ProxyClient();
+        $this->snapshot_manager   = new SnapshotManager( $this->audit_logger );
+
+        // Admin components
+        $this->dashboard     = new Dashboard( $this->plugin_detector, $this->audit_logger );
+        $this->settings      = new Settings( $this->proxy_client, $this->plugin_detector );
+        $this->setup_wizard  = new SetupWizard( $this->plugin_detector );
+
+        // Chat system
+        $this->chat_interface = new ChatInterface(
+            $this->proxy_client,
+            $this->capability_checker,
+            $this->snapshot_manager,
+            $this->audit_logger
+        );
+
+        // REST API
+        $this->rest_api = new REST_API(
+            $this->chat_interface,
+            $this->capability_checker,
+            $this->audit_logger
+        );
+    }
+
+    /**
+     * Register WordPress hooks
+     *
+     * @return void
+     */
+    private function register_hooks(): void {
+        // Admin menu
+        add_action( 'admin_menu', [ $this, 'register_admin_menu' ] );
+
+        // Admin assets
+        add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
+
+        // REST API
+        add_action( 'rest_api_init', [ $this->rest_api, 'register_routes' ] );
+
+        // Setup wizard redirect on activation
+        add_action( 'admin_init', [ $this->setup_wizard, 'maybe_redirect' ] );
+
+        // Plugin action links
+        add_filter( 'plugin_action_links_' . CREATOR_CORE_BASENAME, [ $this, 'add_action_links' ] );
+
+        // Add custom capabilities on init
+        add_action( 'init', [ $this->capability_checker, 'register_capabilities' ] );
+    }
+
+    /**
+     * Register admin menu
+     *
+     * @return void
+     */
+    public function register_admin_menu(): void {
+        // Main menu
+        add_menu_page(
+            __( 'Creator', 'creator-core' ),
+            __( 'Creator', 'creator-core' ),
+            'manage_options',
+            'creator-dashboard',
+            [ $this->dashboard, 'render' ],
+            'dashicons-superhero-alt',
+            30
+        );
+
+        // Dashboard submenu (same as main)
+        add_submenu_page(
+            'creator-dashboard',
+            __( 'Dashboard', 'creator-core' ),
+            __( 'Dashboard', 'creator-core' ),
+            'manage_options',
+            'creator-dashboard',
+            [ $this->dashboard, 'render' ]
+        );
+
+        // New Chat
+        add_submenu_page(
+            'creator-dashboard',
+            __( 'New Chat', 'creator-core' ),
+            __( 'New Chat', 'creator-core' ),
+            'edit_posts',
+            'creator-chat',
+            [ $this->chat_interface, 'render' ]
+        );
+
+        // Settings
+        add_submenu_page(
+            'creator-dashboard',
+            __( 'Settings', 'creator-core' ),
+            __( 'Settings', 'creator-core' ),
+            'manage_options',
+            'creator-settings',
+            [ $this->settings, 'render' ]
+        );
+
+        // Setup Wizard (hidden from menu)
+        add_submenu_page(
+            null,
+            __( 'Setup Wizard', 'creator-core' ),
+            __( 'Setup Wizard', 'creator-core' ),
+            'manage_options',
+            'creator-setup',
+            [ $this->setup_wizard, 'render' ]
+        );
+    }
+
+    /**
+     * Enqueue admin assets
+     *
+     * @param string $hook Current admin page hook.
+     * @return void
+     */
+    public function enqueue_admin_assets( string $hook ): void {
+        // Only load on Creator pages
+        if ( strpos( $hook, 'creator' ) === false ) {
+            return;
+        }
+
+        // Common styles
+        wp_enqueue_style(
+            'creator-admin-common',
+            CREATOR_CORE_URL . 'assets/css/admin-common.css',
+            [],
+            CREATOR_CORE_VERSION
+        );
+
+        // Page-specific assets
+        if ( strpos( $hook, 'creator-dashboard' ) !== false ) {
+            wp_enqueue_style(
+                'creator-admin-dashboard',
+                CREATOR_CORE_URL . 'assets/css/admin-dashboard.css',
+                [ 'creator-admin-common' ],
+                CREATOR_CORE_VERSION
+            );
+            wp_enqueue_script(
+                'creator-admin-dashboard',
+                CREATOR_CORE_URL . 'assets/js/admin-dashboard.js',
+                [ 'jquery' ],
+                CREATOR_CORE_VERSION,
+                true
+            );
+        }
+
+        if ( strpos( $hook, 'creator-chat' ) !== false ) {
+            wp_enqueue_style(
+                'creator-chat-interface',
+                CREATOR_CORE_URL . 'assets/css/chat-interface.css',
+                [ 'creator-admin-common' ],
+                CREATOR_CORE_VERSION
+            );
+            wp_enqueue_script(
+                'creator-chat-interface',
+                CREATOR_CORE_URL . 'assets/js/chat-interface.js',
+                [ 'jquery', 'wp-util' ],
+                CREATOR_CORE_VERSION,
+                true
+            );
+            wp_enqueue_script(
+                'creator-action-handler',
+                CREATOR_CORE_URL . 'assets/js/action-handler.js',
+                [ 'creator-chat-interface' ],
+                CREATOR_CORE_VERSION,
+                true
+            );
+            wp_localize_script( 'creator-chat-interface', 'creatorChat', [
+                'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+                'restUrl'   => rest_url( 'creator/v1/' ),
+                'nonce'     => wp_create_nonce( 'creator_chat_nonce' ),
+                'restNonce' => wp_create_nonce( 'wp_rest' ),
+                'i18n'      => [
+                    'sending'       => __( 'Sending...', 'creator-core' ),
+                    'error'         => __( 'An error occurred. Please try again.', 'creator-core' ),
+                    'confirmUndo'   => __( 'Are you sure you want to undo this action?', 'creator-core' ),
+                    'undoSuccess'   => __( 'Action undone successfully.', 'creator-core' ),
+                    'processing'    => __( 'Processing...', 'creator-core' ),
+                ],
+            ]);
+        }
+
+        if ( strpos( $hook, 'creator-setup' ) !== false ) {
+            wp_enqueue_style(
+                'creator-setup-wizard',
+                CREATOR_CORE_URL . 'assets/css/setup-wizard.css',
+                [ 'creator-admin-common' ],
+                CREATOR_CORE_VERSION
+            );
+            wp_enqueue_script(
+                'creator-setup-wizard',
+                CREATOR_CORE_URL . 'assets/js/setup-wizard.js',
+                [ 'jquery' ],
+                CREATOR_CORE_VERSION,
+                true
+            );
+            wp_localize_script( 'creator-setup-wizard', 'creatorSetup', [
+                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                'nonce'   => wp_create_nonce( 'creator_setup_nonce' ),
+                'i18n'    => [
+                    'installing' => __( 'Installing...', 'creator-core' ),
+                    'installed'  => __( 'Installed', 'creator-core' ),
+                    'error'      => __( 'Installation failed', 'creator-core' ),
+                    'validating' => __( 'Validating...', 'creator-core' ),
+                    'valid'      => __( 'Valid', 'creator-core' ),
+                    'invalid'    => __( 'Invalid license key', 'creator-core' ),
+                ],
+            ]);
+        }
+
+        if ( strpos( $hook, 'creator-settings' ) !== false ) {
+            wp_enqueue_style(
+                'creator-settings',
+                CREATOR_CORE_URL . 'assets/css/settings.css',
+                [ 'creator-admin-common' ],
+                CREATOR_CORE_VERSION
+            );
+            wp_enqueue_script(
+                'creator-settings',
+                CREATOR_CORE_URL . 'assets/js/settings.js',
+                [ 'jquery' ],
+                CREATOR_CORE_VERSION,
+                true
+            );
+        }
+    }
+
+    /**
+     * Add plugin action links
+     *
+     * @param array $links Existing links.
+     * @return array
+     */
+    public function add_action_links( array $links ): array {
+        $plugin_links = [
+            '<a href="' . admin_url( 'admin.php?page=creator-settings' ) . '">' . __( 'Settings', 'creator-core' ) . '</a>',
+            '<a href="' . admin_url( 'admin.php?page=creator-dashboard' ) . '">' . __( 'Dashboard', 'creator-core' ) . '</a>',
+        ];
+
+        return array_merge( $plugin_links, $links );
+    }
+
+    /**
+     * Get component instance
+     *
+     * @param string $component Component name.
+     * @return object|null
+     */
+    public function get_component( string $component ): ?object {
+        $property = str_replace( '-', '_', $component );
+        return $this->$property ?? null;
+    }
+}

@@ -1,0 +1,146 @@
+<?php
+/**
+ * Plugin Name: Creator Core
+ * Plugin URI: https://github.com/michelebogoni/creator-core-plugin
+ * Description: AI-powered WordPress development assistant - Create pages, posts, custom fields via natural conversation
+ * Version: 1.0.0
+ * Requires at least: 5.8
+ * Requires PHP: 7.4
+ * Author: Michele Bogoni
+ * Author URI: https://aloudmarketing.com
+ * License: GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: creator-core
+ * Domain Path: /languages
+ *
+ * @package CreatorCore
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+// Plugin constants
+define( 'CREATOR_CORE_VERSION', '1.0.0' );
+define( 'CREATOR_CORE_PATH', plugin_dir_path( __FILE__ ) );
+define( 'CREATOR_CORE_URL', plugin_dir_url( __FILE__ ) );
+define( 'CREATOR_CORE_BASENAME', plugin_basename( __FILE__ ) );
+define( 'CREATOR_CORE_FILE', __FILE__ );
+
+// Proxy configuration
+define( 'CREATOR_PROXY_URL', 'https://creator-ai-proxy.firebaseapp.com' );
+
+// Mock mode for development/testing (set to false in production)
+define( 'CREATOR_MOCK_MODE', true );
+
+// Debug mode
+define( 'CREATOR_DEBUG', defined( 'WP_DEBUG' ) && WP_DEBUG );
+
+// Minimum requirements
+define( 'CREATOR_MIN_PHP_VERSION', '7.4' );
+define( 'CREATOR_MIN_WP_VERSION', '5.8' );
+
+/**
+ * Check minimum requirements before loading the plugin
+ *
+ * @return bool
+ */
+function creator_core_check_requirements(): bool {
+    $errors = [];
+
+    // Check PHP version
+    if ( version_compare( PHP_VERSION, CREATOR_MIN_PHP_VERSION, '<' ) ) {
+        $errors[] = sprintf(
+            /* translators: 1: Required PHP version, 2: Current PHP version */
+            __( 'Creator Core requires PHP %1$s or higher. You are running PHP %2$s.', 'creator-core' ),
+            CREATOR_MIN_PHP_VERSION,
+            PHP_VERSION
+        );
+    }
+
+    // Check WordPress version
+    global $wp_version;
+    if ( version_compare( $wp_version, CREATOR_MIN_WP_VERSION, '<' ) ) {
+        $errors[] = sprintf(
+            /* translators: 1: Required WordPress version, 2: Current WordPress version */
+            __( 'Creator Core requires WordPress %1$s or higher. You are running WordPress %2$s.', 'creator-core' ),
+            CREATOR_MIN_WP_VERSION,
+            $wp_version
+        );
+    }
+
+    if ( ! empty( $errors ) ) {
+        add_action( 'admin_notices', function() use ( $errors ) {
+            foreach ( $errors as $error ) {
+                printf(
+                    '<div class="notice notice-error"><p><strong>Creator Core:</strong> %s</p></div>',
+                    esc_html( $error )
+                );
+            }
+        });
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Initialize the plugin
+ */
+function creator_core_init(): void {
+    // Check requirements
+    if ( ! creator_core_check_requirements() ) {
+        return;
+    }
+
+    // Load text domain
+    load_plugin_textdomain( 'creator-core', false, dirname( CREATOR_CORE_BASENAME ) . '/languages' );
+
+    // Load autoloader
+    require_once CREATOR_CORE_PATH . 'includes/Autoloader.php';
+    \CreatorCore\Autoloader::register();
+
+    // Initialize the plugin
+    require_once CREATOR_CORE_PATH . 'includes/Loader.php';
+    $loader = new \CreatorCore\Loader();
+    $loader->run();
+}
+add_action( 'plugins_loaded', 'creator_core_init' );
+
+/**
+ * Plugin activation hook
+ */
+function creator_core_activate(): void {
+    // Check requirements on activation
+    if ( ! creator_core_check_requirements() ) {
+        deactivate_plugins( CREATOR_CORE_BASENAME );
+        wp_die(
+            esc_html__( 'Creator Core cannot be activated. Please check system requirements.', 'creator-core' ),
+            esc_html__( 'Plugin Activation Error', 'creator-core' ),
+            [ 'back_link' => true ]
+        );
+    }
+
+    // Load autoloader for activation
+    require_once CREATOR_CORE_PATH . 'includes/Autoloader.php';
+    \CreatorCore\Autoloader::register();
+
+    // Run activation tasks
+    require_once CREATOR_CORE_PATH . 'includes/Activator.php';
+    \CreatorCore\Activator::activate();
+}
+register_activation_hook( __FILE__, 'creator_core_activate' );
+
+/**
+ * Plugin deactivation hook
+ */
+function creator_core_deactivate(): void {
+    require_once CREATOR_CORE_PATH . 'includes/Autoloader.php';
+    \CreatorCore\Autoloader::register();
+
+    require_once CREATOR_CORE_PATH . 'includes/Deactivator.php';
+    \CreatorCore\Deactivator::deactivate();
+}
+register_deactivation_hook( __FILE__, 'creator_core_deactivate' );
+
+/**
+ * Plugin uninstall hook is handled in uninstall.php
+ */
