@@ -1,0 +1,21 @@
+# Creator - Code Owners
+# Each line is a file pattern followed by one or more owners.
+
+# Default owner for everything
+* @michelebogoni
+
+# Firebase Functions
+/functions/ @michelebogoni
+
+# WordPress Plugin
+/packages/creator-core-plugin/ @michelebogoni
+
+# CI/CD Workflows
+/.github/workflows/ @michelebogoni
+
+# Documentation
+/docs/ @michelebogoni
+
+# Configuration files
+firebase.json @michelebogoni
+.firebaserc @michelebogoni
