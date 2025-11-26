@@ -154,6 +154,15 @@ class ActionExecutor {
                 $operations
             );
 
+            // Handle snapshot creation failure
+            if ( is_wp_error( $snapshot_id ) ) {
+                $this->logger->warning( 'snapshot_creation_failed', [
+                    'error' => $snapshot_id->get_error_message(),
+                ]);
+                // Continue with operation completion even if snapshot fails
+                $snapshot_id = null;
+            }
+
             // Complete operation
             $this->tracker->complete_operation( $snapshot_id, $result['data'] ?? [] );
 

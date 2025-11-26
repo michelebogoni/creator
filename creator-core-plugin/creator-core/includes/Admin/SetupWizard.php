@@ -65,6 +65,28 @@ class SetupWizard {
     }
 
     /**
+     * Recursively sanitize an array of input data
+     *
+     * @param mixed $input Input data to sanitize.
+     * @return mixed Sanitized data.
+     */
+    private function sanitize_array( $input ) {
+        if ( is_array( $input ) ) {
+            return array_map( [ $this, 'sanitize_array' ], $input );
+        }
+        if ( is_string( $input ) ) {
+            return sanitize_text_field( $input );
+        }
+        if ( is_int( $input ) ) {
+            return absint( $input );
+        }
+        if ( is_bool( $input ) ) {
+            return (bool) $input;
+        }
+        return $input;
+    }
+
+    /**
      * Maybe redirect to setup wizard
      *
      * @return void
@@ -252,7 +274,7 @@ class SetupWizard {
         }
 
         $step = isset( $_POST['step'] ) ? sanitize_key( $_POST['step'] ) : '';
-        $data = isset( $_POST['data'] ) ? $_POST['data'] : [];
+        $data = isset( $_POST['data'] ) ? $this->sanitize_array( wp_unslash( $_POST['data'] ) ) : [];
 
         switch ( $step ) {
             case 'backup':

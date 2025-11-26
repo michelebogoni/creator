@@ -54,21 +54,42 @@ class SnapshotManager {
      * @param int   $message_id Message ID.
      * @param int   $action_id  Action ID.
      * @param array $operations Operations to snapshot.
-     * @return int|false Snapshot ID or false on failure.
+     * @return int|false|\WP_Error Snapshot ID, false on failure, or WP_Error if directory not writable.
      */
     public function create_snapshot( int $chat_id, int $message_id, int $action_id, array $operations ) {
         global $wpdb;
 
+        // Sanitize IDs
+        $chat_id    = absint( $chat_id );
+        $message_id = absint( $message_id );
+        $action_id  = absint( $action_id );
+
         // Generate storage file path
         $date_folder = gmdate( 'Y-m-d' );
-        $folder_path = $this->backup_path . '/' . $date_folder . '/chat_' . $chat_id;
+        $folder_path = wp_normalize_path( $this->backup_path . '/' . $date_folder . '/chat_' . $chat_id );
 
         if ( ! file_exists( $folder_path ) ) {
             wp_mkdir_p( $folder_path );
         }
 
-        $filename     = 'snapshot_msg_' . $message_id . '_' . time() . '.json';
-        $storage_file = $folder_path . '/' . $filename;
+        // Verify directory is writable
+        if ( ! is_writable( $folder_path ) ) {
+            $this->logger->failure( 'snapshot_directory_not_writable', [
+                'folder_path' => $folder_path,
+            ]);
+            return new \WP_Error(
+                'backup_directory_not_writable',
+                sprintf(
+                    /* translators: %s: Directory path */
+                    __( 'Backup directory is not writable: %s', 'creator-core' ),
+                    $folder_path
+                ),
+                [ 'status' => 500 ]
+            );
+        }
+
+        $filename     = 'snapshot_msg_' . absint( $message_id ) . '_' . time() . '.json';
+        $storage_file = wp_normalize_path( $folder_path . '/' . $filename );
 
         // Prepare snapshot data
         $snapshot_data = [
