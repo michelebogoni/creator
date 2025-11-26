@@ -370,6 +370,227 @@ export async function getLicenseBySiteToken(
   return snapshot.docs[0].data() as import("../types/License").License;
 }
 
+/**
+ * Gets cost tracking document for a license and period
+ *
+ * @param {string} licenseId - The license ID
+ * @param {string} month - Month in YYYY-MM format
+ * @returns {Promise<CostTrackingDocument | null>} Cost tracking data or null
+ *
+ * @example
+ * ```typescript
+ * const costs = await getCostTracking("CREATOR-2024-ABCDE", "2025-11");
+ * if (costs) {
+ *   console.log(costs.total_cost_usd);
+ * }
+ * ```
+ */
+export async function getCostTracking(
+  licenseId: string,
+  month: string
+): Promise<CostTrackingDocument | null> {
+  const docId = `${licenseId}_${month}`;
+  const docRef = db.collection(COLLECTIONS.COST_TRACKING).doc(docId);
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    return null;
+  }
+
+  return doc.data() as CostTrackingDocument;
+}
+
+/**
+ * Gets cost tracking documents for multiple periods
+ *
+ * @param {string} licenseId - The license ID
+ * @param {string[]} months - Array of months in YYYY-MM format
+ * @returns {Promise<CostTrackingDocument[]>} Array of cost tracking documents
+ *
+ * @example
+ * ```typescript
+ * const history = await getCostTrackingHistory("CREATOR-2024-ABCDE", ["2025-09", "2025-10", "2025-11"]);
+ * ```
+ */
+export async function getCostTrackingHistory(
+  licenseId: string,
+  months: string[]
+): Promise<CostTrackingDocument[]> {
+  const docIds = months.map((month) => `${licenseId}_${month}`);
+  const docs: CostTrackingDocument[] = [];
+
+  // Firestore allows up to 10 document IDs in a single get
+  const chunks: string[][] = [];
+  for (let i = 0; i < docIds.length; i += 10) {
+    chunks.push(docIds.slice(i, i + 10));
+  }
+
+  for (const chunk of chunks) {
+    const refs = chunk.map((id) =>
+      db.collection(COLLECTIONS.COST_TRACKING).doc(id)
+    );
+    const snapshots = await db.getAll(...refs);
+
+    for (const snap of snapshots) {
+      if (snap.exists) {
+        docs.push(snap.data() as CostTrackingDocument);
+      }
+    }
+  }
+
+  return docs;
+}
+
+/**
+ * Gets all cost tracking documents for a license
+ *
+ * @param {string} licenseId - The license ID
+ * @param {number} limit - Maximum number of documents to return
+ * @returns {Promise<CostTrackingDocument[]>} Array of cost tracking documents (newest first)
+ */
+export async function getAllCostTrackingForLicense(
+  licenseId: string,
+  limit: number = 12
+): Promise<CostTrackingDocument[]> {
+  const snapshot = await db
+    .collection(COLLECTIONS.COST_TRACKING)
+    .where("license_id", "==", licenseId)
+    .orderBy("month", "desc")
+    .limit(limit)
+    .get();
+
+  return snapshot.docs.map((doc) => doc.data() as CostTrackingDocument);
+}
+
+/**
+ * Gets request counts by provider for a license and period
+ *
+ * @param {string} licenseId - The license ID
+ * @param {string} startDate - Start date in ISO format
+ * @param {string} endDate - End date in ISO format
+ * @returns {Promise<Record<"openai" | "gemini" | "claude", number>>} Request counts per provider
+ *
+ * @example
+ * ```typescript
+ * const counts = await getRequestCountsByProvider(
+ *   "CREATOR-2024-ABCDE",
+ *   "2025-11-01T00:00:00Z",
+ *   "2025-11-30T23:59:59Z"
+ * );
+ * console.log(counts.openai); // Number of OpenAI requests
+ * ```
+ */
+export async function getRequestCountsByProvider(
+  licenseId: string,
+  startDate: string,
+  endDate: string
+): Promise<Record<"openai" | "gemini" | "claude", number>> {
+  const startTimestamp = Timestamp.fromDate(new Date(startDate));
+  const endTimestamp = Timestamp.fromDate(new Date(endDate));
+
+  const snapshot = await db
+    .collection(COLLECTIONS.AUDIT_LOGS)
+    .where("license_id", "==", licenseId)
+    .where("request_type", "==", "ai_request")
+    .where("status", "==", "success")
+    .where("created_at", ">=", startTimestamp)
+    .where("created_at", "<=", endTimestamp)
+    .get();
+
+  const counts: Record<"openai" | "gemini" | "claude", number> = {
+    openai: 0,
+    gemini: 0,
+    claude: 0,
+  };
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data() as AuditLogEntry;
+    if (data.provider_used && data.provider_used in counts) {
+      counts[data.provider_used]++;
+    }
+  }
+
+  return counts;
+}
+
+/**
+ * Gets task type breakdown for analytics
+ *
+ * @param {string} licenseId - The license ID
+ * @param {string} startDate - Start date in ISO format
+ * @param {string} endDate - End date in ISO format
+ * @returns {Promise<Record<string, { requests: number; tokens: number; cost: number }>>} Task breakdown
+ */
+export async function getTaskTypeBreakdown(
+  licenseId: string,
+  startDate: string,
+  endDate: string
+): Promise<Record<string, { requests: number; tokens: number; cost: number }>> {
+  const startTimestamp = Timestamp.fromDate(new Date(startDate));
+  const endTimestamp = Timestamp.fromDate(new Date(endDate));
+
+  // Query audit logs for the period
+  const snapshot = await db
+    .collection(COLLECTIONS.AUDIT_LOGS)
+    .where("license_id", "==", licenseId)
+    .where("status", "==", "success")
+    .where("created_at", ">=", startTimestamp)
+    .where("created_at", "<=", endTimestamp)
+    .get();
+
+  const breakdown: Record<string, { requests: number; tokens: number; cost: number }> = {
+    TEXT_GEN: { requests: 0, tokens: 0, cost: 0 },
+    CODE_GEN: { requests: 0, tokens: 0, cost: 0 },
+    DESIGN_GEN: { requests: 0, tokens: 0, cost: 0 },
+    ECOMMERCE_GEN: { requests: 0, tokens: 0, cost: 0 },
+  };
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data() as AuditLogEntry;
+    // Note: We would need to add task_type to audit logs to get accurate breakdown
+    // For now, categorize all ai_request as TEXT_GEN
+    if (data.request_type === "ai_request") {
+      const totalTokens = (data.tokens_input || 0) + (data.tokens_output || 0);
+      const cost = data.cost_usd || 0;
+
+      // Default to TEXT_GEN - this would need task_type field in audit_logs
+      breakdown.TEXT_GEN.requests++;
+      breakdown.TEXT_GEN.tokens += totalTokens;
+      breakdown.TEXT_GEN.cost += cost;
+    }
+  }
+
+  return breakdown;
+}
+
+/**
+ * Gets the total request count for a license in a period
+ *
+ * @param {string} licenseId - The license ID
+ * @param {string} startDate - Start date in ISO format
+ * @param {string} endDate - End date in ISO format
+ * @returns {Promise<number>} Total request count
+ */
+export async function getTotalRequestCount(
+  licenseId: string,
+  startDate: string,
+  endDate: string
+): Promise<number> {
+  const startTimestamp = Timestamp.fromDate(new Date(startDate));
+  const endTimestamp = Timestamp.fromDate(new Date(endDate));
+
+  const snapshot = await db
+    .collection(COLLECTIONS.AUDIT_LOGS)
+    .where("license_id", "==", licenseId)
+    .where("request_type", "==", "ai_request")
+    .where("status", "==", "success")
+    .where("created_at", ">=", startTimestamp)
+    .where("created_at", "<=", endTimestamp)
+    .get();
+
+  return snapshot.size;
+}
+
 // ==================== UTILITY FUNCTIONS ====================
 
 /**
