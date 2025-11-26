@@ -1,0 +1,118 @@
+name: WordPress Plugin - Lint & Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/creator-core-plugin/**'
+      - '.github/workflows/test-plugin.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/creator-core-plugin/**'
+      - '.github/workflows/test-plugin.yml'
+
+env:
+  PHP_VERSION: '8.1'
+  WP_VERSION: 'latest'
+
+jobs:
+  lint:
+    name: PHP Lint & Code Standards
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, intl, mysqli
+          tools: composer, phpcs, phpstan
+          coverage: none
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        working-directory: packages/creator-core-plugin/creator-core
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        working-directory: packages/creator-core-plugin/creator-core
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run PHP CodeSniffer
+        working-directory: packages/creator-core-plugin/creator-core
+        run: composer run-script phpcs --no-interaction || true
+        continue-on-error: true
+
+  test:
+    name: PHPUnit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, intl, mysqli
+          tools: composer, phpunit
+          coverage: xdebug
+
+      - name: Install dependencies
+        working-directory: packages/creator-core-plugin/creator-core
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run PHPUnit tests
+        working-directory: packages/creator-core-plugin/creator-core
+        run: vendor/bin/phpunit --configuration phpunit.xml --coverage-text
+        env:
+          DB_HOST: 127.0.0.1
+          DB_NAME: wordpress_test
+          DB_USER: root
+          DB_PASSWORD: root
+
+  security:
+    name: Security Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: composer
+
+      - name: Security audit
+        working-directory: packages/creator-core-plugin/creator-core
+        run: composer audit --no-interaction || true
+        continue-on-error: true

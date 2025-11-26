@@ -1,10 +1,20 @@
-name: Deploy to Firebase
+name: Firebase Functions - Lint, Test & Deploy
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/firebase-deploy.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/firebase-deploy.yml'
 
 env:
   NODE_VERSION: '20'
