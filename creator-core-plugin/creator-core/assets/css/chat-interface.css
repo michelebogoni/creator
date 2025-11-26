@@ -450,3 +450,77 @@
     padding: 12px 16px;
     border-top: 1px solid var(--creator-gray-100);
 }
+
+/* Responsive Styles */
+@media (max-width: 782px) {
+    .creator-chat-container {
+        max-width: 100%;
+        height: calc(100vh - 46px);
+    }
+
+    .creator-chat-header {
+        padding: 12px 16px;
+    }
+
+    .creator-chat-title {
+        font-size: 16px;
+    }
+
+    .creator-message {
+        max-width: 95%;
+    }
+
+    .creator-chat-messages {
+        padding: 16px;
+    }
+
+    .creator-chat-input-container {
+        padding: 12px 16px;
+    }
+
+    .creator-welcome-message {
+        padding: 40px 16px;
+    }
+
+    .creator-welcome-icon {
+        width: 60px;
+        height: 60px;
+    }
+
+    .creator-welcome-icon .dashicons {
+        font-size: 30px;
+        width: 30px;
+        height: 30px;
+    }
+
+    .creator-welcome-message h2 {
+        font-size: 20px;
+    }
+
+    .creator-suggestions {
+        gap: 8px;
+    }
+
+    .creator-suggestion {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 480px) {
+    .creator-chat-header-right .creator-btn span:not(.dashicons) {
+        display: none;
+    }
+
+    .creator-back-btn,
+    .creator-header-btn {
+        width: 32px;
+        height: 32px;
+    }
+
+    .creator-action-card {
+        margin-left: -16px;
+        margin-right: -16px;
+        border-radius: 0;
+    }
+}

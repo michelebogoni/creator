@@ -148,3 +148,64 @@
     background: var(--creator-primary-dark);
     border-color: var(--creator-primary-dark);
 }
+
+/* Responsive Styles */
+@media (max-width: 782px) {
+    .creator-settings {
+        max-width: 100%;
+        margin: 10px;
+    }
+
+    .creator-tabs-nav {
+        padding: 0 10px;
+    }
+
+    .creator-tab {
+        padding: 12px 14px;
+        font-size: 13px;
+    }
+
+    .creator-tab-content {
+        padding: 16px;
+    }
+
+    .creator-settings .form-table th {
+        display: block;
+        width: 100%;
+        padding: 16px 0 4px 0;
+    }
+
+    .creator-settings .form-table td {
+        display: block;
+        padding: 4px 0 16px 0;
+    }
+
+    .creator-settings .form-table input[type="text"],
+    .creator-settings .form-table input[type="url"],
+    .creator-settings .form-table select {
+        width: 100%;
+        max-width: none;
+    }
+
+    #validate-license,
+    #clear-cache,
+    #cleanup-backups {
+        display: block;
+        margin: 10px 0 0 0;
+    }
+
+    .creator-settings .submit {
+        padding: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .creator-tab {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+
+    .creator-settings .form-table .small-text {
+        width: 100%;
+    }
+}
