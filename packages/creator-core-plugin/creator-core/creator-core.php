@@ -130,48 +130,30 @@ function creator_core_activate(): void {
 register_activation_hook( __FILE__, 'creator_core_activate' );
 
 /**
- * Check if we can redirect after activation
- *
- * @return bool
- */
-function creator_core_can_redirect_on_activation(): bool {
-    // Don't redirect on AJAX
-    if ( wp_doing_ajax() ) {
-        return false;
-    }
-
-    // Don't redirect during bulk activation
-    if (
-        ( isset( $_REQUEST['action'] ) && 'activate-selected' === $_REQUEST['action'] ) ||
-        ( isset( $_GET['activate-multi'] ) )
-    ) {
-        return false;
-    }
-
-    // Don't redirect if setup already completed
-    if ( get_option( 'creator_setup_completed' ) ) {
-        return false;
-    }
-
-    return true;
-}
-
-/**
  * Redirect to setup wizard after plugin activation
+ * Follows official WordPress documentation pattern
  *
- * @see https://dlxplugins.com/tutorials/how-to-redirect-your-plugin-after-activation-the-right-way/
+ * @see https://developer.wordpress.org/reference/functions/register_activation_hook/
  */
 function creator_core_activation_redirect() {
-    if ( creator_core_can_redirect_on_activation() && is_admin() ) {
-        // Check if option matches our plugin file
-        if ( CREATOR_CORE_FILE === get_option( 'creator_activation_redirect' ) ) {
-            // Delete option so no more redirects
-            delete_option( 'creator_activation_redirect' );
+    // Check if redirect flag is set
+    if ( is_admin() && 'yes' === get_option( 'creator_do_activation_redirect' ) ) {
+        // Delete option immediately to prevent future redirects
+        delete_option( 'creator_do_activation_redirect' );
 
-            // Redirect to setup wizard
-            wp_safe_redirect( esc_url( admin_url( 'admin.php?page=creator-setup' ) ) );
-            exit;
+        // Don't redirect during bulk activation
+        if ( isset( $_GET['activate-multi'] ) ) {
+            return;
         }
+
+        // Don't redirect if setup already completed
+        if ( get_option( 'creator_setup_completed' ) ) {
+            return;
+        }
+
+        // Redirect to setup wizard
+        wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
+        exit;
     }
 }
 add_action( 'admin_init', 'creator_core_activation_redirect' );

@@ -279,24 +279,16 @@ class Activator {
 
     /**
      * Set activation redirect flag
-     * Saves plugin file path for redirect check
+     * Uses simple string value as per WordPress official documentation
      *
-     * @see https://dlxplugins.com/tutorials/how-to-redirect-your-plugin-after-activation-the-right-way/
+     * @see https://developer.wordpress.org/reference/functions/register_activation_hook/
      * @return void
      */
     private static function set_activation_redirect(): void {
-        // Don't redirect during bulk activation
-        if (
-            ( isset( $_REQUEST['action'] ) && 'activate-selected' === $_REQUEST['action'] ) &&
-            ( isset( $_POST['checked'] ) && count( $_POST['checked'] ) > 1 )
-        ) {
-            return;
-        }
-
         // Only redirect if not already completed setup
         if ( ! get_option( 'creator_setup_completed' ) ) {
-            // Save plugin file path for redirect check
-            add_option( 'creator_activation_redirect', CREATOR_CORE_FILE );
+            // Use update_option to ensure value is always written (add_option won't overwrite)
+            update_option( 'creator_do_activation_redirect', 'yes' );
         }
     }
 }
