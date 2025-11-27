@@ -88,6 +88,8 @@ class SetupWizard {
 
     /**
      * Maybe redirect to setup wizard
+     * Only handles redirect when user tries to access Creator pages without completing setup
+     * Activation redirect is handled separately in creator-core.php
      *
      * @return void
      */
@@ -97,25 +99,9 @@ class SetupWizard {
             return;
         }
 
-        // Don't redirect during bulk activation
-        if ( isset( $_GET['activate-multi'] ) ) {
-            return;
-        }
-
         // Don't redirect if already on setup page (allow navigation between steps)
         if ( isset( $_GET['page'] ) && $_GET['page'] === 'creator-setup' ) {
             return;
-        }
-
-        // Check for activation redirect option (more reliable than transient)
-        // This triggers redirect from ANY page after plugin activation
-        if ( get_option( 'creator_activation_redirect' ) ) {
-            delete_option( 'creator_activation_redirect' );
-
-            if ( ! get_option( 'creator_setup_completed' ) && current_user_can( 'manage_options' ) ) {
-                wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
-                exit;
-            }
         }
 
         // Force redirect to setup if not completed and user tries to access other Creator pages
