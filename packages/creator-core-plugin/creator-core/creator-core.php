@@ -130,34 +130,35 @@ function creator_core_activate(): void {
 register_activation_hook( __FILE__, 'creator_core_activate' );
 
 /**
- * Redirect to setup wizard immediately after plugin activation
+ * Redirect to setup wizard after plugin activation
+ * Uses the recommended WordPress pattern with user ID check
  *
- * @param string $plugin The plugin that was activated.
+ * @see https://wearnhardt.com/2020/03/redirecting-after-plugin-activation/
  */
-function creator_core_activation_redirect( string $plugin ): void {
-    // Only redirect for our plugin
-    if ( $plugin !== CREATOR_CORE_BASENAME ) {
+function creator_core_activation_redirect() {
+    // Don't redirect on AJAX
+    if ( wp_doing_ajax() ) {
         return;
     }
 
-    // Don't redirect during bulk activation
-    if ( isset( $_GET['activate-multi'] ) || isset( $_REQUEST['activate-multi'] ) ) {
-        return;
+    // Check if we should redirect (option contains user ID who activated)
+    $redirect_user_id = get_option( 'creator_activation_redirect', false );
+
+    if ( $redirect_user_id && intval( $redirect_user_id ) === wp_get_current_user()->ID ) {
+        // Delete the option so we don't redirect again
+        delete_option( 'creator_activation_redirect' );
+
+        // Don't redirect if setup already completed
+        if ( get_option( 'creator_setup_completed' ) ) {
+            return;
+        }
+
+        // Redirect to setup wizard
+        wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
+        exit;
     }
-
-    // Don't redirect if setup already completed
-    if ( get_option( 'creator_setup_completed' ) ) {
-        return;
-    }
-
-    // Clear the option flag (if set)
-    delete_option( 'creator_activation_redirect' );
-
-    // Redirect to setup wizard
-    wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
-    exit;
 }
-add_action( 'activated_plugin', 'creator_core_activation_redirect' );
+add_action( 'admin_init', 'creator_core_activation_redirect', 1 );
 
 /**
  * Plugin deactivation hook

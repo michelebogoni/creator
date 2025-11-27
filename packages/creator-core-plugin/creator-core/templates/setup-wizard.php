@@ -201,10 +201,10 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                 <button type="button" id="skip-setup-btn" class="creator-btn creator-btn-link">
                     <?php esc_html_e( 'Skip Setup', 'creator-core' ); ?>
                 </button>
-                <button type="button" id="next-step-btn" class="creator-btn creator-btn-primary">
+                <a href="<?php echo esc_url( $setup_wizard->get_next_step_url( $data['current_step'] ) ); ?>" id="next-step-btn" class="creator-btn creator-btn-primary">
                     <?php esc_html_e( 'Continue', 'creator-core' ); ?>
                     <span class="dashicons dashicons-arrow-right-alt2"></span>
-                </button>
+                </a>
             </div>
         <?php endif; ?>
     </div>

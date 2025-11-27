@@ -279,14 +279,24 @@ class Activator {
 
     /**
      * Set activation redirect flag
+     * Saves user ID to ensure only the activating user is redirected
      *
+     * @see https://wearnhardt.com/2020/03/redirecting-after-plugin-activation/
      * @return void
      */
     private static function set_activation_redirect(): void {
+        // Don't redirect during bulk activation
+        if (
+            ( isset( $_REQUEST['action'] ) && 'activate-selected' === $_REQUEST['action'] ) &&
+            ( isset( $_POST['checked'] ) && count( $_POST['checked'] ) > 1 )
+        ) {
+            return;
+        }
+
         // Only redirect if not already completed setup
         if ( ! get_option( 'creator_setup_completed' ) ) {
-            // Use option instead of transient for more reliable redirect
-            update_option( 'creator_activation_redirect', true );
+            // Save user ID for redirect check
+            add_option( 'creator_activation_redirect', wp_get_current_user()->ID );
         }
     }
 }
