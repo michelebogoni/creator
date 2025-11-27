@@ -279,9 +279,9 @@ class Activator {
 
     /**
      * Set activation redirect flag
-     * Saves user ID to ensure only the activating user is redirected
+     * Saves plugin file path for redirect check
      *
-     * @see https://wearnhardt.com/2020/03/redirecting-after-plugin-activation/
+     * @see https://dlxplugins.com/tutorials/how-to-redirect-your-plugin-after-activation-the-right-way/
      * @return void
      */
     private static function set_activation_redirect(): void {
@@ -295,8 +295,8 @@ class Activator {
 
         // Only redirect if not already completed setup
         if ( ! get_option( 'creator_setup_completed' ) ) {
-            // Save user ID for redirect check
-            add_option( 'creator_activation_redirect', wp_get_current_user()->ID );
+            // Save plugin file path for redirect check
+            add_option( 'creator_activation_redirect', CREATOR_CORE_FILE );
         }
     }
 }
