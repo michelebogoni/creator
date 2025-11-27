@@ -159,6 +159,76 @@ function creator_core_activation_redirect() {
 add_action( 'admin_init', 'creator_core_activation_redirect' );
 
 /**
+ * Show admin notice with setup wizard link if redirect didn't work
+ * This is a fallback mechanism
+ */
+function creator_core_activation_notice() {
+    // Only show if setup not completed and we're not on setup page
+    if ( get_option( 'creator_setup_completed' ) ) {
+        return;
+    }
+
+    // Don't show on setup page
+    if ( isset( $_GET['page'] ) && $_GET['page'] === 'creator-setup' ) {
+        return;
+    }
+
+    // Only show to admins
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+
+    $setup_url = admin_url( 'admin.php?page=creator-setup' );
+    ?>
+    <div class="notice notice-info is-dismissible">
+        <p>
+            <strong><?php esc_html_e( 'Creator', 'creator-core' ); ?>:</strong>
+            <?php esc_html_e( 'Thank you for installing Creator! Please complete the setup wizard to get started.', 'creator-core' ); ?>
+            <a href="<?php echo esc_url( $setup_url ); ?>" class="button button-primary" style="margin-left: 10px;">
+                <?php esc_html_e( 'Start Setup Wizard', 'creator-core' ); ?>
+            </a>
+        </p>
+    </div>
+    <?php
+}
+add_action( 'admin_notices', 'creator_core_activation_notice' );
+
+/**
+ * JavaScript fallback for activation redirect
+ * Injects JS that redirects to setup wizard on plugins page after activation
+ */
+function creator_core_activation_redirect_js() {
+    // Only on plugins page
+    $screen = get_current_screen();
+    if ( ! $screen || $screen->id !== 'plugins' ) {
+        return;
+    }
+
+    // Check if plugin was just activated (WordPress adds 'activate' parameter)
+    if ( ! isset( $_GET['activate'] ) || $_GET['activate'] !== 'true' ) {
+        return;
+    }
+
+    // Don't redirect if setup completed
+    if ( get_option( 'creator_setup_completed' ) ) {
+        return;
+    }
+
+    $setup_url = admin_url( 'admin.php?page=creator-setup' );
+    ?>
+    <script type="text/javascript">
+        (function() {
+            // Small delay to ensure page is loaded
+            setTimeout(function() {
+                window.location.href = '<?php echo esc_js( $setup_url ); ?>';
+            }, 100);
+        })();
+    </script>
+    <?php
+}
+add_action( 'admin_footer', 'creator_core_activation_redirect_js' );
+
+/**
  * Plugin deactivation hook
  */
 function creator_core_deactivate(): void {
