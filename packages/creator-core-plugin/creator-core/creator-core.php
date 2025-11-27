@@ -195,7 +195,7 @@ add_action( 'admin_notices', 'creator_core_activation_notice' );
 
 /**
  * JavaScript fallback for activation redirect
- * Injects JS that redirects to setup wizard on plugins page after activation
+ * Uses the redirect option as indicator (if it exists, PHP redirect didn't work)
  */
 function creator_core_activation_redirect_js() {
     // Only on plugins page
@@ -204,10 +204,14 @@ function creator_core_activation_redirect_js() {
         return;
     }
 
-    // Check if plugin was just activated (WordPress adds 'activate' parameter)
-    if ( ! isset( $_GET['activate'] ) || $_GET['activate'] !== 'true' ) {
+    // Check if redirect option still exists (means PHP redirect didn't happen)
+    $should_redirect = get_option( 'creator_do_activation_redirect' );
+    if ( ! $should_redirect ) {
         return;
     }
+
+    // Delete the option
+    delete_option( 'creator_do_activation_redirect' );
 
     // Don't redirect if setup completed
     if ( get_option( 'creator_setup_completed' ) ) {
@@ -218,10 +222,7 @@ function creator_core_activation_redirect_js() {
     ?>
     <script type="text/javascript">
         (function() {
-            // Small delay to ensure page is loaded
-            setTimeout(function() {
-                window.location.href = '<?php echo esc_js( $setup_url ); ?>';
-            }, 100);
+            window.location.href = '<?php echo esc_js( $setup_url ); ?>';
         })();
     </script>
     <?php
