@@ -213,7 +213,7 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
 <script>
     var creatorSetupData = {
         currentStep: '<?php echo esc_js( $data['current_step'] ); ?>',
-        nextUrl: '<?php echo esc_url( $setup_wizard->get_next_step_url( $data['current_step'] ) ); ?>'
+        nextUrl: '<?php echo esc_js( $setup_wizard->get_next_step_url( $data['current_step'] ) ); ?>'
     };
     console.log('Creator Setup Data:', creatorSetupData);
 </script>
