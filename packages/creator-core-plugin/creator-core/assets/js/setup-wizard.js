@@ -22,9 +22,10 @@
          * Bind event handlers
          */
         bindEvents: function() {
-            // Navigation buttons (using IDs from template)
-            $('#next-step-btn').on('click', this.nextStep.bind(this));
+            // Skip setup button
             $('#skip-setup-btn').on('click', this.skipSetup.bind(this));
+
+            // Note: Next step button is now a direct link (<a> tag), no JS needed
 
             // License validation
             $('#validate-license-btn').on('click', this.validateLicense.bind(this));
