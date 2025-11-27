@@ -102,25 +102,25 @@ class SetupWizard {
             return;
         }
 
-        // Don't redirect if already on setup page
+        // Don't redirect if already on setup page (allow navigation between steps)
         if ( isset( $_GET['page'] ) && $_GET['page'] === 'creator-setup' ) {
             return;
         }
 
-        // Check for activation redirect transient
-        $should_redirect = get_transient( 'creator_activation_redirect' );
+        // Check for activation redirect option (more reliable than transient)
+        // This triggers redirect from ANY page after plugin activation
+        if ( get_option( 'creator_activation_redirect' ) ) {
+            delete_option( 'creator_activation_redirect' );
 
-        if ( $should_redirect ) {
-            delete_transient( 'creator_activation_redirect' );
-            wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
-            exit;
+            if ( ! get_option( 'creator_setup_completed' ) && current_user_can( 'manage_options' ) ) {
+                wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
+                exit;
+            }
         }
 
-        // Also redirect if setup is not completed and user is on a Creator page
-        // This ensures users complete setup before using the plugin
+        // Force redirect to setup if not completed and user tries to access other Creator pages
         if ( ! get_option( 'creator_setup_completed' ) && current_user_can( 'manage_options' ) ) {
-            // Only force redirect if on a Creator page (not setup)
-            if ( isset( $_GET['page'] ) && strpos( $_GET['page'], 'creator-' ) === 0 ) {
+            if ( isset( $_GET['page'] ) && strpos( $_GET['page'], 'creator-' ) === 0 && $_GET['page'] !== 'creator-setup' ) {
                 wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
                 exit;
             }
