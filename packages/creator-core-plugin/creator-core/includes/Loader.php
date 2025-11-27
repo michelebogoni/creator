@@ -156,8 +156,8 @@ class Loader {
         // REST API
         add_action( 'rest_api_init', [ $this->rest_api, 'register_routes' ] );
 
-        // Setup wizard redirect on activation
-        add_action( 'admin_init', [ $this->setup_wizard, 'maybe_redirect' ] );
+        // Setup wizard redirect on activation (priority 1 to run early)
+        add_action( 'admin_init', [ $this->setup_wizard, 'maybe_redirect' ], 1 );
 
         // Plugin action links
         add_filter( 'plugin_action_links_' . CREATOR_CORE_BASENAME, [ $this, 'add_action_links' ] );

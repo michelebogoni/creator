@@ -1,12 +1,12 @@
 <?php
 /**
- * Plugin Name: Creator Core
+ * Plugin Name: Creator
  * Plugin URI: https://github.com/michelebogoni/creator-core-plugin
- * Description: AI-powered WordPress development assistant - Create pages, posts, custom fields via natural conversation
+ * Description: AI-powered WordPress development assistant - Create and build everything in Wordpress via AI assistant
  * Version: 1.0.0
  * Requires at least: 5.8
  * Requires PHP: 7.4
- * Author: Michele Bogoni
+ * Author: Aloud Marketing
  * Author URI: https://aloudmarketing.com
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
