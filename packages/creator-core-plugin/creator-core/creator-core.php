@@ -130,6 +130,36 @@ function creator_core_activate(): void {
 register_activation_hook( __FILE__, 'creator_core_activate' );
 
 /**
+ * Redirect to setup wizard immediately after plugin activation
+ *
+ * @param string $plugin The plugin that was activated.
+ */
+function creator_core_activation_redirect( string $plugin ): void {
+    // Only redirect for our plugin
+    if ( $plugin !== CREATOR_CORE_BASENAME ) {
+        return;
+    }
+
+    // Don't redirect during bulk activation
+    if ( isset( $_GET['activate-multi'] ) || isset( $_REQUEST['activate-multi'] ) ) {
+        return;
+    }
+
+    // Don't redirect if setup already completed
+    if ( get_option( 'creator_setup_completed' ) ) {
+        return;
+    }
+
+    // Clear the option flag (if set)
+    delete_option( 'creator_activation_redirect' );
+
+    // Redirect to setup wizard
+    wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
+    exit;
+}
+add_action( 'activated_plugin', 'creator_core_activation_redirect' );
+
+/**
  * Plugin deactivation hook
  */
 function creator_core_deactivate(): void {

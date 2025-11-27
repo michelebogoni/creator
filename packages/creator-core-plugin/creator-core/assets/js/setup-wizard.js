@@ -39,16 +39,26 @@
          */
         nextStep: function(e) {
             e.preventDefault();
+            e.stopPropagation();
 
             const $btn = $(e.currentTarget);
 
+            console.log('Next button clicked');
+            console.log('creatorSetupData:', typeof creatorSetupData !== 'undefined' ? creatorSetupData : 'undefined');
+
             // Get next URL from inline script variable
             if (typeof creatorSetupData !== 'undefined' && creatorSetupData.nextUrl) {
+                const nextUrl = creatorSetupData.nextUrl;
+                console.log('Navigating to:', nextUrl);
+
                 $btn.prop('disabled', true);
                 $btn.html('Loading... <span class="dashicons dashicons-update creator-spin"></span>');
-                window.location.href = creatorSetupData.nextUrl;
+
+                // Use direct navigation
+                window.location.assign(nextUrl);
             } else {
                 console.error('creatorSetupData.nextUrl not defined');
+                alert('Error: Unable to navigate to next step. Please refresh the page.');
             }
         },
 
