@@ -285,8 +285,8 @@ class Activator {
     private static function set_activation_redirect(): void {
         // Only redirect if not already completed setup
         if ( ! get_option( 'creator_setup_completed' ) ) {
-            // Set transient for 2 minutes to ensure redirect works
-            set_transient( 'creator_activation_redirect', true, 120 );
+            // Use option instead of transient for more reliable redirect
+            update_option( 'creator_activation_redirect', true );
         }
     }
 }
