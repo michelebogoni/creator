@@ -75,9 +75,46 @@
         skipStep: function(e) {
             e.preventDefault();
 
+            const $btn = $(e.currentTarget);
+
+            // If button has skip-all class or on last step, skip entire setup
+            if ($btn.hasClass('creator-skip-all') || this.currentStep === this.totalSteps) {
+                this.skipSetup();
+                return;
+            }
+
             if (this.currentStep < this.totalSteps) {
                 this.goToStep(this.currentStep + 1);
             }
+        },
+
+        /**
+         * Skip entire setup and go to dashboard
+         */
+        skipSetup: function() {
+            const $btn = $('.creator-wizard-skip');
+            $btn.prop('disabled', true).text('Redirecting...');
+
+            $.ajax({
+                url: creatorSetup.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'creator_skip_setup',
+                    nonce: creatorSetup.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        window.location.href = response.data.redirect_url || creatorSetup.dashboardUrl;
+                    } else {
+                        alert('Failed to skip setup: ' + (response.data?.message || 'Unknown error'));
+                        $btn.prop('disabled', false).text('Skip');
+                    }
+                },
+                error: function() {
+                    // Still redirect on error
+                    window.location.href = creatorSetup.dashboardUrl;
+                }
+            });
         },
 
         /**

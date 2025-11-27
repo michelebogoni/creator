@@ -172,11 +172,11 @@ class Loader {
      * @return void
      */
     public function register_admin_menu(): void {
-        // Main menu
+        // Main menu - accessible to anyone who can edit posts
         add_menu_page(
             __( 'Creator', 'creator-core' ),
             __( 'Creator', 'creator-core' ),
-            'manage_options',
+            'edit_posts',
             'creator-dashboard',
             [ $this->dashboard, 'render' ],
             'dashicons-superhero-alt',
@@ -188,7 +188,7 @@ class Loader {
             'creator-dashboard',
             __( 'Dashboard', 'creator-core' ),
             __( 'Dashboard', 'creator-core' ),
-            'manage_options',
+            'edit_posts',
             'creator-dashboard',
             [ $this->dashboard, 'render' ]
         );
@@ -259,6 +259,19 @@ class Loader {
                 CREATOR_CORE_VERSION,
                 true
             );
+            wp_localize_script( 'creator-admin-dashboard', 'creatorDashboard', [
+                'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
+                'restUrl'    => rest_url( 'creator/v1/' ),
+                'nonce'      => wp_create_nonce( 'creator_dashboard_nonce' ),
+                'restNonce'  => wp_create_nonce( 'wp_rest' ),
+                'newChatUrl' => admin_url( 'admin.php?page=creator-chat' ),
+                'i18n'       => [
+                    'loading'      => __( 'Loading...', 'creator-core' ),
+                    'error'        => __( 'An error occurred', 'creator-core' ),
+                    'noChats'      => __( 'No recent chats', 'creator-core' ),
+                    'refreshStats' => __( 'Refresh statistics', 'creator-core' ),
+                ],
+            ]);
         }
 
         if ( strpos( $hook, 'creator-chat' ) !== false ) {
@@ -282,12 +295,17 @@ class Loader {
                 CREATOR_CORE_VERSION,
                 true
             );
+            $current_user = wp_get_current_user();
+            $chat_id      = isset( $_GET['chat_id'] ) ? absint( $_GET['chat_id'] ) : null;
             wp_localize_script( 'creator-chat-interface', 'creatorChat', [
-                'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-                'restUrl'   => rest_url( 'creator/v1/' ),
-                'nonce'     => wp_create_nonce( 'creator_chat_nonce' ),
-                'restNonce' => wp_create_nonce( 'wp_rest' ),
-                'i18n'      => [
+                'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
+                'restUrl'    => rest_url( 'creator/v1/' ),
+                'nonce'      => wp_create_nonce( 'creator_chat_nonce' ),
+                'restNonce'  => wp_create_nonce( 'wp_rest' ),
+                'chatId'     => $chat_id,
+                'userName'   => $current_user->display_name,
+                'userAvatar' => get_avatar_url( $current_user->ID, [ 'size' => 32 ] ),
+                'i18n'       => [
                     'sending'       => __( 'Sending...', 'creator-core' ),
                     'error'         => __( 'An error occurred. Please try again.', 'creator-core' ),
                     'confirmUndo'   => __( 'Are you sure you want to undo this action?', 'creator-core' ),
@@ -311,10 +329,14 @@ class Loader {
                 CREATOR_CORE_VERSION,
                 true
             );
+            $current_step = isset( $_GET['step'] ) ? sanitize_key( $_GET['step'] ) : 'dependencies';
+            $step_map     = [ 'dependencies' => 1, 'backup' => 2, 'license' => 3, 'finish' => 4 ];
             wp_localize_script( 'creator-setup-wizard', 'creatorSetup', [
-                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-                'nonce'   => wp_create_nonce( 'creator_setup_nonce' ),
-                'i18n'    => [
+                'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+                'nonce'        => wp_create_nonce( 'creator_setup_nonce' ),
+                'currentStep'  => $step_map[ $current_step ] ?? 1,
+                'dashboardUrl' => admin_url( 'admin.php?page=creator-dashboard' ),
+                'i18n'         => [
                     'installing' => __( 'Installing...', 'creator-core' ),
                     'installed'  => __( 'Installed', 'creator-core' ),
                     'error'      => __( 'Installation failed', 'creator-core' ),
@@ -339,6 +361,21 @@ class Loader {
                 CREATOR_CORE_VERSION,
                 true
             );
+            wp_localize_script( 'creator-settings', 'creatorSettings', [
+                'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+                'restUrl'   => rest_url( 'creator/v1/' ),
+                'nonce'     => wp_create_nonce( 'creator_settings_nonce' ),
+                'restNonce' => wp_create_nonce( 'wp_rest' ),
+                'i18n'      => [
+                    'saving'       => __( 'Saving...', 'creator-core' ),
+                    'saved'        => __( 'Settings saved', 'creator-core' ),
+                    'error'        => __( 'An error occurred', 'creator-core' ),
+                    'validating'   => __( 'Validating...', 'creator-core' ),
+                    'clearing'     => __( 'Clearing cache...', 'creator-core' ),
+                    'cacheCleared' => __( 'Cache cleared', 'creator-core' ),
+                    'confirmDelete' => __( 'Are you sure you want to delete this?', 'creator-core' ),
+                ],
+            ]);
         }
     }
 

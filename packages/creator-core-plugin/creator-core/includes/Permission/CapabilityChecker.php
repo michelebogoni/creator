@@ -214,6 +214,12 @@ class CapabilityChecker {
             }
         }
 
+        // Fallback: allow anyone who can edit posts (editors, authors, contributors with edit_posts)
+        // This makes Creator accessible while still respecting operation-level restrictions
+        if ( user_can( $user_id, 'edit_posts' ) ) {
+            return true;
+        }
+
         return false;
     }
 
