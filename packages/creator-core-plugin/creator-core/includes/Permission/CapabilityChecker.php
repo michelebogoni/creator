@@ -27,12 +27,14 @@ class CapabilityChecker {
         'edit_post'            => [ 'edit_posts' ],
         'delete_post'          => [ 'delete_posts' ],
         'publish_post'         => [ 'publish_posts' ],
+        'update_post'          => [ 'edit_posts' ],
 
         // Page operations
         'create_page'          => [ 'edit_pages', 'publish_pages' ],
         'edit_page'            => [ 'edit_pages' ],
         'delete_page'          => [ 'delete_pages' ],
         'publish_page'         => [ 'publish_pages' ],
+        'update_page'          => [ 'edit_pages' ],
 
         // Custom post type operations
         'create_cpt'           => [ 'edit_posts', 'publish_posts' ],
@@ -76,6 +78,38 @@ class CapabilityChecker {
 
         // Options operations
         'edit_options'         => [ 'manage_options' ],
+        'update_option'        => [ 'manage_options' ],
+        'update_meta'          => [ 'edit_posts' ],
+
+        // File system operations (Development)
+        'read_file'            => [ 'manage_options' ],
+        'write_file'           => [ 'manage_options' ],
+        'delete_file'          => [ 'manage_options' ],
+        'list_directory'       => [ 'manage_options' ],
+        'search_files'         => [ 'manage_options' ],
+
+        // Plugin development operations
+        'create_plugin'        => [ 'manage_options', 'install_plugins' ],
+        'activate_plugin'      => [ 'activate_plugins' ],
+        'deactivate_plugin'    => [ 'activate_plugins' ],
+        'delete_plugin'        => [ 'delete_plugins' ],
+        'add_plugin_file'      => [ 'manage_options', 'install_plugins' ],
+
+        // Code analysis operations
+        'analyze_code'         => [ 'manage_options' ],
+        'analyze_plugin'       => [ 'manage_options' ],
+        'analyze_theme'        => [ 'manage_options' ],
+        'debug_error'          => [ 'manage_options' ],
+        'get_debug_log'        => [ 'manage_options' ],
+
+        // Database operations
+        'db_query'             => [ 'manage_options' ],
+        'db_get_rows'          => [ 'manage_options' ],
+        'db_insert'            => [ 'manage_options' ],
+        'db_update'            => [ 'manage_options' ],
+        'db_delete'            => [ 'manage_options' ],
+        'db_create_table'      => [ 'manage_options' ],
+        'db_info'              => [ 'manage_options' ],
 
         // Creator-specific operations
         'use_creator'          => [ 'use_creator' ],

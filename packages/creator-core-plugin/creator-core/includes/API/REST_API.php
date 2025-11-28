@@ -14,6 +14,10 @@ use CreatorCore\Permission\CapabilityChecker;
 use CreatorCore\Audit\AuditLogger;
 use CreatorCore\Backup\Rollback;
 use CreatorCore\Executor\ActionExecutor;
+use CreatorCore\Development\FileSystemManager;
+use CreatorCore\Development\PluginGenerator;
+use CreatorCore\Development\CodeAnalyzer;
+use CreatorCore\Development\DatabaseManager;
 
 /**
  * Class REST_API
@@ -164,6 +168,126 @@ class REST_API {
             'methods'             => \WP_REST_Server::READABLE,
             'callback'            => [ $this, 'health_check' ],
             'permission_callback' => '__return_true',
+        ]);
+
+        // =========================================================================
+        // DEVELOPMENT ENDPOINTS
+        // =========================================================================
+
+        // File operations
+        register_rest_route( self::NAMESPACE, '/files/read', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'read_file' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+            'args'                => [
+                'file_path' => [
+                    'required' => true,
+                    'type'     => 'string',
+                ],
+            ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/files/write', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'write_file' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+            'args'                => [
+                'file_path' => [
+                    'required' => true,
+                    'type'     => 'string',
+                ],
+                'content' => [
+                    'required' => true,
+                    'type'     => 'string',
+                ],
+            ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/files/list', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'list_directory' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/files/search', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'search_files' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        // Plugin development
+        register_rest_route( self::NAMESPACE, '/plugins/create', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'create_plugin' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/plugins/list', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'list_plugins' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/plugins/(?P<slug>[a-zA-Z0-9_-]+)/info', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_plugin_info' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/plugins/(?P<slug>[a-zA-Z0-9_-]+)/activate', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'activate_plugin' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/plugins/(?P<slug>[a-zA-Z0-9_-]+)/deactivate', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'deactivate_plugin' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        // Code analysis
+        register_rest_route( self::NAMESPACE, '/analyze/file', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'analyze_file' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/analyze/plugin/(?P<slug>[a-zA-Z0-9_-]+)', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'analyze_plugin' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/analyze/theme/(?P<slug>[a-zA-Z0-9_-]+)', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'analyze_theme' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/debug/log', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_debug_log' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        // Database
+        register_rest_route( self::NAMESPACE, '/database/info', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_database_info' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/database/query', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'database_query' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/database/table/(?P<table>[a-zA-Z0-9_]+)/structure', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_table_structure' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
         ]);
     }
 
@@ -446,5 +570,327 @@ class REST_API {
             'version' => CREATOR_CORE_VERSION,
             'time'    => current_time( 'mysql' ),
         ]);
+    }
+
+    /**
+     * Check admin permission for development endpoints
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return bool|\WP_Error
+     */
+    public function check_admin_permission( \WP_REST_Request $request ) {
+        if ( ! is_user_logged_in() ) {
+            return new \WP_Error(
+                'rest_forbidden',
+                __( 'You must be logged in.', 'creator-core' ),
+                [ 'status' => 401 ]
+            );
+        }
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return new \WP_Error(
+                'rest_forbidden',
+                __( 'You need administrator privileges for this operation.', 'creator-core' ),
+                [ 'status' => 403 ]
+            );
+        }
+
+        return true;
+    }
+
+    // =========================================================================
+    // FILE OPERATIONS
+    // =========================================================================
+
+    /**
+     * Read a file
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function read_file( \WP_REST_Request $request ) {
+        $file_path  = $request->get_param( 'file_path' );
+        $filesystem = new FileSystemManager( $this->logger );
+        $result     = $filesystem->read_file( $file_path );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'file_read_failed', $result['error'], [ 'status' => 400 ] );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Write a file
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function write_file( \WP_REST_Request $request ) {
+        $file_path  = $request->get_param( 'file_path' );
+        $content    = $request->get_param( 'content' );
+        $filesystem = new FileSystemManager( $this->logger );
+        $result     = $filesystem->write_file( $file_path, $content );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'file_write_failed', $result['error'], [ 'status' => 400 ] );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * List directory contents
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function list_directory( \WP_REST_Request $request ) {
+        $dir_path   = $request->get_param( 'dir_path' ) ?? WP_CONTENT_DIR;
+        $recursive  = $request->get_param( 'recursive' ) ?? false;
+        $filesystem = new FileSystemManager( $this->logger );
+        $result     = $filesystem->list_directory( $dir_path, $recursive );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'list_failed', $result['error'], [ 'status' => 400 ] );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Search in files
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function search_files( \WP_REST_Request $request ) {
+        $directory   = $request->get_param( 'directory' ) ?? WP_CONTENT_DIR;
+        $search_term = $request->get_param( 'search_term' );
+        $pattern     = $request->get_param( 'pattern' ) ?? '*.php';
+
+        if ( empty( $search_term ) ) {
+            return new \WP_Error( 'missing_param', __( 'Search term is required', 'creator-core' ), [ 'status' => 400 ] );
+        }
+
+        $filesystem = new FileSystemManager( $this->logger );
+        $result     = $filesystem->search_in_files( $directory, $search_term, $pattern );
+
+        return rest_ensure_response( $result );
+    }
+
+    // =========================================================================
+    // PLUGIN OPERATIONS
+    // =========================================================================
+
+    /**
+     * Create a plugin
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function create_plugin( \WP_REST_Request $request ) {
+        $config    = $request->get_json_params();
+        $generator = new PluginGenerator( $this->logger );
+        $result    = $generator->create_plugin( $config );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'plugin_creation_failed', $result['error'], [ 'status' => 400 ] );
+        }
+
+        // Auto-activate if requested
+        if ( ! empty( $config['activate'] ) ) {
+            $generator->activate_plugin( $result['plugin_slug'] );
+            $result['activated'] = true;
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * List all plugins
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response
+     */
+    public function list_plugins( \WP_REST_Request $request ): \WP_REST_Response {
+        $generator = new PluginGenerator( $this->logger );
+        return rest_ensure_response( $generator->list_plugins() );
+    }
+
+    /**
+     * Get plugin info
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function get_plugin_info( \WP_REST_Request $request ) {
+        $slug      = $request->get_param( 'slug' );
+        $generator = new PluginGenerator( $this->logger );
+        $result    = $generator->get_plugin_info( $slug );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'plugin_not_found', $result['error'], [ 'status' => 404 ] );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Activate a plugin
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function activate_plugin( \WP_REST_Request $request ) {
+        $slug      = $request->get_param( 'slug' );
+        $generator = new PluginGenerator( $this->logger );
+        $result    = $generator->activate_plugin( $slug );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'activation_failed', $result['error'], [ 'status' => 400 ] );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Deactivate a plugin
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response
+     */
+    public function deactivate_plugin( \WP_REST_Request $request ): \WP_REST_Response {
+        $slug      = $request->get_param( 'slug' );
+        $generator = new PluginGenerator( $this->logger );
+        return rest_ensure_response( $generator->deactivate_plugin( $slug ) );
+    }
+
+    // =========================================================================
+    // CODE ANALYSIS
+    // =========================================================================
+
+    /**
+     * Analyze a file
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function analyze_file( \WP_REST_Request $request ) {
+        $file_path = $request->get_param( 'file_path' );
+
+        if ( empty( $file_path ) ) {
+            return new \WP_Error( 'missing_param', __( 'File path is required', 'creator-core' ), [ 'status' => 400 ] );
+        }
+
+        $analyzer = new CodeAnalyzer( $this->logger );
+        return rest_ensure_response( $analyzer->analyze_file( $file_path ) );
+    }
+
+    /**
+     * Analyze a plugin
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function analyze_plugin( \WP_REST_Request $request ) {
+        $slug     = $request->get_param( 'slug' );
+        $analyzer = new CodeAnalyzer( $this->logger );
+        $result   = $analyzer->analyze_plugin( $slug );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'analysis_failed', $result['error'], [ 'status' => 400 ] );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Analyze a theme
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function analyze_theme( \WP_REST_Request $request ) {
+        $slug     = $request->get_param( 'slug' );
+        $analyzer = new CodeAnalyzer( $this->logger );
+        $result   = $analyzer->analyze_theme( $slug );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'analysis_failed', $result['error'], [ 'status' => 400 ] );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Get debug log
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response
+     */
+    public function get_debug_log( \WP_REST_Request $request ): \WP_REST_Response {
+        $lines    = $request->get_param( 'lines' ) ?? 100;
+        $analyzer = new CodeAnalyzer( $this->logger );
+        return rest_ensure_response( $analyzer->get_debug_log( (int) $lines ) );
+    }
+
+    // =========================================================================
+    // DATABASE OPERATIONS
+    // =========================================================================
+
+    /**
+     * Get database info
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response
+     */
+    public function get_database_info( \WP_REST_Request $request ): \WP_REST_Response {
+        $database = new DatabaseManager( $this->logger );
+        return rest_ensure_response( $database->get_database_info() );
+    }
+
+    /**
+     * Execute database query
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function database_query( \WP_REST_Request $request ) {
+        $query  = $request->get_param( 'query' );
+        $limit  = $request->get_param( 'limit' ) ?? 100;
+        $offset = $request->get_param( 'offset' ) ?? 0;
+
+        if ( empty( $query ) ) {
+            return new \WP_Error( 'missing_param', __( 'Query is required', 'creator-core' ), [ 'status' => 400 ] );
+        }
+
+        $database = new DatabaseManager( $this->logger );
+        $result   = $database->select( $query, (int) $limit, (int) $offset );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'query_failed', $result['error'], [ 'status' => 400 ] );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Get table structure
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function get_table_structure( \WP_REST_Request $request ) {
+        global $wpdb;
+        $table    = $request->get_param( 'table' );
+        $database = new DatabaseManager( $this->logger );
+        $result   = $database->get_table_structure( $wpdb->prefix . $table );
+
+        if ( ! $result['success'] ) {
+            return new \WP_Error( 'table_not_found', $result['error'], [ 'status' => 404 ] );
+        }
+
+        return rest_ensure_response( $result );
     }
 }

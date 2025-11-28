@@ -50,6 +50,25 @@
 
             // Rollback action
             $(document).on('click', '.creator-rollback-action', this.handleRollback.bind(this));
+
+            // Capability tabs
+            $(document).on('click', '.creator-tab', this.handleTabClick.bind(this));
+        },
+
+        /**
+         * Handle capability tab click
+         */
+        handleTabClick: function(e) {
+            const $tab = $(e.currentTarget);
+            const tabName = $tab.data('tab');
+
+            // Update active tab
+            $('.creator-tab').removeClass('active');
+            $tab.addClass('active');
+
+            // Show/hide corresponding suggestions
+            $('[data-tab-content]').hide();
+            $('[data-tab-content="' + tabName + '"]').show();
         },
 
         /**

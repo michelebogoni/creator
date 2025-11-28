@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Creator
  * Plugin URI: https://github.com/michelebogoni/creator-core-plugin
- * Description: AI-powered WordPress development assistant - Create and build everything in Wordpress via AI assistant
+ * Description: AI-powered WordPress development agent - Create plugins, analyze code, debug issues, and automate WordPress development with full site access
  * Version: 1.0.0
  * Requires at least: 5.8
  * Requires PHP: 7.4

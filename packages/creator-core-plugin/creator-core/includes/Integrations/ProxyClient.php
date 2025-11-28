@@ -220,7 +220,7 @@ class ProxyClient {
                 'intent'     => 'identity',
                 'confidence' => 0.95,
                 'actions'    => [],
-                'message'    => 'Sono Creator, un assistente AI progettato per aiutarti a gestire il tuo sito WordPress. Posso creare e modificare pagine, post, gestire plugin come Elementor, ACF, RankMath e WooCommerce. Sono qui per semplificare il tuo lavoro!',
+                'message'    => 'Sono Creator, un agente di sviluppo AI per WordPress. Posso creare plugin personalizzati su richiesta e installarli automaticamente, analizzare il codice per trovare e risolvere bug, accedere ai file del sito e al database, debuggare errori, e gestire contenuti con Elementor, ACF, WooCommerce e altri plugin. Sono come un assistente sviluppatore integrato direttamente nel tuo WordPress!',
             ]);
         }
 
@@ -240,7 +240,67 @@ class ProxyClient {
                 'intent'     => 'capabilities',
                 'confidence' => 0.95,
                 'actions'    => [],
-                'message'    => 'Posso aiutarti con molte attività WordPress: creare e modificare pagine e post, gestire contenuti Elementor, configurare campi ACF, ottimizzare SEO con RankMath, gestire prodotti WooCommerce, e molto altro. Dimmi cosa ti serve!',
+                'message'    => "Sono un agente di sviluppo WordPress completo. Posso:\n\n**Sviluppo Plugin:**\n- Creare plugin personalizzati su richiesta\n- Installare e attivare plugin automaticamente\n- Aggiungere file e funzionalità ai plugin\n\n**Analisi e Debug:**\n- Analizzare codice PHP per errori e vulnerabilità\n- Leggere i log di debug di WordPress\n- Diagnosticare e risolvere problemi\n\n**Gestione File:**\n- Leggere e modificare file del tema e dei plugin\n- Cercare codice nel sito\n- Creare backup automatici\n\n**Database:**\n- Eseguire query di lettura\n- Gestire tabelle personalizzate\n- Analizzare la struttura del database\n\n**Contenuti WordPress:**\n- Creare pagine, post, prodotti WooCommerce\n- Gestire Elementor, ACF, RankMath\n- Ottimizzare SEO\n\nDimmi cosa ti serve e lo realizzo!",
+            ]);
+        }
+
+        // Handle plugin creation requests
+        if ( preg_match( '/(crea|create|genera|generate|fai|make|sviluppa|develop).*(plugin)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'create_plugin',
+                'confidence' => 0.95,
+                'actions'    => [
+                    [
+                        'type'   => 'create_plugin',
+                        'params' => [
+                            'name'        => 'Custom Plugin',
+                            'description' => 'Plugin personalizzato creato da Creator',
+                            'features'    => [ 'admin_menu', 'settings' ],
+                            'activate'    => true,
+                        ],
+                    ],
+                ],
+                'message' => 'Sto per creare un nuovo plugin WordPress. Descrivimi le funzionalità che desideri e lo creerò per te!',
+            ]);
+        }
+
+        // Handle code analysis requests
+        if ( preg_match( '/(analizza|analyze|controlla|check|verifica|verify).*(codice|code|plugin|tema|theme)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'analyze_code',
+                'confidence' => 0.90,
+                'actions'    => [],
+                'message'    => 'Posso analizzare il codice per te. Dimmi quale plugin o tema vuoi che analizzi, oppure forniscimi il percorso del file da controllare.',
+            ]);
+        }
+
+        // Handle debug requests
+        if ( preg_match( '/(debug|errore|error|problema|problem|bug|fix|risolvi|solve)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'debug',
+                'confidence' => 0.85,
+                'actions'    => [],
+                'message'    => 'Sono pronto ad aiutarti con il debug! Descrivimi l\'errore che stai riscontrando, oppure posso controllare il log di debug di WordPress per te.',
+            ]);
+        }
+
+        // Handle file operations
+        if ( preg_match( '/(leggi|read|mostra|show|apri|open).*(file|codice|code)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'read_file',
+                'confidence' => 0.85,
+                'actions'    => [],
+                'message'    => 'Posso leggere i file del tuo sito WordPress. Dimmi quale file vuoi che apra (es. functions.php del tema, un file di un plugin, ecc.).',
+            ]);
+        }
+
+        // Handle database queries
+        if ( preg_match( '/(database|db|tabella|table|query|dati|data)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'database',
+                'confidence' => 0.80,
+                'actions'    => [],
+                'message'    => 'Posso accedere al database WordPress. Dimmi cosa vuoi sapere o quale operazione vuoi eseguire (visualizzare tabelle, eseguire query, ecc.).',
             ]);
         }
 
