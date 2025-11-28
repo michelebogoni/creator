@@ -38,6 +38,19 @@ define( 'CREATOR_DEBUG', defined( 'WP_DEBUG' ) && WP_DEBUG );
 define( 'CREATOR_MIN_PHP_VERSION', '7.4' );
 define( 'CREATOR_MIN_WP_VERSION', '5.8' );
 
+// Simple admin notice - added early to test if plugin loads correctly
+add_action( 'admin_notices', function() {
+    if ( get_option( 'creator_setup_completed' ) ) {
+        return;
+    }
+    if ( isset( $_GET['page'] ) && strpos( $_GET['page'], 'creator-' ) === 0 ) {
+        return;
+    }
+    $url = admin_url( 'admin.php?page=creator-setup' );
+    echo '<div class="notice notice-info"><p><strong>Creator:</strong> ';
+    echo 'Please complete the <a href="' . esc_url( $url ) . '">setup wizard</a> to get started.</p></div>';
+});
+
 /**
  * Check minimum requirements before loading the plugin
  *
