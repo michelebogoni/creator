@@ -38,7 +38,7 @@ define( 'CREATOR_DEBUG', defined( 'WP_DEBUG' ) && WP_DEBUG );
 define( 'CREATOR_MIN_PHP_VERSION', '7.4' );
 define( 'CREATOR_MIN_WP_VERSION', '5.8' );
 
-// Simple admin notice - added early to test if plugin loads correctly
+// Show setup reminder notice if wizard not completed
 add_action( 'admin_notices', function() {
     if ( get_option( 'creator_setup_completed' ) ) {
         return;
