@@ -59,14 +59,17 @@ class ContextCollector {
         }
 
         $context = [
-            'site_info'      => $this->get_site_info(),
-            'theme_info'     => $this->get_theme_info(),
-            'active_plugins' => $this->get_active_plugins_info(),
-            'integrations'   => $this->plugin_detector->get_all_integrations(),
-            'current_user'   => $this->get_current_user_info(),
-            'content_stats'  => $this->get_content_statistics(),
-            'capabilities'   => $this->get_available_capabilities(),
-            'timestamp'      => current_time( 'mysql' ),
+            'site_info'        => $this->get_site_info(),
+            'theme_info'       => $this->get_theme_info(),
+            'active_plugins'   => $this->get_active_plugins_info(),
+            'integrations'     => $this->plugin_detector->get_all_integrations(),
+            'current_user'     => $this->get_current_user_info(),
+            'content_stats'    => $this->get_content_statistics(),
+            'capabilities'     => $this->get_available_capabilities(),
+            'development_info' => $this->get_development_info(),
+            'file_system'      => $this->get_file_system_info(),
+            'database_info'    => $this->get_database_summary(),
+            'timestamp'        => current_time( 'mysql' ),
         ];
 
         $this->cached_context = $context;
@@ -414,5 +417,160 @@ class ContextCollector {
     public function clear_cache(): void {
         $this->cached_context = null;
         delete_transient( 'creator_site_context' );
+    }
+
+    /**
+     * Get development environment information
+     *
+     * @return array
+     */
+    public function get_development_info(): array {
+        return [
+            'debug_mode'     => defined( 'WP_DEBUG' ) && WP_DEBUG,
+            'debug_log'      => defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG,
+            'debug_display'  => defined( 'WP_DEBUG_DISPLAY' ) && WP_DEBUG_DISPLAY,
+            'script_debug'   => defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG,
+            'savequeries'    => defined( 'SAVEQUERIES' ) && SAVEQUERIES,
+            'memory_limit'   => WP_MEMORY_LIMIT,
+            'max_memory'     => defined( 'WP_MAX_MEMORY_LIMIT' ) ? WP_MAX_MEMORY_LIMIT : '256M',
+            'php_memory'     => ini_get( 'memory_limit' ),
+            'max_upload'     => wp_max_upload_size(),
+            'max_post_size'  => ini_get( 'post_max_size' ),
+            'max_exec_time'  => ini_get( 'max_execution_time' ),
+            'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+            'is_ssl'         => is_ssl(),
+            'is_multisite'   => is_multisite(),
+            'creator_capabilities' => [
+                'file_operations'   => current_user_can( 'manage_options' ),
+                'plugin_creation'   => current_user_can( 'install_plugins' ),
+                'code_analysis'     => current_user_can( 'manage_options' ),
+                'database_access'   => current_user_can( 'manage_options' ),
+            ],
+        ];
+    }
+
+    /**
+     * Get file system information
+     *
+     * @return array
+     */
+    public function get_file_system_info(): array {
+        $upload_dir = wp_upload_dir();
+
+        return [
+            'paths' => [
+                'abspath'      => ABSPATH,
+                'wp_content'   => WP_CONTENT_DIR,
+                'plugins'      => WP_PLUGIN_DIR,
+                'themes'       => get_theme_root(),
+                'uploads'      => $upload_dir['basedir'],
+                'active_theme' => get_stylesheet_directory(),
+            ],
+            'permissions' => [
+                'wp_content_writable' => wp_is_writable( WP_CONTENT_DIR ),
+                'plugins_writable'    => wp_is_writable( WP_PLUGIN_DIR ),
+                'uploads_writable'    => wp_is_writable( $upload_dir['basedir'] ),
+                'themes_writable'     => wp_is_writable( get_theme_root() ),
+            ],
+            'disk_space' => [
+                'free'  => function_exists( 'disk_free_space' ) ? size_format( @disk_free_space( ABSPATH ) ) : 'Unknown',
+                'total' => function_exists( 'disk_total_space' ) ? size_format( @disk_total_space( ABSPATH ) ) : 'Unknown',
+            ],
+        ];
+    }
+
+    /**
+     * Get database summary information
+     *
+     * @return array
+     */
+    public function get_database_summary(): array {
+        global $wpdb;
+
+        return [
+            'prefix'        => $wpdb->prefix,
+            'charset'       => $wpdb->charset,
+            'collate'       => $wpdb->collate,
+            'mysql_version' => $wpdb->db_version(),
+            'table_count'   => count( $wpdb->get_results( 'SHOW TABLES', ARRAY_N ) ),
+        ];
+    }
+
+    /**
+     * Get extended context summary for AI prompt
+     *
+     * @return string
+     */
+    public function get_extended_context_summary(): string {
+        $context = $this->get_wordpress_context();
+
+        $summary = "=== WordPress Development Environment ===\n\n";
+
+        $summary .= sprintf(
+            "Site: %s (%s)\n",
+            $context['site_info']['site_title'],
+            $context['site_info']['site_url']
+        );
+
+        $summary .= sprintf(
+            "WordPress %s | PHP %s | MySQL %s\n",
+            $context['site_info']['wordpress_version'],
+            $context['site_info']['php_version'],
+            $context['database_info']['mysql_version'] ?? 'Unknown'
+        );
+
+        $summary .= sprintf(
+            "Theme: %s v%s\n\n",
+            $context['theme_info']['name'],
+            $context['theme_info']['version']
+        );
+
+        $summary .= "=== Development Capabilities ===\n";
+        $dev_info = $context['development_info'];
+
+        $summary .= sprintf( "Debug Mode: %s\n", $dev_info['debug_mode'] ? 'Enabled' : 'Disabled' );
+        $summary .= sprintf( "Memory Limit: %s\n", $dev_info['memory_limit'] );
+
+        $summary .= "\nCreator can:\n";
+        if ( $dev_info['creator_capabilities']['file_operations'] ) {
+            $summary .= "- Read, write, and manage files\n";
+        }
+        if ( $dev_info['creator_capabilities']['plugin_creation'] ) {
+            $summary .= "- Create and install WordPress plugins\n";
+        }
+        if ( $dev_info['creator_capabilities']['code_analysis'] ) {
+            $summary .= "- Analyze code for errors and security issues\n";
+        }
+        if ( $dev_info['creator_capabilities']['database_access'] ) {
+            $summary .= "- Query and manage the database\n";
+        }
+
+        $summary .= "\n=== File System ===\n";
+        $fs = $context['file_system'];
+        $summary .= sprintf( "Plugins: %s (%s)\n",
+            $fs['paths']['plugins'],
+            $fs['permissions']['plugins_writable'] ? 'writable' : 'read-only'
+        );
+        $summary .= sprintf( "Themes: %s (%s)\n",
+            $fs['paths']['themes'],
+            $fs['permissions']['themes_writable'] ? 'writable' : 'read-only'
+        );
+
+        $summary .= "\n=== Active Integrations ===\n";
+        $active = [];
+        foreach ( $context['integrations'] as $key => $status ) {
+            if ( $status['active'] ) {
+                $active[] = $status['name'];
+            }
+        }
+        $summary .= implode( ', ', $active ) . "\n";
+
+        $summary .= sprintf(
+            "\nUser: %s (%s)\n",
+            $context['current_user']['display_name'] ?? 'Guest',
+            implode( ', ', $context['current_user']['roles'] ?? [] )
+        );
+
+        return $summary;
     }
 }

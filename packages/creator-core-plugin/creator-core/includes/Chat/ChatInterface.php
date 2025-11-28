@@ -287,8 +287,9 @@ class ChatInterface {
 
         // Send to AI
         $ai_response = $this->proxy_client->send_to_ai( $prompt, 'TEXT_GEN', [
-            'chat_id'    => $chat_id,
-            'message_id' => $user_message_id,
+            'chat_id'         => $chat_id,
+            'message_id'      => $user_message_id,
+            'user_message'    => $content, // Original user message for mock mode intent detection
         ]);
 
         if ( ! $ai_response['success'] ) {

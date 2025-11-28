@@ -14,6 +14,10 @@ use CreatorCore\Audit\OperationTracker;
 use CreatorCore\Backup\SnapshotManager;
 use CreatorCore\Backup\DeltaBackup;
 use CreatorCore\Permission\CapabilityChecker;
+use CreatorCore\Development\FileSystemManager;
+use CreatorCore\Development\PluginGenerator;
+use CreatorCore\Development\CodeAnalyzer;
+use CreatorCore\Development\DatabaseManager;
 
 /**
  * Class ActionExecutor
@@ -218,6 +222,76 @@ class ActionExecutor {
 
             case 'update_option':
                 return $this->update_option( $params );
+
+            // File operations
+            case 'read_file':
+                return $this->read_file( $params );
+
+            case 'write_file':
+                return $this->write_file( $params );
+
+            case 'delete_file':
+                return $this->delete_file( $params );
+
+            case 'list_directory':
+                return $this->list_directory( $params );
+
+            case 'search_files':
+                return $this->search_files( $params );
+
+            // Plugin operations
+            case 'create_plugin':
+                return $this->create_plugin( $params );
+
+            case 'activate_plugin':
+                return $this->activate_plugin( $params );
+
+            case 'deactivate_plugin':
+                return $this->deactivate_plugin( $params );
+
+            case 'delete_plugin':
+                return $this->delete_plugin_action( $params );
+
+            case 'add_plugin_file':
+                return $this->add_plugin_file( $params );
+
+            // Code analysis operations
+            case 'analyze_code':
+                return $this->analyze_code( $params );
+
+            case 'analyze_plugin':
+                return $this->analyze_plugin( $params );
+
+            case 'analyze_theme':
+                return $this->analyze_theme( $params );
+
+            case 'debug_error':
+                return $this->debug_error( $params );
+
+            case 'get_debug_log':
+                return $this->get_debug_log( $params );
+
+            // Database operations
+            case 'db_query':
+                return $this->db_query( $params );
+
+            case 'db_get_rows':
+                return $this->db_get_rows( $params );
+
+            case 'db_insert':
+                return $this->db_insert( $params );
+
+            case 'db_update':
+                return $this->db_update( $params );
+
+            case 'db_delete':
+                return $this->db_delete( $params );
+
+            case 'db_create_table':
+                return $this->db_create_table( $params );
+
+            case 'db_info':
+                return $this->db_info( $params );
 
             default:
                 return [
@@ -625,5 +699,558 @@ class ActionExecutor {
             default:
                 return $data;
         }
+    }
+
+    // =========================================================================
+    // FILE SYSTEM OPERATIONS
+    // =========================================================================
+
+    /**
+     * Read a file
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function read_file( array $params ): array {
+        $file_path = $params['file_path'] ?? '';
+
+        if ( empty( $file_path ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'File path is required', 'creator-core' ),
+            ];
+        }
+
+        $filesystem = new FileSystemManager( $this->logger );
+        $result     = $filesystem->read_file( $file_path );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'file_read', [ 'path' => $file_path ] );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Write a file
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function write_file( array $params ): array {
+        $file_path = $params['file_path'] ?? '';
+        $content   = $params['content'] ?? '';
+
+        if ( empty( $file_path ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'File path is required', 'creator-core' ),
+            ];
+        }
+
+        $filesystem = new FileSystemManager( $this->logger );
+        $result     = $filesystem->write_file( $file_path, $content );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'file_written', [ 'path' => $file_path ] );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Delete a file
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function delete_file( array $params ): array {
+        $file_path = $params['file_path'] ?? '';
+
+        if ( empty( $file_path ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'File path is required', 'creator-core' ),
+            ];
+        }
+
+        $filesystem = new FileSystemManager( $this->logger );
+        $result     = $filesystem->delete_file( $file_path );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'file_deleted', [ 'path' => $file_path ] );
+        }
+
+        return $result;
+    }
+
+    /**
+     * List directory contents
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function list_directory( array $params ): array {
+        $dir_path  = $params['dir_path'] ?? '';
+        $recursive = $params['recursive'] ?? false;
+
+        if ( empty( $dir_path ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Directory path is required', 'creator-core' ),
+            ];
+        }
+
+        $filesystem = new FileSystemManager( $this->logger );
+        return $filesystem->list_directory( $dir_path, $recursive );
+    }
+
+    /**
+     * Search files
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function search_files( array $params ): array {
+        $directory   = $params['directory'] ?? '';
+        $search_term = $params['search_term'] ?? '';
+        $pattern     = $params['pattern'] ?? '*.php';
+
+        if ( empty( $directory ) || empty( $search_term ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Directory and search term are required', 'creator-core' ),
+            ];
+        }
+
+        $filesystem = new FileSystemManager( $this->logger );
+        return $filesystem->search_in_files( $directory, $search_term, $pattern );
+    }
+
+    // =========================================================================
+    // PLUGIN OPERATIONS
+    // =========================================================================
+
+    /**
+     * Create a new plugin
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function create_plugin( array $params ): array {
+        $generator = new PluginGenerator( $this->logger );
+        $result    = $generator->create_plugin( $params );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'plugin_created', [ 'slug' => $result['plugin_slug'] ] );
+
+            // Auto-activate if requested
+            if ( ! empty( $params['activate'] ) ) {
+                $generator->activate_plugin( $result['plugin_slug'] );
+                $result['activated'] = true;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Activate a plugin
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function activate_plugin( array $params ): array {
+        $plugin_slug = $params['plugin_slug'] ?? '';
+
+        if ( empty( $plugin_slug ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Plugin slug is required', 'creator-core' ),
+            ];
+        }
+
+        $generator = new PluginGenerator( $this->logger );
+        $result    = $generator->activate_plugin( $plugin_slug );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'plugin_activated', [ 'slug' => $plugin_slug ] );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Deactivate a plugin
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function deactivate_plugin( array $params ): array {
+        $plugin_slug = $params['plugin_slug'] ?? '';
+
+        if ( empty( $plugin_slug ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Plugin slug is required', 'creator-core' ),
+            ];
+        }
+
+        $generator = new PluginGenerator( $this->logger );
+        $result    = $generator->deactivate_plugin( $plugin_slug );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'plugin_deactivated', [ 'slug' => $plugin_slug ] );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Delete a plugin
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function delete_plugin_action( array $params ): array {
+        $plugin_slug = $params['plugin_slug'] ?? '';
+
+        if ( empty( $plugin_slug ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Plugin slug is required', 'creator-core' ),
+            ];
+        }
+
+        $generator = new PluginGenerator( $this->logger );
+        $result    = $generator->delete_plugin( $plugin_slug );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'plugin_deleted', [ 'slug' => $plugin_slug ] );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Add file to a plugin
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function add_plugin_file( array $params ): array {
+        $plugin_slug = $params['plugin_slug'] ?? '';
+        $file_path   = $params['file_path'] ?? '';
+        $content     = $params['content'] ?? '';
+
+        if ( empty( $plugin_slug ) || empty( $file_path ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Plugin slug and file path are required', 'creator-core' ),
+            ];
+        }
+
+        $generator = new PluginGenerator( $this->logger );
+        $result    = $generator->add_plugin_file( $plugin_slug, $file_path, $content );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'plugin_file_added', [
+                'slug' => $plugin_slug,
+                'file' => $file_path,
+            ]);
+        }
+
+        return $result;
+    }
+
+    // =========================================================================
+    // CODE ANALYSIS OPERATIONS
+    // =========================================================================
+
+    /**
+     * Analyze code file
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function analyze_code( array $params ): array {
+        $file_path = $params['file_path'] ?? '';
+
+        if ( empty( $file_path ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'File path is required', 'creator-core' ),
+            ];
+        }
+
+        $analyzer = new CodeAnalyzer( $this->logger );
+        $result   = $analyzer->analyze_file( $file_path );
+
+        $this->tracker->add_step( 'code_analyzed', [ 'file' => $file_path ] );
+
+        return $result;
+    }
+
+    /**
+     * Analyze plugin code
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function analyze_plugin( array $params ): array {
+        $plugin_slug = $params['plugin_slug'] ?? '';
+
+        if ( empty( $plugin_slug ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Plugin slug is required', 'creator-core' ),
+            ];
+        }
+
+        $analyzer = new CodeAnalyzer( $this->logger );
+        $result   = $analyzer->analyze_plugin( $plugin_slug );
+
+        $this->tracker->add_step( 'plugin_analyzed', [ 'slug' => $plugin_slug ] );
+
+        return $result;
+    }
+
+    /**
+     * Analyze theme code
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function analyze_theme( array $params ): array {
+        $theme_slug = $params['theme_slug'] ?? '';
+
+        if ( empty( $theme_slug ) ) {
+            // Use active theme
+            $theme_slug = get_stylesheet();
+        }
+
+        $analyzer = new CodeAnalyzer( $this->logger );
+        $result   = $analyzer->analyze_theme( $theme_slug );
+
+        $this->tracker->add_step( 'theme_analyzed', [ 'slug' => $theme_slug ] );
+
+        return $result;
+    }
+
+    /**
+     * Debug an error
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function debug_error( array $params ): array {
+        $error_message = $params['error_message'] ?? '';
+        $file_path     = $params['file_path'] ?? '';
+        $line_number   = $params['line_number'] ?? 0;
+
+        if ( empty( $error_message ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Error message is required', 'creator-core' ),
+            ];
+        }
+
+        $analyzer = new CodeAnalyzer( $this->logger );
+        return $analyzer->debug_error( $error_message, $file_path, (int) $line_number );
+    }
+
+    /**
+     * Get debug log
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function get_debug_log( array $params ): array {
+        $lines = $params['lines'] ?? 100;
+
+        $analyzer = new CodeAnalyzer( $this->logger );
+        return $analyzer->get_debug_log( (int) $lines );
+    }
+
+    // =========================================================================
+    // DATABASE OPERATIONS
+    // =========================================================================
+
+    /**
+     * Execute database SELECT query
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function db_query( array $params ): array {
+        $query  = $params['query'] ?? '';
+        $limit  = $params['limit'] ?? 100;
+        $offset = $params['offset'] ?? 0;
+
+        if ( empty( $query ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Query is required', 'creator-core' ),
+            ];
+        }
+
+        $database = new DatabaseManager( $this->logger );
+        $result   = $database->select( $query, (int) $limit, (int) $offset );
+
+        $this->tracker->add_step( 'db_query_executed', [ 'query' => $query ] );
+
+        return $result;
+    }
+
+    /**
+     * Get rows from a table
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function db_get_rows( array $params ): array {
+        $table      = $params['table'] ?? '';
+        $conditions = $params['conditions'] ?? [];
+        $args       = $params['args'] ?? [];
+
+        if ( empty( $table ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Table name is required', 'creator-core' ),
+            ];
+        }
+
+        $database = new DatabaseManager( $this->logger );
+        return $database->get_rows( $table, $conditions, $args );
+    }
+
+    /**
+     * Insert row into a table
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function db_insert( array $params ): array {
+        $table = $params['table'] ?? '';
+        $data  = $params['data'] ?? [];
+
+        if ( empty( $table ) || empty( $data ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Table name and data are required', 'creator-core' ),
+            ];
+        }
+
+        $database = new DatabaseManager( $this->logger );
+        $result   = $database->insert( $table, $data );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'db_row_inserted', [
+                'table'     => $table,
+                'insert_id' => $result['insert_id'],
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Update rows in a table
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function db_update( array $params ): array {
+        $table = $params['table'] ?? '';
+        $data  = $params['data'] ?? [];
+        $where = $params['where'] ?? [];
+
+        if ( empty( $table ) || empty( $data ) || empty( $where ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Table name, data, and where conditions are required', 'creator-core' ),
+            ];
+        }
+
+        $database = new DatabaseManager( $this->logger );
+        $result   = $database->update( $table, $data, $where );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'db_rows_updated', [
+                'table'        => $table,
+                'rows_updated' => $result['rows_updated'],
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Delete rows from a table
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function db_delete( array $params ): array {
+        $table = $params['table'] ?? '';
+        $where = $params['where'] ?? [];
+
+        if ( empty( $table ) || empty( $where ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Table name and where conditions are required', 'creator-core' ),
+            ];
+        }
+
+        $database = new DatabaseManager( $this->logger );
+        $result   = $database->delete( $table, $where );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'db_rows_deleted', [
+                'table'        => $table,
+                'rows_deleted' => $result['rows_deleted'],
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Create a database table
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function db_create_table( array $params ): array {
+        $table   = $params['table'] ?? '';
+        $columns = $params['columns'] ?? [];
+        $options = $params['options'] ?? [];
+
+        if ( empty( $table ) || empty( $columns ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Table name and columns are required', 'creator-core' ),
+            ];
+        }
+
+        $database = new DatabaseManager( $this->logger );
+        $result   = $database->create_table( $table, $columns, $options );
+
+        if ( $result['success'] ) {
+            $this->tracker->add_step( 'db_table_created', [ 'table' => $table ] );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get database info
+     *
+     * @param array $params Parameters.
+     * @return array
+     */
+    private function db_info( array $params ): array {
+        $database = new DatabaseManager( $this->logger );
+        return $database->get_database_info();
     }
 }

@@ -79,16 +79,60 @@ defined( 'ABSPATH' ) || exit;
                         <span class="dashicons dashicons-superhero-alt"></span>
                     </div>
                     <h2><?php esc_html_e( 'Welcome to Creator!', 'creator-core' ); ?></h2>
-                    <p><?php esc_html_e( 'I can help you create pages, posts, manage Elementor, and much more. How can I help you today?', 'creator-core' ); ?></p>
-                    <div class="creator-suggestions">
+                    <p><?php esc_html_e( 'Your AI-powered WordPress development agent. I can create custom plugins, analyze and debug code, manage files, access the database, and build content. What would you like to create today?', 'creator-core' ); ?></p>
+
+                    <div class="creator-capability-tabs">
+                        <button type="button" class="creator-tab active" data-tab="content"><?php esc_html_e( 'Content', 'creator-core' ); ?></button>
+                        <button type="button" class="creator-tab" data-tab="development"><?php esc_html_e( 'Development', 'creator-core' ); ?></button>
+                        <button type="button" class="creator-tab" data-tab="debug"><?php esc_html_e( 'Debug', 'creator-core' ); ?></button>
+                    </div>
+
+                    <div class="creator-suggestions" data-tab-content="content">
                         <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Create a new About page', 'creator-core' ); ?>">
-                            <?php esc_html_e( 'Create About page', 'creator-core' ); ?>
+                            <span class="dashicons dashicons-welcome-add-page"></span>
+                            <?php esc_html_e( 'Create page', 'creator-core' ); ?>
                         </button>
                         <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Write a blog post about', 'creator-core' ); ?>">
-                            <?php esc_html_e( 'Write a blog post', 'creator-core' ); ?>
+                            <span class="dashicons dashicons-edit"></span>
+                            <?php esc_html_e( 'Write post', 'creator-core' ); ?>
                         </button>
-                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Help me with SEO', 'creator-core' ); ?>">
-                            <?php esc_html_e( 'Help with SEO', 'creator-core' ); ?>
+                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Help me optimize SEO', 'creator-core' ); ?>">
+                            <span class="dashicons dashicons-search"></span>
+                            <?php esc_html_e( 'Optimize SEO', 'creator-core' ); ?>
+                        </button>
+                    </div>
+
+                    <div class="creator-suggestions" data-tab-content="development" style="display: none;">
+                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Create a custom plugin that', 'creator-core' ); ?>">
+                            <span class="dashicons dashicons-admin-plugins"></span>
+                            <?php esc_html_e( 'Create plugin', 'creator-core' ); ?>
+                        </button>
+                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Analyze the code of my active theme', 'creator-core' ); ?>">
+                            <span class="dashicons dashicons-code-standards"></span>
+                            <?php esc_html_e( 'Analyze theme', 'creator-core' ); ?>
+                        </button>
+                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Show me the database structure', 'creator-core' ); ?>">
+                            <span class="dashicons dashicons-database"></span>
+                            <?php esc_html_e( 'Database info', 'creator-core' ); ?>
+                        </button>
+                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Read the functions.php of my theme', 'creator-core' ); ?>">
+                            <span class="dashicons dashicons-media-code"></span>
+                            <?php esc_html_e( 'Read files', 'creator-core' ); ?>
+                        </button>
+                    </div>
+
+                    <div class="creator-suggestions" data-tab-content="debug" style="display: none;">
+                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Check the WordPress debug log', 'creator-core' ); ?>">
+                            <span class="dashicons dashicons-warning"></span>
+                            <?php esc_html_e( 'Debug log', 'creator-core' ); ?>
+                        </button>
+                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Analyze my plugins for security issues', 'creator-core' ); ?>">
+                            <span class="dashicons dashicons-shield"></span>
+                            <?php esc_html_e( 'Security check', 'creator-core' ); ?>
+                        </button>
+                        <button type="button" class="creator-suggestion" data-prompt="<?php esc_attr_e( 'Help me fix this error:', 'creator-core' ); ?>">
+                            <span class="dashicons dashicons-sos"></span>
+                            <?php esc_html_e( 'Fix error', 'creator-core' ); ?>
                         </button>
                     </div>
                 </div>
