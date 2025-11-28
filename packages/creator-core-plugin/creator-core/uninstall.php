@@ -19,6 +19,11 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
  * Tables and backups are removed only if the option is enabled.
  */
 
+// Always delete activation redirect option on uninstall
+// This ensures the wizard will show again on reinstall
+delete_option( 'creator_do_activation_redirect' );
+delete_option( 'creator_setup_completed' );
+
 // Check if user wants to delete data on uninstall
 $delete_data = get_option( 'creator_delete_data_on_uninstall', false );
 

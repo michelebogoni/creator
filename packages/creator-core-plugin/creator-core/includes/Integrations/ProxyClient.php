@@ -128,7 +128,7 @@ class ProxyClient {
      */
     public function send_to_ai( string $prompt, string $task_type = 'TEXT_GEN', array $options = [] ): array {
         if ( $this->is_mock_mode() ) {
-            return $this->mock_ai_response( $prompt, $task_type );
+            return $this->mock_ai_response( $prompt, $task_type, $options );
         }
 
         $site_token = get_option( 'creator_site_token' );
@@ -166,13 +166,16 @@ class ProxyClient {
      *
      * @param string $prompt    The prompt.
      * @param string $task_type Task type.
+     * @param array  $options   Additional options including user_message.
      * @return array
      */
-    private function mock_ai_response( string $prompt, string $task_type ): array {
+    private function mock_ai_response( string $prompt, string $task_type, array $options = [] ): array {
         // Simulate API delay
         usleep( 1000000 ); // 1 second
 
-        $response_text = $this->generate_mock_response( $prompt, $task_type );
+        // Use original user message for intent detection if available
+        $user_message  = $options['user_message'] ?? $prompt;
+        $response_text = $this->generate_mock_response( $user_message, $task_type );
 
         return [
             'success'  => true,
@@ -192,60 +195,102 @@ class ProxyClient {
     }
 
     /**
-     * Generate mock response based on prompt
+     * Generate mock response based on user message
      *
-     * @param string $prompt    The prompt.
-     * @param string $task_type Task type.
+     * @param string $user_message The user's message (not the full prompt).
+     * @param string $task_type    Task type.
      * @return string
      */
-    private function generate_mock_response( string $prompt, string $task_type ): string {
-        $prompt_lower = strtolower( $prompt );
+    private function generate_mock_response( string $user_message, string $task_type ): string {
+        $message_lower = strtolower( $user_message );
 
-        // Detect intent from prompt
-        if ( strpos( $prompt_lower, 'crea' ) !== false || strpos( $prompt_lower, 'create' ) !== false ) {
-            if ( strpos( $prompt_lower, 'pagin' ) !== false || strpos( $prompt_lower, 'page' ) !== false ) {
-                return wp_json_encode( [
-                    'intent'     => 'create_page',
-                    'confidence' => 0.95,
-                    'actions'    => [
-                        [
-                            'type'   => 'create_page',
-                            'params' => [
-                                'title'   => 'New Page',
-                                'content' => 'Page content will be generated here.',
-                                'status'  => 'draft',
-                            ],
-                        ],
-                    ],
-                    'message' => 'Sto per creare una nuova pagina. Vuoi procedere?',
-                ]);
-            }
-
-            if ( strpos( $prompt_lower, 'post' ) !== false || strpos( $prompt_lower, 'articol' ) !== false ) {
-                return wp_json_encode( [
-                    'intent'     => 'create_post',
-                    'confidence' => 0.92,
-                    'actions'    => [
-                        [
-                            'type'   => 'create_post',
-                            'params' => [
-                                'title'   => 'New Post',
-                                'content' => 'Post content will be generated here.',
-                                'status'  => 'draft',
-                            ],
-                        ],
-                    ],
-                    'message' => 'Sto per creare un nuovo post. Vuoi procedere?',
-                ]);
-            }
+        // Handle greetings first
+        if ( preg_match( '/^(ciao|hello|hi|hey|buongiorno|buonasera|salve)\b/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'greeting',
+                'confidence' => 0.95,
+                'actions'    => [],
+                'message'    => 'Ciao! Sono Creator, il tuo assistente AI per WordPress. Posso aiutarti a creare pagine, post, gestire Elementor, ACF e molto altro. Come posso aiutarti oggi?',
+            ]);
         }
 
-        // Default conversational response
+        // Handle identity questions
+        if ( preg_match( '/(chi sei|who are you|cosa sei|what are you)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'identity',
+                'confidence' => 0.95,
+                'actions'    => [],
+                'message'    => 'Sono Creator, un assistente AI progettato per aiutarti a gestire il tuo sito WordPress. Posso creare e modificare pagine, post, gestire plugin come Elementor, ACF, RankMath e WooCommerce. Sono qui per semplificare il tuo lavoro!',
+            ]);
+        }
+
+        // Handle platform/technology questions
+        if ( preg_match( '/(piattaforma|platform|basi|based|tecnologia|technology|gemini|chatgpt|claude|openai|gpt)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'about_platform',
+                'confidence' => 0.95,
+                'actions'    => [],
+                'message'    => 'Sono basato su tecnologie AI avanzate e comunico attraverso un proxy sicuro che gestisce le richieste al modello di linguaggio. Il mio obiettivo è aiutarti con WordPress in modo semplice e naturale.',
+            ]);
+        }
+
+        // Handle help/capability questions
+        if ( preg_match( '/(cosa puoi|what can you|aiutarmi|help me|funzionalit|features|capabilities)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'capabilities',
+                'confidence' => 0.95,
+                'actions'    => [],
+                'message'    => 'Posso aiutarti con molte attività WordPress: creare e modificare pagine e post, gestire contenuti Elementor, configurare campi ACF, ottimizzare SEO con RankMath, gestire prodotti WooCommerce, e molto altro. Dimmi cosa ti serve!',
+            ]);
+        }
+
+        // Detect action intents - must be explicit requests to create/modify
+        // Check for create page intent
+        if ( preg_match( '/(crea|create|genera|generate|fai|make).*(pagin|page)/i', $message_lower ) ||
+             preg_match( '/(pagin|page).*(crea|create|genera|generate|fai|make)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'create_page',
+                'confidence' => 0.95,
+                'actions'    => [
+                    [
+                        'type'   => 'create_page',
+                        'params' => [
+                            'title'   => 'New Page',
+                            'content' => 'Page content will be generated here.',
+                            'status'  => 'draft',
+                        ],
+                    ],
+                ],
+                'message' => 'Sto per creare una nuova pagina. Vuoi procedere?',
+            ]);
+        }
+
+        // Check for create post intent
+        if ( preg_match( '/(crea|create|genera|generate|scrivi|write).*(post|articol|article)/i', $message_lower ) ||
+             preg_match( '/(post|articol|article).*(crea|create|genera|generate|scrivi|write)/i', $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'create_post',
+                'confidence' => 0.92,
+                'actions'    => [
+                    [
+                        'type'   => 'create_post',
+                        'params' => [
+                            'title'   => 'New Post',
+                            'content' => 'Post content will be generated here.',
+                            'status'  => 'draft',
+                        ],
+                    ],
+                ],
+                'message' => 'Sto per creare un nuovo post. Vuoi procedere?',
+            ]);
+        }
+
+        // Default conversational response for anything else
         return wp_json_encode( [
             'intent'     => 'conversation',
-            'confidence' => 0.8,
+            'confidence' => 0.7,
             'actions'    => [],
-            'message'    => 'Ciao! Sono Creator, il tuo assistente AI per WordPress. Posso aiutarti a creare pagine, post, gestire Elementor, ACF e molto altro. Come posso aiutarti oggi?',
+            'message'    => 'Capisco. Sono qui per aiutarti con il tuo sito WordPress. Puoi chiedermi di creare pagine, post, o gestire altri aspetti del tuo sito. Cosa vorresti fare?',
         ]);
     }
 
