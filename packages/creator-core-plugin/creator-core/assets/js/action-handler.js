@@ -152,7 +152,7 @@
 
             // Make API call
             $.ajax({
-                url: creatorAction.restUrl + 'creator/v1/actions/' + actionId + '/execute',
+                url: creatorAction.restUrl + 'actions/execute',
                 type: 'POST',
                 headers: {
                     'X-WP-Nonce': creatorAction.restNonce
@@ -204,7 +204,7 @@
             $btn.prop('disabled', true).addClass('loading');
 
             $.ajax({
-                url: creatorAction.restUrl + 'creator/v1/rollback/' + actionId,
+                url: creatorAction.restUrl + 'actions/' + actionId + '/rollback',
                 type: 'POST',
                 headers: {
                     'X-WP-Nonce': creatorAction.restNonce
@@ -353,7 +353,7 @@
             const self = this;
 
             $.ajax({
-                url: creatorAction.restUrl + 'creator/v1/actions/' + actionId,
+                url: creatorAction.restUrl + 'actions/' + actionId,
                 type: 'GET',
                 headers: {
                     'X-WP-Nonce': creatorAction.restNonce

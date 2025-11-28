@@ -131,17 +131,65 @@
             // Show typing indicator
             this.showTypingIndicator();
 
-            // Send to API
+            // If no chat exists, create one first
+            if (!this.chatId) {
+                this.createChatAndSendMessage(message);
+                return;
+            }
+
+            // Send to existing chat
+            this.sendMessageToChat(this.chatId, message);
+        },
+
+        /**
+         * Create a new chat and send the first message
+         */
+        createChatAndSendMessage: function(message) {
+            const self = this;
+
             $.ajax({
-                url: creatorChat.restUrl + 'creator/v1/messages',
+                url: creatorChat.restUrl + 'chats',
                 type: 'POST',
                 contentType: 'application/json',
                 headers: {
                     'X-WP-Nonce': creatorChat.restNonce
                 },
                 data: JSON.stringify({
-                    chat_id: this.chatId,
-                    message: message
+                    title: message.substring(0, 50) + (message.length > 50 ? '...' : '')
+                }),
+                success: function(response) {
+                    if (response.success && response.chat && response.chat.id) {
+                        self.chatId = response.chat.id;
+                        self.updateUrl(response.chat.id);
+                        self.sendMessageToChat(response.chat.id, message);
+                    } else {
+                        self.hideTypingIndicator();
+                        self.showError(response.message || 'Failed to create chat');
+                    }
+                },
+                error: function(xhr) {
+                    self.hideTypingIndicator();
+                    const error = xhr.responseJSON?.message || 'Failed to create chat';
+                    self.showError(error);
+                }
+            });
+        },
+
+        /**
+         * Send message to an existing chat
+         */
+        sendMessageToChat: function(chatId, message) {
+            const self = this;
+
+            $.ajax({
+                url: creatorChat.restUrl + 'chats/' + chatId + '/messages',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'X-WP-Nonce': creatorChat.restNonce
+                },
+                data: JSON.stringify({
+                    content: message
                 }),
                 success: function(response) {
                     self.hideTypingIndicator();
@@ -380,7 +428,7 @@
             $card.find('.creator-action-buttons button').prop('disabled', true);
 
             $.ajax({
-                url: creatorChat.restUrl + 'creator/v1/actions/' + actionId + '/execute',
+                url: creatorChat.restUrl + 'actions/execute',
                 type: 'POST',
                 headers: {
                     'X-WP-Nonce': creatorChat.restNonce
@@ -466,7 +514,7 @@
             $btn.prop('disabled', true).text('Rolling back...');
 
             $.ajax({
-                url: creatorChat.restUrl + 'creator/v1/rollback/' + actionId,
+                url: creatorChat.restUrl + 'actions/' + actionId + '/rollback',
                 type: 'POST',
                 headers: {
                     'X-WP-Nonce': creatorChat.restNonce
@@ -506,7 +554,7 @@
 
             if (newTitle && newTitle !== currentTitle) {
                 $.ajax({
-                    url: creatorChat.restUrl + 'creator/v1/chats/' + this.chatId,
+                    url: creatorChat.restUrl + 'chats/' + this.chatId,
                     type: 'PUT',
                     contentType: 'application/json',
                     headers: {
