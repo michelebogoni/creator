@@ -114,13 +114,6 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                     <h2><?php esc_html_e( 'License Activation', 'creator-core' ); ?></h2>
                     <p><?php esc_html_e( 'Enter your license key to activate Creator. This connects to our AI services.', 'creator-core' ); ?></p>
 
-                    <?php if ( $data['step_data']['mock_mode'] ) : ?>
-                        <div class="creator-notice creator-notice-info">
-                            <span class="dashicons dashicons-info"></span>
-                            <?php esc_html_e( 'Mock Mode is enabled. You can skip license validation for testing.', 'creator-core' ); ?>
-                        </div>
-                    <?php endif; ?>
-
                     <form id="creator-license-form" class="creator-setup-form">
                         <div class="creator-form-row">
                             <label for="license-key"><?php esc_html_e( 'License Key', 'creator-core' ); ?></label>

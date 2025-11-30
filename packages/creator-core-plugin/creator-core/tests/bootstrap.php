@@ -37,9 +37,7 @@ if ( ! defined( 'CREATOR_PROXY_URL' ) ) {
     define( 'CREATOR_PROXY_URL', 'https://creator-ai-proxy.firebaseapp.com/api/' );
 }
 
-if ( ! defined( 'CREATOR_MOCK_MODE' ) ) {
-    define( 'CREATOR_MOCK_MODE', true );
-}
+// Mock mode has been removed - tests run against real functionality
 
 // WordPress test stubs.
 require_once __DIR__ . '/stubs/wordpress-stubs.php';

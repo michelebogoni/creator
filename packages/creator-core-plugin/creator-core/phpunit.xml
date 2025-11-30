@@ -38,6 +38,5 @@
 
     <php>
         <const name="CREATOR_CORE_TESTING" value="true"/>
-        <const name="CREATOR_MOCK_MODE" value="true"/>
     </php>
 </phpunit>

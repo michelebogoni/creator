@@ -62,6 +62,7 @@ class SetupWizard {
         add_action( 'wp_ajax_creator_install_plugin', [ $this, 'ajax_install_plugin' ] );
         add_action( 'wp_ajax_creator_activate_plugin', [ $this, 'ajax_activate_plugin' ] );
         add_action( 'wp_ajax_creator_skip_setup', [ $this, 'ajax_skip_setup' ] );
+        add_action( 'wp_ajax_creator_validate_license', [ $this, 'ajax_validate_license' ] );
     }
 
     /**
@@ -202,7 +203,6 @@ class SetupWizard {
             'license_key'    => get_option( 'creator_license_key', '' ),
             'is_validated'   => $license_status && ! empty( $license_status['success'] ),
             'license_status' => $license_status,
-            'mock_mode'      => defined( 'CREATOR_MOCK_MODE' ) && CREATOR_MOCK_MODE,
         ];
     }
 
@@ -332,12 +332,12 @@ class SetupWizard {
     private function process_license_step( array $data ): void {
         $license_key = isset( $data['license_key'] ) ? sanitize_text_field( $data['license_key'] ) : '';
 
-        if ( empty( $license_key ) && ! ( defined( 'CREATOR_MOCK_MODE' ) && CREATOR_MOCK_MODE ) ) {
+        if ( empty( $license_key ) ) {
             wp_send_json_error( [ 'message' => __( 'License key is required', 'creator-core' ) ] );
         }
 
         $proxy_client = new ProxyClient();
-        $result = $proxy_client->validate_license( $license_key ?: 'test' );
+        $result = $proxy_client->validate_license( $license_key );
 
         if ( $result['success'] ) {
             update_option( 'creator_license_key', $license_key );
@@ -467,5 +467,39 @@ class SetupWizard {
             'message'      => __( 'Setup skipped', 'creator-core' ),
             'redirect_url' => admin_url( 'admin.php?page=creator-dashboard' ),
         ]);
+    }
+
+    /**
+     * AJAX: Validate license
+     *
+     * @return void
+     */
+    public function ajax_validate_license(): void {
+        check_ajax_referer( 'creator_setup_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied', 'creator-core' ) ] );
+        }
+
+        $license_key = isset( $_POST['license_key'] ) ? sanitize_text_field( wp_unslash( $_POST['license_key'] ) ) : '';
+
+        if ( empty( $license_key ) ) {
+            wp_send_json_error( [ 'message' => __( 'License key is required', 'creator-core' ) ] );
+        }
+
+        $proxy_client = new ProxyClient();
+        $result = $proxy_client->validate_license( $license_key );
+
+        if ( $result['success'] ) {
+            update_option( 'creator_license_key', $license_key );
+            wp_send_json_success( [
+                'message' => __( 'License validated successfully', 'creator-core' ),
+                'license' => $result,
+            ]);
+        } else {
+            wp_send_json_error( [
+                'message' => $result['error'] ?? __( 'License validation failed', 'creator-core' ),
+            ]);
+        }
     }
 }

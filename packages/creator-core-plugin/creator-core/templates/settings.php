@@ -68,9 +68,9 @@ $settings_page = new \CreatorCore\Admin\Settings(
                                     <span class="dashicons dashicons-yes"></span>
                                     <?php esc_html_e( 'Connected', 'creator-core' ); ?>
                                 </span>
-                                <?php if ( $data['connection']['mock_mode'] ) : ?>
-                                    <span class="creator-status-badge warning">
-                                        <?php esc_html_e( 'Mock Mode', 'creator-core' ); ?>
+                                <?php if ( ! empty( $data['connection']['admin_mode'] ) ) : ?>
+                                    <span class="creator-status-badge info">
+                                        <?php esc_html_e( 'Admin License', 'creator-core' ); ?>
                                     </span>
                                 <?php endif; ?>
                             <?php else : ?>
