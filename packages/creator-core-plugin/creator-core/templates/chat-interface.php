@@ -169,9 +169,6 @@ defined( 'ABSPATH' ) || exit;
                         <span class="dot"></span>
                         <?php esc_html_e( 'Creator is typing...', 'creator-core' ); ?>
                     </span>
-                    <span class="creator-mock-badge" style="<?php echo defined( 'CREATOR_MOCK_MODE' ) && CREATOR_MOCK_MODE ? '' : 'display:none;'; ?>">
-                        <?php esc_html_e( 'Mock Mode', 'creator-core' ); ?>
-                    </span>
                 </div>
             </form>
         </div>

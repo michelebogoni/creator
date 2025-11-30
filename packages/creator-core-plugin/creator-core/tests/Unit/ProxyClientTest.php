@@ -23,6 +23,13 @@ class ProxyClientTest extends TestCase {
     private $client;
 
     /**
+     * Admin license key for testing
+     *
+     * @var string
+     */
+    private const ADMIN_LICENSE = 'CREATOR-ADMIN-7f3d9c2e1a8b4f6d';
+
+    /**
      * Set up test fixtures
      */
     protected function setUp(): void {
@@ -38,56 +45,16 @@ class ProxyClientTest extends TestCase {
     }
 
     /**
-     * Test mock mode is enabled in test environment
+     * Test admin license validation
      */
-    public function test_mock_mode_enabled(): void {
-        // CREATOR_MOCK_MODE is defined as true in bootstrap
-        $this->assertTrue( defined( 'CREATOR_MOCK_MODE' ) );
-        $this->assertTrue( CREATOR_MOCK_MODE );
-    }
-
-    /**
-     * Test send_message in mock mode
-     */
-    public function test_send_message_mock(): void {
-        $response = $this->client->send_message( 'Test message', [] );
-
-        $this->assertIsArray( $response );
-        $this->assertTrue( $response['success'] );
-        $this->assertArrayHasKey( 'response', $response );
-        $this->assertArrayHasKey( 'mock', $response );
-        $this->assertTrue( $response['mock'] );
-    }
-
-    /**
-     * Test send_message with context
-     */
-    public function test_send_message_with_context(): void {
-        $context = [
-            'site_info' => [
-                'name' => 'Test Site',
-                'url' => 'http://example.com',
-            ],
-            'plugins' => [
-                'elementor' => true,
-            ],
-        ];
-
-        $response = $this->client->send_message( 'Create a page', $context );
-
-        $this->assertIsArray( $response );
-        $this->assertTrue( $response['success'] );
-    }
-
-    /**
-     * Test validate_license in mock mode
-     */
-    public function test_validate_license_mock(): void {
-        $result = $this->client->validate_license( 'test-license-key' );
+    public function test_validate_admin_license(): void {
+        $result = $this->client->validate_license( self::ADMIN_LICENSE );
 
         $this->assertIsArray( $result );
-        $this->assertTrue( $result['valid'] );
-        $this->assertArrayHasKey( 'expires', $result );
+        $this->assertTrue( $result['success'] );
+        $this->assertEquals( 'admin', $result['plan'] );
+        $this->assertTrue( $result['admin_mode'] );
+        $this->assertArrayHasKey( 'site_token', $result );
     }
 
     /**
@@ -100,35 +67,65 @@ class ProxyClientTest extends TestCase {
     }
 
     /**
-     * Test health check
+     * Test set_proxy_url changes URL
      */
-    public function test_health_check(): void {
-        $result = $this->client->health_check();
+    public function test_set_proxy_url(): void {
+        $new_url = 'https://new-proxy.example.com';
+        $this->client->set_proxy_url( $new_url );
+
+        $this->assertEquals( $new_url, $this->client->get_proxy_url() );
+    }
+
+    /**
+     * Test check_connection returns expected structure
+     */
+    public function test_check_connection_structure(): void {
+        $result = $this->client->check_connection();
 
         $this->assertIsArray( $result );
-        $this->assertTrue( $result['healthy'] );
+        $this->assertArrayHasKey( 'connected', $result );
+        $this->assertArrayHasKey( 'proxy_url', $result );
     }
 
     /**
-     * Test mock response contains expected fields
+     * Test get_usage_stats returns expected structure
      */
-    public function test_mock_response_structure(): void {
-        $response = $this->client->send_message( 'What can you do?', [] );
+    public function test_get_usage_stats_structure(): void {
+        $result = $this->client->get_usage_stats();
 
-        $this->assertArrayHasKey( 'success', $response );
-        $this->assertArrayHasKey( 'response', $response );
-        $this->assertArrayHasKey( 'actions', $response );
-        $this->assertIsArray( $response['actions'] );
+        $this->assertIsArray( $result );
+        // Will have either error (if not authenticated) or stats
+        $this->assertTrue(
+            isset( $result['error'] ) || isset( $result['tokens_used'] )
+        );
     }
 
     /**
-     * Test action generation in mock mode
+     * Test clear_authentication removes credentials
      */
-    public function test_mock_action_generation(): void {
-        $response = $this->client->send_message( 'Create a new blog post', [] );
+    public function test_clear_authentication(): void {
+        // First validate a license
+        $this->client->validate_license( self::ADMIN_LICENSE );
 
-        $this->assertTrue( $response['success'] );
-        // Mock mode should return sample actions
-        $this->assertArrayHasKey( 'actions', $response );
+        // Then clear
+        $this->client->clear_authentication();
+
+        // Check that credentials are cleared
+        $this->assertFalse( get_option( 'creator_site_token' ) );
+        $this->assertFalse( get_option( 'creator_license_validated' ) );
+    }
+
+    /**
+     * Test send_to_ai requires authentication
+     */
+    public function test_send_to_ai_requires_auth(): void {
+        // Clear any existing auth
+        $this->client->clear_authentication();
+
+        $result = $this->client->send_to_ai( 'Test prompt' );
+
+        $this->assertIsArray( $result );
+        $this->assertFalse( $result['success'] );
+        $this->assertArrayHasKey( 'error', $result );
     }
 }

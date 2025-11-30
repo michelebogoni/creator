@@ -28,9 +28,6 @@ define( 'CREATOR_CORE_FILE', __FILE__ );
 // Proxy configuration
 define( 'CREATOR_PROXY_URL', 'https://creator-ai-proxy.firebaseapp.com' );
 
-// Mock mode for development/testing (set to false in production)
-define( 'CREATOR_MOCK_MODE', true );
-
 // Debug mode
 define( 'CREATOR_DEBUG', defined( 'WP_DEBUG' ) && WP_DEBUG );
 
