@@ -282,14 +282,19 @@ class ChatInterface {
         // Build conversation history
         $history = $this->build_conversation_history( $chat_id );
 
-        // Prepare prompt with context
-        $prompt = $this->prepare_prompt( $content, $context, $history );
+        // Extract pending actions from previous messages
+        $pending_actions = $this->extract_pending_actions( $chat_id );
+
+        // Prepare prompt with context (include pending actions info)
+        $prompt = $this->prepare_prompt( $content, $context, $history, $pending_actions );
 
         // Send to AI
         $ai_response = $this->proxy_client->send_to_ai( $prompt, 'TEXT_GEN', [
             'chat_id'         => $chat_id,
             'message_id'      => $user_message_id,
             'user_message'    => $content, // Original user message for mock mode intent detection
+            'pending_actions' => $pending_actions, // Pending actions for confirmation handling
+            'conversation'    => $history, // Conversation history for context extraction
         ]);
 
         if ( ! $ai_response['success'] ) {
@@ -373,12 +378,13 @@ class ChatInterface {
     /**
      * Prepare prompt with context
      *
-     * @param string $user_message User's message.
-     * @param array  $context      WordPress context.
-     * @param array  $history      Conversation history.
+     * @param string $user_message    User's message.
+     * @param array  $context         WordPress context.
+     * @param array  $history         Conversation history.
+     * @param array  $pending_actions Pending actions from previous messages.
      * @return string
      */
-    private function prepare_prompt( string $user_message, array $context, array $history ): string {
+    private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [] ): string {
         $context_collector = new ContextCollector();
         $context_summary  = $context_collector->get_context_summary();
 
@@ -394,20 +400,81 @@ class ChatInterface {
             $prompt .= "\n";
         }
 
+        // Include pending actions info
+        if ( ! empty( $pending_actions ) ) {
+            $prompt .= "## Pending Actions (waiting for user confirmation)\n";
+            foreach ( $pending_actions as $action ) {
+                $prompt .= sprintf( "- %s: %s\n", $action['type'], wp_json_encode( $action['params'] ?? [] ) );
+            }
+            $prompt .= "\n";
+            $prompt .= "IMPORTANT: If the user is confirming these actions (saying 'yes', 'ok', 'proceed', 'si', 'procedi', etc.), ";
+            $prompt .= "you should execute them. If they are rejecting (saying 'no', 'cancel', 'annulla', etc.), cancel the actions.\n\n";
+        }
+
         $prompt .= "## User Request\n";
         $prompt .= $user_message . "\n\n";
 
         $prompt .= "## Response Format\n";
-        $prompt .= "If you need to perform actions, respond with JSON:\n";
+        $prompt .= "ALWAYS respond with valid JSON in this format:\n";
         $prompt .= "{\n";
-        $prompt .= '  "intent": "action_type",' . "\n";
+        $prompt .= '  "intent": "action_type or conversation",' . "\n";
         $prompt .= '  "confidence": 0.0-1.0,' . "\n";
-        $prompt .= '  "actions": [{"type": "...", "params": {...}}],' . "\n";
-        $prompt .= '  "message": "Your message to the user"' . "\n";
+        $prompt .= '  "actions": [{"type": "action_name", "params": {...}, "status": "pending|ready"}],' . "\n";
+        $prompt .= '  "message": "Your message to the user in their language"' . "\n";
         $prompt .= "}\n\n";
-        $prompt .= "Otherwise, respond with a helpful message.";
+        $prompt .= "Action status meanings:\n";
+        $prompt .= "- 'pending': Action needs user confirmation before execution\n";
+        $prompt .= "- 'ready': User has confirmed, action should be executed immediately\n\n";
+        $prompt .= "For conversations without actions, use actions: [] (empty array).\n";
+        $prompt .= "Always respond in the same language the user is using.";
 
         return $prompt;
+    }
+
+    /**
+     * Extract pending actions from previous messages
+     *
+     * @param int $chat_id Chat ID.
+     * @return array
+     */
+    private function extract_pending_actions( int $chat_id ): array {
+        $messages = $this->message_handler->get_messages( $chat_id, [
+            'per_page' => 5,
+            'order'    => 'DESC',
+        ]);
+
+        $pending_actions = [];
+
+        foreach ( $messages as $message ) {
+            // Only check assistant messages
+            if ( $message['role'] !== 'assistant' ) {
+                continue;
+            }
+
+            // Check if message has actions metadata
+            $metadata = $message['metadata'] ?? [];
+
+            if ( is_string( $metadata ) ) {
+                $metadata = json_decode( $metadata, true ) ?? [];
+            }
+
+            $actions = $metadata['actions'] ?? [];
+
+            foreach ( $actions as $action ) {
+                // Include actions that are pending (not yet executed or cancelled)
+                $status = $action['status'] ?? 'pending';
+                if ( in_array( $status, [ 'pending', 'proposed' ], true ) ) {
+                    $pending_actions[] = $action;
+                }
+            }
+
+            // Only check the most recent assistant message with actions
+            if ( ! empty( $pending_actions ) ) {
+                break;
+            }
+        }
+
+        return $pending_actions;
     }
 
     /**

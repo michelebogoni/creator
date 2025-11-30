@@ -139,12 +139,14 @@ class REST_API {
                     'type'     => 'object',
                 ],
                 'chat_id' => [
-                    'required' => true,
+                    'required' => false,
                     'type'     => 'integer',
+                    'default'  => 0,
                 ],
                 'message_id' => [
-                    'required' => true,
+                    'required' => false,
                     'type'     => 'integer',
+                    'default'  => 0,
                 ],
             ],
         ]);
