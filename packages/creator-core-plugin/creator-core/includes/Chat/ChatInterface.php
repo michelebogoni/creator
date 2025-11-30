@@ -315,9 +315,18 @@ class ChatInterface {
         }
 
         // Parse AI response
-        $parsed_response = $this->parse_ai_response( $ai_response['response'] );
+        // Firebase returns 'content' key, not 'response'
+        $ai_content = $ai_response['content'] ?? $ai_response['response'] ?? '';
+        $parsed_response = $this->parse_ai_response( $ai_content );
 
         // Save assistant message
+        // Map Firebase response keys to expected format
+        $usage_data = [
+            'tokens_used' => $ai_response['tokens_used'] ?? 0,
+            'cost_usd'    => $ai_response['cost_usd'] ?? 0,
+            'latency_ms'  => $ai_response['latency_ms'] ?? 0,
+        ];
+
         $assistant_message_id = $this->message_handler->save_message(
             $chat_id,
             $parsed_response['message'],
@@ -325,8 +334,9 @@ class ChatInterface {
             $parsed_response['has_actions'] ? 'action' : 'text',
             [
                 'actions'   => $parsed_response['actions'],
-                'usage'     => $ai_response['usage'] ?? [],
+                'usage'     => $usage_data,
                 'provider'  => $ai_response['provider'] ?? 'unknown',
+                'model'     => $ai_response['model'] ?? 'unknown',
             ]
         );
 
@@ -346,7 +356,7 @@ class ChatInterface {
             'assistant_message_id' => $assistant_message_id,
             'response'            => $parsed_response['message'],
             'actions'             => $parsed_response['actions'],
-            'usage'               => $ai_response['usage'] ?? [],
+            'usage'               => $usage_data,
         ];
     }
 
