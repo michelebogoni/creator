@@ -166,7 +166,7 @@ class ProxyClient {
      *
      * @param string $prompt    The prompt.
      * @param string $task_type Task type.
-     * @param array  $options   Additional options including user_message.
+     * @param array  $options   Additional options including user_message, pending_actions, conversation.
      * @return array
      */
     private function mock_ai_response( string $prompt, string $task_type, array $options = [] ): array {
@@ -174,8 +174,11 @@ class ProxyClient {
         usleep( 1000000 ); // 1 second
 
         // Use original user message for intent detection if available
-        $user_message  = $options['user_message'] ?? $prompt;
-        $response_text = $this->generate_mock_response( $user_message, $task_type );
+        $user_message    = $options['user_message'] ?? $prompt;
+        $pending_actions = $options['pending_actions'] ?? [];
+        $conversation    = $options['conversation'] ?? [];
+
+        $response_text = $this->generate_mock_response( $user_message, $task_type, $pending_actions, $conversation );
 
         return [
             'success'  => true,
@@ -197,12 +200,29 @@ class ProxyClient {
     /**
      * Generate mock response based on user message
      *
-     * @param string $user_message The user's message (not the full prompt).
-     * @param string $task_type    Task type.
+     * @param string $user_message    The user's message (not the full prompt).
+     * @param string $task_type       Task type.
+     * @param array  $pending_actions Pending actions from previous messages.
+     * @param array  $conversation    Conversation history for context.
      * @return string
      */
-    private function generate_mock_response( string $user_message, string $task_type ): string {
+    private function generate_mock_response( string $user_message, string $task_type, array $pending_actions = [], array $conversation = [] ): string {
         $message_lower = strtolower( $user_message );
+
+        // Check for confirmation patterns FIRST when there are pending actions
+        if ( ! empty( $pending_actions ) && $this->is_confirmation_message( $message_lower ) ) {
+            return $this->generate_action_execution_response( $pending_actions, $conversation );
+        }
+
+        // Check for rejection/cancellation patterns when there are pending actions
+        if ( ! empty( $pending_actions ) && $this->is_rejection_message( $message_lower ) ) {
+            return wp_json_encode( [
+                'intent'     => 'cancellation',
+                'confidence' => 0.95,
+                'actions'    => [],
+                'message'    => 'Va bene, ho annullato l\'operazione. Come posso aiutarti?',
+            ]);
+        }
 
         // Handle greetings first
         if ( preg_match( '/^(ciao|hello|hi|hey|buongiorno|buonasera|salve)\b/i', $message_lower ) ) {
@@ -352,6 +372,557 @@ class ProxyClient {
             'actions'    => [],
             'message'    => 'Capisco. Sono qui per aiutarti con il tuo sito WordPress. Puoi chiedermi di creare pagine, post, o gestire altri aspetti del tuo sito. Cosa vorresti fare?',
         ]);
+    }
+
+    /**
+     * Check if message is a confirmation
+     *
+     * @param string $message_lower Lowercase message.
+     * @return bool
+     */
+    private function is_confirmation_message( string $message_lower ): bool {
+        $confirmation_patterns = [
+            '/^(s[iì]|yes|yeah|yep|ok|okay|va bene|procedi|conferma|confermo|esegui|fallo|fai|certo|assolutamente|perfetto|d\'accordo|daccordo)\b/i',
+            '/\b(s[iì]\s*(,\s*)?(procedi|conferma|esegui|fallo|fai|grazie)?)\b/i',
+            '/\b(procedi|conferma|esegui|vai|avanti|continua)\b/i',
+            '/^(👍|✅|✓|💪|🚀)/u',
+        ];
+
+        foreach ( $confirmation_patterns as $pattern ) {
+            if ( preg_match( $pattern, $message_lower ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if message is a rejection/cancellation
+     *
+     * @param string $message_lower Lowercase message.
+     * @return bool
+     */
+    private function is_rejection_message( string $message_lower ): bool {
+        $rejection_patterns = [
+            '/^(no|nope|nah|annulla|cancella|stop|ferma|non)\b/i',
+            '/\b(non\s+(lo\s+)?fare|annulla|cancella|lascia\s+(stare|perdere))\b/i',
+        ];
+
+        foreach ( $rejection_patterns as $pattern ) {
+            if ( preg_match( $pattern, $message_lower ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Generate action execution response
+     *
+     * @param array $pending_actions Pending actions.
+     * @param array $conversation    Conversation history.
+     * @return string
+     */
+    private function generate_action_execution_response( array $pending_actions, array $conversation ): string {
+        // Extract details from conversation for better action parameters
+        $context_details = $this->extract_context_from_conversation( $conversation );
+
+        $actions_to_execute = [];
+
+        foreach ( $pending_actions as $action ) {
+            $enhanced_action = $this->enhance_action_with_context( $action, $context_details );
+            $enhanced_action['status'] = 'ready';
+            $actions_to_execute[] = $enhanced_action;
+        }
+
+        $action_type = $actions_to_execute[0]['type'] ?? 'unknown';
+        $message = $this->get_execution_message( $action_type, $context_details );
+
+        return wp_json_encode( [
+            'intent'     => 'execute_' . $action_type,
+            'confidence' => 0.98,
+            'actions'    => $actions_to_execute,
+            'message'    => $message,
+        ]);
+    }
+
+    /**
+     * Extract context details from conversation history
+     *
+     * @param array $conversation Conversation history.
+     * @return array
+     */
+    private function extract_context_from_conversation( array $conversation ): array {
+        $details = [
+            'title'           => '',
+            'description'     => '',
+            'business_name'   => '',
+            'business_type'   => '',
+            'services'        => [],
+            'use_elementor'   => false,
+            'include_form'    => false,
+            'use_lorem'       => false,
+            'raw_request'     => '',
+        ];
+
+        foreach ( $conversation as $msg ) {
+            if ( $msg['role'] !== 'user' ) {
+                continue;
+            }
+
+            $content = $msg['content'];
+            $details['raw_request'] .= ' ' . $content;
+
+            // Check for Elementor mention
+            if ( preg_match( '/\belementor\b/i', $content ) ) {
+                $details['use_elementor'] = true;
+            }
+
+            // Check for contact form mention
+            if ( preg_match( '/\b(form|modulo|contatt|contact)\b/i', $content ) ) {
+                $details['include_form'] = true;
+            }
+
+            // Check for lorem ipsum / placeholder text
+            if ( preg_match( '/\b(lorem|ipsum|segnaposto|placeholder|prova|test)\b/i', $content ) ) {
+                $details['use_lorem'] = true;
+            }
+
+            // Extract business/person name (look for patterns like "per X" or "di X")
+            if ( preg_match( '/\b(?:per|di|del|della|dello)\s+(?:il\s+)?(?:la\s+)?(?:lo\s+)?(?:dentista|dott\.?|dottor|dottoressa|professionista|avvocato|studio|azienda|negozio|ristorante|hotel|medico)?\s*([A-Z][a-zàèéìòù]+(?:\s+[A-Z][a-zàèéìòù]+)*)/i', $content, $matches ) ) {
+                $details['business_name'] = trim( $matches[1] );
+            }
+
+            // Extract business type
+            if ( preg_match( '/\b(dentista|avvocato|medico|ristorante|hotel|negozio|studio|azienda|professionista|fotografo|architetto|commercialista)\b/i', $content, $matches ) ) {
+                $details['business_type'] = strtolower( $matches[1] );
+            }
+
+            // Extract services mentioned
+            if ( preg_match( '/\bservizi?\b/i', $content ) ) {
+                // Look for service-related content
+                $details['services'][] = 'services_requested';
+            }
+        }
+
+        // Generate a title based on extracted info
+        if ( ! empty( $details['business_name'] ) ) {
+            $details['title'] = $details['business_name'];
+            if ( ! empty( $details['business_type'] ) ) {
+                $details['title'] = ucfirst( $details['business_type'] ) . ' ' . $details['business_name'];
+            }
+        }
+
+        return $details;
+    }
+
+    /**
+     * Enhance action with context details
+     *
+     * @param array $action          Original action.
+     * @param array $context_details Extracted context.
+     * @return array
+     */
+    private function enhance_action_with_context( array $action, array $context_details ): array {
+        $type = $action['type'] ?? '';
+
+        switch ( $type ) {
+            case 'create_page':
+                $action['params'] = $this->build_page_params( $context_details );
+                break;
+
+            case 'create_post':
+                $action['params'] = $this->build_post_params( $context_details );
+                break;
+        }
+
+        return $action;
+    }
+
+    /**
+     * Build page parameters from context
+     *
+     * @param array $context Context details.
+     * @return array
+     */
+    private function build_page_params( array $context ): array {
+        $title = $context['title'] ?: 'Nuova Pagina';
+        $use_elementor = $context['use_elementor'];
+        $include_form = $context['include_form'];
+        $use_lorem = $context['use_lorem'];
+
+        // Build content based on context
+        $content = $this->generate_page_content( $context );
+
+        $params = [
+            'title'   => $title,
+            'content' => $content,
+            'status'  => 'draft',
+        ];
+
+        if ( $use_elementor ) {
+            $params['use_elementor'] = true;
+            $params['elementor_data'] = $this->generate_elementor_template( $context );
+        }
+
+        return $params;
+    }
+
+    /**
+     * Build post parameters from context
+     *
+     * @param array $context Context details.
+     * @return array
+     */
+    private function build_post_params( array $context ): array {
+        return [
+            'title'   => $context['title'] ?: 'Nuovo Articolo',
+            'content' => $this->generate_post_content( $context ),
+            'status'  => 'draft',
+        ];
+    }
+
+    /**
+     * Generate page content based on context
+     *
+     * @param array $context Context details.
+     * @return string
+     */
+    private function generate_page_content( array $context ): string {
+        $business_name = $context['business_name'] ?: '[Nome Professionista]';
+        $business_type = $context['business_type'] ?: 'professionista';
+        $use_lorem = $context['use_lorem'];
+
+        $lorem_short = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
+        $lorem_long = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.';
+
+        $content = "<!-- wp:heading {\"level\":1} -->\n";
+        $content .= "<h1>" . esc_html( $business_name ) . "</h1>\n";
+        $content .= "<!-- /wp:heading -->\n\n";
+
+        $content .= "<!-- wp:paragraph -->\n";
+        $content .= "<p>" . ( $use_lorem ? $lorem_long : "[Inserisci qui la descrizione del {$business_type}]" ) . "</p>\n";
+        $content .= "<!-- /wp:paragraph -->\n\n";
+
+        // Services section
+        $content .= "<!-- wp:heading -->\n";
+        $content .= "<h2>I Nostri Servizi</h2>\n";
+        $content .= "<!-- /wp:heading -->\n\n";
+
+        $services = $this->get_default_services( $business_type );
+        foreach ( $services as $service ) {
+            $content .= "<!-- wp:heading {\"level\":3} -->\n";
+            $content .= "<h3>" . esc_html( $service['name'] ) . "</h3>\n";
+            $content .= "<!-- /wp:heading -->\n\n";
+
+            $content .= "<!-- wp:paragraph -->\n";
+            $content .= "<p>" . ( $use_lorem ? $lorem_short : $service['description'] ) . "</p>\n";
+            $content .= "<!-- /wp:paragraph -->\n\n";
+        }
+
+        // Contact form section
+        if ( $context['include_form'] ) {
+            $content .= "<!-- wp:heading -->\n";
+            $content .= "<h2>Contattaci</h2>\n";
+            $content .= "<!-- /wp:heading -->\n\n";
+
+            $content .= "<!-- wp:paragraph -->\n";
+            $content .= "<p>" . ( $use_lorem ? $lorem_short : "[Inserisci qui le informazioni di contatto]" ) . "</p>\n";
+            $content .= "<!-- /wp:paragraph -->\n\n";
+
+            // Check for WPForms or Contact Form 7
+            if ( is_plugin_active( 'wpforms-lite/wpforms.php' ) || is_plugin_active( 'wpforms/wpforms.php' ) ) {
+                $content .= "<!-- wp:wpforms/form-selector /-->\n\n";
+            } elseif ( is_plugin_active( 'contact-form-7/wp-contact-form-7.php' ) ) {
+                $content .= "<!-- wp:contact-form-7/contact-form-selector /-->\n\n";
+            } else {
+                $content .= "<!-- wp:html -->\n";
+                $content .= "<form class=\"contact-form\">\n";
+                $content .= "  <p><label>Nome<br><input type=\"text\" name=\"name\" required></label></p>\n";
+                $content .= "  <p><label>Email<br><input type=\"email\" name=\"email\" required></label></p>\n";
+                $content .= "  <p><label>Telefono<br><input type=\"tel\" name=\"phone\"></label></p>\n";
+                $content .= "  <p><label>Messaggio<br><textarea name=\"message\" rows=\"5\" required></textarea></label></p>\n";
+                $content .= "  <p><button type=\"submit\">Invia Messaggio</button></p>\n";
+                $content .= "</form>\n";
+                $content .= "<!-- /wp:html -->\n\n";
+            }
+        }
+
+        return $content;
+    }
+
+    /**
+     * Generate post content based on context
+     *
+     * @param array $context Context details.
+     * @return string
+     */
+    private function generate_post_content( array $context ): string {
+        $lorem = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.';
+
+        return "<!-- wp:paragraph -->\n<p>" . $lorem . "</p>\n<!-- /wp:paragraph -->";
+    }
+
+    /**
+     * Get default services based on business type
+     *
+     * @param string $business_type Business type.
+     * @return array
+     */
+    private function get_default_services( string $business_type ): array {
+        $services_map = [
+            'dentista' => [
+                [ 'name' => 'Igiene Dentale', 'description' => '[Descrizione del servizio di igiene dentale professionale]' ],
+                [ 'name' => 'Sbiancamento', 'description' => '[Descrizione del servizio di sbiancamento dentale]' ],
+                [ 'name' => 'Ortodonzia', 'description' => '[Descrizione del servizio di ortodonzia]' ],
+                [ 'name' => 'Implantologia', 'description' => '[Descrizione del servizio di implantologia]' ],
+            ],
+            'avvocato' => [
+                [ 'name' => 'Consulenza Legale', 'description' => '[Descrizione del servizio di consulenza legale]' ],
+                [ 'name' => 'Diritto Civile', 'description' => '[Descrizione del servizio di diritto civile]' ],
+                [ 'name' => 'Diritto Penale', 'description' => '[Descrizione del servizio di diritto penale]' ],
+                [ 'name' => 'Diritto del Lavoro', 'description' => '[Descrizione del servizio di diritto del lavoro]' ],
+            ],
+            'medico' => [
+                [ 'name' => 'Visite Specialistiche', 'description' => '[Descrizione delle visite specialistiche]' ],
+                [ 'name' => 'Check-up Completo', 'description' => '[Descrizione del servizio di check-up]' ],
+                [ 'name' => 'Ecografie', 'description' => '[Descrizione del servizio di ecografia]' ],
+                [ 'name' => 'Consulenze Online', 'description' => '[Descrizione delle consulenze online]' ],
+            ],
+            'fotografo' => [
+                [ 'name' => 'Servizi Fotografici', 'description' => '[Descrizione dei servizi fotografici]' ],
+                [ 'name' => 'Fotografia di Matrimonio', 'description' => '[Descrizione del servizio matrimoni]' ],
+                [ 'name' => 'Fotografia Aziendale', 'description' => '[Descrizione della fotografia aziendale]' ],
+                [ 'name' => 'Post-produzione', 'description' => '[Descrizione del servizio di post-produzione]' ],
+            ],
+            'default' => [
+                [ 'name' => 'Servizio 1', 'description' => '[Descrizione del primo servizio offerto]' ],
+                [ 'name' => 'Servizio 2', 'description' => '[Descrizione del secondo servizio offerto]' ],
+                [ 'name' => 'Servizio 3', 'description' => '[Descrizione del terzo servizio offerto]' ],
+                [ 'name' => 'Servizio 4', 'description' => '[Descrizione del quarto servizio offerto]' ],
+            ],
+        ];
+
+        return $services_map[ $business_type ] ?? $services_map['default'];
+    }
+
+    /**
+     * Generate Elementor template data
+     *
+     * @param array $context Context details.
+     * @return array
+     */
+    private function generate_elementor_template( array $context ): array {
+        $business_name = $context['business_name'] ?: '[Nome Professionista]';
+        $business_type = $context['business_type'] ?: 'professionista';
+        $use_lorem = $context['use_lorem'];
+        $include_form = $context['include_form'];
+
+        $lorem_short = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
+        $lorem_long = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.';
+
+        $elements = [];
+
+        // Hero Section
+        $elements[] = [
+            'elType' => 'section',
+            'settings' => [
+                'layout' => 'full_width',
+                'min_height' => [ 'size' => 500, 'unit' => 'px' ],
+                'background_background' => 'classic',
+                'background_color' => '#f8f9fa',
+            ],
+            'elements' => [
+                [
+                    'elType' => 'column',
+                    'settings' => [ 'content_position' => 'center' ],
+                    'elements' => [
+                        [
+                            'elType' => 'widget',
+                            'widgetType' => 'heading',
+                            'settings' => [
+                                'title' => $business_name,
+                                'header_size' => 'h1',
+                                'align' => 'center',
+                            ],
+                        ],
+                        [
+                            'elType' => 'widget',
+                            'widgetType' => 'text-editor',
+                            'settings' => [
+                                'editor' => $use_lorem ? $lorem_long : "[Descrizione introduttiva del {$business_type}]",
+                                'align' => 'center',
+                            ],
+                        ],
+                        [
+                            'elType' => 'widget',
+                            'widgetType' => 'button',
+                            'settings' => [
+                                'text' => 'Contattaci',
+                                'align' => 'center',
+                                'link' => [ 'url' => '#contatti' ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        // Services Section
+        $services = $this->get_default_services( $business_type );
+        $service_columns = [];
+
+        foreach ( $services as $service ) {
+            $service_columns[] = [
+                'elType' => 'column',
+                'settings' => [ '_column_size' => 25 ],
+                'elements' => [
+                    [
+                        'elType' => 'widget',
+                        'widgetType' => 'icon-box',
+                        'settings' => [
+                            'selected_icon' => [ 'value' => 'fas fa-check-circle', 'library' => 'fa-solid' ],
+                            'title_text' => $service['name'],
+                            'description_text' => $use_lorem ? $lorem_short : $service['description'],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        $elements[] = [
+            'elType' => 'section',
+            'settings' => [
+                'layout' => 'boxed',
+                'gap' => 'extended',
+            ],
+            'elements' => [
+                [
+                    'elType' => 'column',
+                    'settings' => [],
+                    'elements' => [
+                        [
+                            'elType' => 'widget',
+                            'widgetType' => 'heading',
+                            'settings' => [
+                                'title' => 'I Nostri Servizi',
+                                'header_size' => 'h2',
+                                'align' => 'center',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $elements[] = [
+            'elType' => 'section',
+            'settings' => [
+                'layout' => 'boxed',
+                'structure' => '40',
+            ],
+            'elements' => $service_columns,
+        ];
+
+        // Contact Section
+        if ( $include_form ) {
+            $contact_elements = [
+                [
+                    'elType' => 'widget',
+                    'widgetType' => 'heading',
+                    'settings' => [
+                        'title' => 'Contattaci',
+                        'header_size' => 'h2',
+                        'align' => 'center',
+                    ],
+                ],
+                [
+                    'elType' => 'widget',
+                    'widgetType' => 'text-editor',
+                    'settings' => [
+                        'editor' => $use_lorem ? $lorem_short : '[Inserisci qui le informazioni di contatto e gli orari di apertura]',
+                        'align' => 'center',
+                    ],
+                ],
+            ];
+
+            // Add form widget if Elementor Pro is available
+            $contact_elements[] = [
+                'elType' => 'widget',
+                'widgetType' => 'form',
+                'settings' => [
+                    'form_name' => 'Contatto',
+                    'form_fields' => [
+                        [
+                            'field_type' => 'text',
+                            'field_label' => 'Nome',
+                            'placeholder' => 'Il tuo nome',
+                            'required' => 'yes',
+                        ],
+                        [
+                            'field_type' => 'email',
+                            'field_label' => 'Email',
+                            'placeholder' => 'La tua email',
+                            'required' => 'yes',
+                        ],
+                        [
+                            'field_type' => 'tel',
+                            'field_label' => 'Telefono',
+                            'placeholder' => 'Il tuo numero',
+                        ],
+                        [
+                            'field_type' => 'textarea',
+                            'field_label' => 'Messaggio',
+                            'placeholder' => 'Come possiamo aiutarti?',
+                            'required' => 'yes',
+                        ],
+                    ],
+                    'button_text' => 'Invia Messaggio',
+                ],
+            ];
+
+            $elements[] = [
+                'elType' => 'section',
+                'settings' => [
+                    'layout' => 'boxed',
+                    'background_background' => 'classic',
+                    'background_color' => '#f8f9fa',
+                ],
+                'isInner' => false,
+                'elements' => [
+                    [
+                        'elType' => 'column',
+                        'settings' => [],
+                        'elements' => $contact_elements,
+                    ],
+                ],
+            ];
+        }
+
+        return $elements;
+    }
+
+    /**
+     * Get execution message based on action type
+     *
+     * @param string $action_type     Action type.
+     * @param array  $context_details Context details.
+     * @return string
+     */
+    private function get_execution_message( string $action_type, array $context_details ): string {
+        $title = $context_details['title'] ?: 'il contenuto richiesto';
+
+        $messages = [
+            'create_page' => "Perfetto! Sto creando la pagina \"{$title}\" con tutti gli elementi richiesti. La troverai come bozza nel pannello Pagine.",
+            'create_post' => "Perfetto! Sto creando l'articolo \"{$title}\". Lo troverai come bozza nel pannello Articoli.",
+            'update_page' => "Sto aggiornando la pagina come richiesto.",
+            'update_post' => "Sto aggiornando l'articolo come richiesto.",
+            'create_plugin' => "Sto creando il plugin personalizzato. Lo troverai attivo nel pannello Plugin.",
+        ];
+
+        return $messages[ $action_type ] ?? "Sto eseguendo l'operazione richiesta.";
     }
 
     /**

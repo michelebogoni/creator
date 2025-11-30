@@ -315,13 +315,16 @@
             const statusText = this.getStatusText(action.status);
             const iconClass = this.getActionIcon(action.type);
 
+            // Encode action data for storage in data attribute
+            const actionDataEncoded = this.escapeHtml(JSON.stringify(action));
+
             let html = `
-                <div class="creator-action-card" data-action-id="${action.id || ''}">
+                <div class="creator-action-card" data-action-id="${action.id || ''}" data-action='${actionDataEncoded}'>
                     <div class="creator-action-header">
                         <div class="creator-action-icon">
                             <span class="dashicons ${iconClass}"></span>
                         </div>
-                        <span class="creator-action-title">${this.escapeHtml(action.title || action.type)}</span>
+                        <span class="creator-action-title">${this.escapeHtml(action.title || this.getActionTitle(action.type, action.params))}</span>
                         <span class="creator-action-status ${statusClass}">
                             ${statusText}
                         </span>
@@ -411,8 +414,114 @@
          * Process actions from response
          */
         processActions: function(actions) {
-            // Actions are displayed in cards and await user interaction
-            console.log('Actions to process:', actions);
+            const self = this;
+
+            // Check for actions that should be auto-executed
+            actions.forEach(function(action, index) {
+                if (action.status === 'ready') {
+                    // Auto-execute actions marked as ready
+                    console.log('Auto-executing action:', action);
+
+                    // Find the action card and execute it
+                    setTimeout(function() {
+                        const $card = $('.creator-action-card').eq(index);
+                        if ($card.length) {
+                            self.executeActionDirectly(action, $card);
+                        }
+                    }, 500); // Small delay for UI to render
+                } else {
+                    console.log('Action pending user confirmation:', action);
+                }
+            });
+        },
+
+        /**
+         * Execute action directly (for auto-execution)
+         */
+        executeActionDirectly: function(action, $card) {
+            const self = this;
+
+            // Update status
+            $card.find('.creator-action-status')
+                .removeClass('creator-status-pending')
+                .addClass('creator-status-executing')
+                .html('<span class="dashicons dashicons-update creator-spin"></span> Executing');
+
+            // Disable buttons
+            $card.find('.creator-action-buttons button').prop('disabled', true);
+
+            $.ajax({
+                url: creatorChat.restUrl + 'actions/execute',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'X-WP-Nonce': creatorChat.restNonce
+                },
+                data: JSON.stringify({
+                    action: action,
+                    chat_id: self.chatId
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        $card.find('.creator-action-status')
+                            .removeClass('creator-status-executing')
+                            .addClass('creator-status-completed')
+                            .html('<span class="dashicons dashicons-yes-alt"></span> Completed');
+
+                        // Show result info if available (data contains URLs etc.)
+                        if (response.data) {
+                            self.showActionResult(response.data, $card);
+                        }
+
+                        // Show rollback button if snapshot was created
+                        if (response.snapshot_id) {
+                            $card.find('.creator-action-buttons').html(`
+                                <button class="creator-btn creator-btn-outline creator-btn-sm creator-rollback-action"
+                                        data-snapshot-id="${response.snapshot_id}">
+                                    <span class="dashicons dashicons-undo"></span> Rollback
+                                </button>
+                            `);
+                        } else {
+                            $card.find('.creator-action-buttons').empty();
+                        }
+                    } else {
+                        self.handleActionError($card, response.message || response.error);
+                    }
+                },
+                error: function(xhr) {
+                    const error = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Action failed';
+                    self.handleActionError($card, error);
+                }
+            });
+        },
+
+        /**
+         * Show action result (e.g., links to created content)
+         */
+        showActionResult: function(data, $card) {
+            let resultHtml = '<div class="creator-action-result">';
+
+            if (data.edit_url) {
+                resultHtml += `<a href="${data.edit_url}" target="_blank" class="creator-btn creator-btn-sm creator-btn-link">
+                    <span class="dashicons dashicons-edit"></span> Edit
+                </a>`;
+            }
+
+            if (data.view_url) {
+                resultHtml += `<a href="${data.view_url}" target="_blank" class="creator-btn creator-btn-sm creator-btn-link">
+                    <span class="dashicons dashicons-visibility"></span> View
+                </a>`;
+            }
+
+            if (data.elementor_url) {
+                resultHtml += `<a href="${data.elementor_url}" target="_blank" class="creator-btn creator-btn-sm creator-btn-primary">
+                    <span class="dashicons dashicons-welcome-widgets-menus"></span> Edit with Elementor
+                </a>`;
+            }
+
+            resultHtml += '</div>';
+
+            $card.find('.creator-action-buttons').before(resultHtml);
         },
 
         /**
@@ -437,6 +546,22 @@
         executeAction: function(actionId, $card) {
             const self = this;
 
+            // Get action data from card
+            let actionData = null;
+            try {
+                const actionStr = $card.attr('data-action');
+                if (actionStr) {
+                    actionData = JSON.parse(actionStr);
+                }
+            } catch (e) {
+                console.error('Failed to parse action data:', e);
+            }
+
+            if (!actionData) {
+                self.handleActionError($card, 'No action data available');
+                return;
+            }
+
             // Update status
             $card.find('.creator-action-status')
                 .removeClass('creator-status-pending')
@@ -449,9 +574,14 @@
             $.ajax({
                 url: creatorChat.restUrl + 'actions/execute',
                 type: 'POST',
+                contentType: 'application/json',
                 headers: {
                     'X-WP-Nonce': creatorChat.restNonce
                 },
+                data: JSON.stringify({
+                    action: actionData,
+                    chat_id: self.chatId
+                }),
                 success: function(response) {
                     if (response.success) {
                         $card.find('.creator-action-status')
@@ -459,10 +589,16 @@
                             .addClass('creator-status-completed')
                             .html('<span class="dashicons dashicons-yes-alt"></span> Completed');
 
-                        // Show rollback button if available
-                        if (response.can_rollback) {
+                        // Show result info if available (data contains URLs etc.)
+                        if (response.data) {
+                            self.showActionResult(response.data, $card);
+                        }
+
+                        // Show rollback button if snapshot was created
+                        if (response.snapshot_id) {
                             $card.find('.creator-action-buttons').html(`
-                                <button class="creator-btn creator-btn-outline creator-btn-sm creator-rollback-action">
+                                <button class="creator-btn creator-btn-outline creator-btn-sm creator-rollback-action"
+                                        data-snapshot-id="${response.snapshot_id}">
                                     <span class="dashicons dashicons-undo"></span> Rollback
                                 </button>
                             `);
@@ -470,14 +606,36 @@
                             $card.find('.creator-action-buttons').empty();
                         }
                     } else {
-                        self.handleActionError($card, response.message);
+                        self.handleActionError($card, response.message || response.error);
                     }
                 },
                 error: function(xhr) {
-                    const error = xhr.responseJSON?.message || 'Action failed';
+                    const error = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Action failed';
                     self.handleActionError($card, error);
                 }
             });
+        },
+
+        /**
+         * Get human-readable action title
+         */
+        getActionTitle: function(type, params) {
+            const titles = {
+                'create_page': 'Create Page' + (params?.title ? ': ' + params.title : ''),
+                'create_post': 'Create Post' + (params?.title ? ': ' + params.title : ''),
+                'update_page': 'Update Page' + (params?.title ? ': ' + params.title : ''),
+                'update_post': 'Update Post' + (params?.title ? ': ' + params.title : ''),
+                'delete_page': 'Delete Page',
+                'delete_post': 'Delete Post',
+                'create_plugin': 'Create Plugin' + (params?.name ? ': ' + params.name : ''),
+                'update_elementor': 'Update Elementor',
+                'update_acf': 'Update ACF Fields',
+                'read_file': 'Read File' + (params?.path ? ': ' + params.path : ''),
+                'write_file': 'Write File' + (params?.path ? ': ' + params.path : ''),
+                'db_query': 'Database Query'
+            };
+
+            return titles[type] || type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         },
 
         /**
