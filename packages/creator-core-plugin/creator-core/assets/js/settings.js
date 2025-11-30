@@ -123,7 +123,15 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        $status.html('<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> License valid until ' + response.data.expires + '</span>');
+                        var licenseData = response.data.data || response.data;
+                        var resetDate = licenseData.reset_date || '';
+                        var plan = licenseData.plan || 'standard';
+                        var statusText = '<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> License valid (' + plan + ')';
+                        if (resetDate) {
+                            statusText += ' - Resets: ' + resetDate;
+                        }
+                        statusText += '</span>';
+                        $status.html(statusText);
                     } else {
                         $status.html('<span class="creator-status-error"><span class="dashicons dashicons-no"></span> ' + (response.data?.message || 'Invalid license') + '</span>');
                     }

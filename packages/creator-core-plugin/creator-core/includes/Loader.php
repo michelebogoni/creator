@@ -301,7 +301,7 @@ class Loader {
                 'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
                 'restUrl'     => rest_url( 'creator/v1/' ),
                 'adminUrl'    => admin_url( 'admin.php' ),
-                'settingsUrl' => admin_url( 'admin.php?page=creator-settings' ),
+                'settingsUrl' => admin_url( 'admin.php?page=creator-settings#api' ),
                 'nonce'       => wp_create_nonce( 'creator_chat_nonce' ),
                 'restNonce'   => wp_create_nonce( 'wp_rest' ),
                 'chatId'      => $chat_id,
