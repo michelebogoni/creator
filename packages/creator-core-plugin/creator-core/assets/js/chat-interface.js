@@ -183,13 +183,14 @@
                         self.sendMessageToChat(response.chat.id, message);
                     } else {
                         self.hideTypingIndicator();
-                        self.showError(response.message || 'Failed to create chat');
+                        const errorMsg = response.message || 'Failed to create chat';
+                        self.showError(errorMsg, self.isLicenseError(errorMsg));
                     }
                 },
                 error: function(xhr) {
                     self.hideTypingIndicator();
                     const error = xhr.responseJSON?.message || 'Failed to create chat';
-                    self.showError(error);
+                    self.showError(error, self.isLicenseError(error));
                 }
             });
         },
@@ -233,13 +234,14 @@
                             self.processActions(response.actions);
                         }
                     } else {
-                        self.showError(response.message || 'Failed to send message');
+                        const errorMsg = response.message || 'Failed to send message';
+                        self.showError(errorMsg, self.isLicenseError(errorMsg));
                     }
                 },
                 error: function(xhr) {
                     self.hideTypingIndicator();
                     const error = xhr.responseJSON?.message || 'Failed to send message';
-                    self.showError(error);
+                    self.showError(error, self.isLicenseError(error));
                 }
             });
         },
@@ -286,7 +288,7 @@
                             <span class="creator-message-time">${timeStr}</span>
                         </div>
                         <div class="creator-message-body">
-                            ${this.formatMessageContent(message.content)}
+                            ${this.formatMessageContent(message.content, message.isError)}
                         </div>
             `;
 
@@ -778,15 +780,33 @@
         },
 
         /**
+         * Check if error is license-related
+         */
+        isLicenseError: function(message) {
+            if (!message) return false;
+            const lowerMsg = message.toLowerCase();
+            return lowerMsg.includes('license') ||
+                   lowerMsg.includes('authenticated') ||
+                   lowerMsg.includes('authentication') ||
+                   lowerMsg.includes('site token') ||
+                   lowerMsg.includes('not authorized');
+        },
+
+        /**
          * Show error message
          */
-        showError: function(message) {
+        showError: function(message, showSettingsLink) {
+            const settingsUrl = creatorChat.settingsUrl || (creatorChat.adminUrl + '?page=creator-settings');
+            let errorContent = '**' + message + '**';
+
+            if (showSettingsLink) {
+                errorContent += '\n\n[' + creatorChat.i18n.goToSettings + '](' + settingsUrl + ')';
+            }
+
             this.addMessage({
                 role: 'assistant',
-                content: `<div class="creator-notice creator-notice-error">
-                    <span class="dashicons dashicons-warning"></span>
-                    <span>${message}</span>
-                </div>`,
+                content: errorContent,
+                isError: true,
                 timestamp: new Date().toISOString()
             });
         },
@@ -811,7 +831,7 @@
         /**
          * Format message content
          */
-        formatMessageContent: function(content) {
+        formatMessageContent: function(content, isError) {
             if (!content) return '';
 
             // Basic markdown-like formatting
@@ -826,8 +846,16 @@
             // Convert `code` to <code>
             formatted = formatted.replace(/`(.*?)`/g, '<code>$1</code>');
 
+            // Convert [text](url) to <a href="url">text</a>
+            formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="creator-link">$1</a>');
+
             // Convert newlines to <br>
             formatted = formatted.replace(/\n/g, '<br>');
+
+            // Wrap error messages in error styling
+            if (isError) {
+                formatted = '<span class="creator-error-text">' + formatted + '</span>';
+            }
 
             return formatted;
         },

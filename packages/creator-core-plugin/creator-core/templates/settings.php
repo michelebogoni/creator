@@ -60,6 +60,22 @@ $settings_page = new \CreatorCore\Admin\Settings(
                             <p class="description"><?php esc_html_e( 'Firebase Proxy endpoint URL', 'creator-core' ); ?></p>
                         </td>
                     </tr>
+                    <?php
+                    $is_admin_license = ( $data['settings']['license_key'] === 'CREATOR-ADMIN-7f3d9c2e1a8b4f6d' );
+                    if ( $is_admin_license ) :
+                    ?>
+                    <tr>
+                        <th scope="row">
+                            <label for="creator_openai_api_key"><?php esc_html_e( 'OpenAI API Key', 'creator-core' ); ?></label>
+                        </th>
+                        <td>
+                            <input type="password" id="creator_openai_api_key" name="creator_openai_api_key"
+                                   value="<?php echo esc_attr( $data['settings']['openai_api_key'] ?? '' ); ?>"
+                                   class="regular-text" placeholder="sk-...">
+                            <p class="description"><?php esc_html_e( 'Required for Admin License. Get your API key from OpenAI.', 'creator-core' ); ?></p>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
                     <tr>
                         <th scope="row"><?php esc_html_e( 'Connection Status', 'creator-core' ); ?></th>
                         <td>

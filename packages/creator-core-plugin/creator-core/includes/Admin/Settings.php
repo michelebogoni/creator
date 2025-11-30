@@ -163,6 +163,9 @@ class Settings {
         if ( isset( $_POST['creator_proxy_url'] ) ) {
             update_option( 'creator_proxy_url', esc_url_raw( $_POST['creator_proxy_url'] ) );
         }
+        if ( isset( $_POST['creator_openai_api_key'] ) ) {
+            update_option( 'creator_openai_api_key', sanitize_text_field( $_POST['creator_openai_api_key'] ) );
+        }
 
         // Backup Settings
         if ( isset( $_POST['creator_backup_retention'] ) ) {
@@ -197,6 +200,7 @@ class Settings {
         return [
             'license_key'               => get_option( 'creator_license_key', '' ),
             'proxy_url'                 => get_option( 'creator_proxy_url', CREATOR_PROXY_URL ),
+            'openai_api_key'            => get_option( 'creator_openai_api_key', '' ),
             'backup_retention'          => get_option( 'creator_backup_retention', 30 ),
             'max_backup_size_mb'        => get_option( 'creator_max_backup_size_mb', 500 ),
             'allowed_roles'             => get_option( 'creator_allowed_roles', [ 'administrator', 'creator_admin' ] ),

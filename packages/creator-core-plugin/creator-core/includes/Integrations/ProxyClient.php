@@ -120,6 +120,18 @@ class ProxyClient {
      * @return array
      */
     public function send_to_ai( string $prompt, string $task_type = 'TEXT_GEN', array $options = [] ): array {
+        // Check for admin license with direct API key
+        if ( $this->is_admin_license() ) {
+            $openai_api_key = get_option( 'creator_openai_api_key', '' );
+            if ( ! empty( $openai_api_key ) ) {
+                return $this->send_to_openai_direct( $prompt, $task_type, $options, $openai_api_key );
+            }
+            return [
+                'success' => false,
+                'error'   => __( 'Admin license requires an OpenAI API key. Please configure it in Settings.', 'creator-core' ),
+            ];
+        }
+
         $site_token = get_option( 'creator_site_token' );
 
         if ( empty( $site_token ) ) {
@@ -148,6 +160,155 @@ class ProxyClient {
         }
 
         return $response;
+    }
+
+    /**
+     * Send request directly to OpenAI (for admin license)
+     *
+     * @param string $prompt    The prompt to send.
+     * @param string $task_type Task type.
+     * @param array  $options   Additional options.
+     * @param string $api_key   OpenAI API key.
+     * @return array
+     */
+    private function send_to_openai_direct( string $prompt, string $task_type, array $options, string $api_key ): array {
+        $context     = $this->get_site_context();
+        $system_prompt = $this->build_system_prompt( $context, $task_type );
+
+        $messages = [
+            [
+                'role'    => 'system',
+                'content' => $system_prompt,
+            ],
+            [
+                'role'    => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        // Add conversation history if present
+        if ( ! empty( $options['history'] ) ) {
+            $history_messages = [];
+            foreach ( $options['history'] as $msg ) {
+                $history_messages[] = [
+                    'role'    => $msg['role'] === 'user' ? 'user' : 'assistant',
+                    'content' => $msg['content'],
+                ];
+            }
+            // Insert history after system message
+            array_splice( $messages, 1, 0, $history_messages );
+        }
+
+        $response = wp_remote_post( 'https://api.openai.com/v1/chat/completions', [
+            'timeout' => 60,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type'  => 'application/json',
+            ],
+            'body'    => wp_json_encode( [
+                'model'       => 'gpt-4o',
+                'messages'    => $messages,
+                'temperature' => 0.7,
+                'max_tokens'  => 4096,
+            ] ),
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            return [
+                'success' => false,
+                'error'   => $response->get_error_message(),
+            ];
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+        $body        = wp_remote_retrieve_body( $response );
+        $data        = json_decode( $body, true );
+
+        if ( $status_code >= 400 ) {
+            $error_message = $data['error']['message'] ?? __( 'OpenAI API request failed', 'creator-core' );
+            return [
+                'success' => false,
+                'error'   => $error_message,
+            ];
+        }
+
+        $ai_response = $data['choices'][0]['message']['content'] ?? '';
+        $actions     = $this->extract_actions( $ai_response );
+
+        return [
+            'success'  => true,
+            'response' => $ai_response,
+            'actions'  => $actions,
+            'usage'    => $data['usage'] ?? [],
+        ];
+    }
+
+    /**
+     * Build system prompt for AI
+     *
+     * @param array  $context   Site context.
+     * @param string $task_type Task type.
+     * @return string
+     */
+    private function build_system_prompt( array $context, string $task_type ): string {
+        $site_name = $context['site_info']['site_title'] ?? 'WordPress Site';
+        $site_url  = $context['site_info']['site_url'] ?? '';
+
+        $prompt = "You are Creator AI, an intelligent WordPress assistant for the site '{$site_name}' ({$site_url}).\n\n";
+        $prompt .= "Your role is to help users manage their WordPress website by:\n";
+        $prompt .= "- Creating and editing pages, posts, and content\n";
+        $prompt .= "- Managing plugins and themes\n";
+        $prompt .= "- Configuring settings\n";
+        $prompt .= "- Providing guidance on WordPress best practices\n\n";
+
+        $prompt .= "Available integrations:\n";
+        foreach ( $context['integrations'] as $integration => $active ) {
+            if ( $active ) {
+                $prompt .= "- {$integration}\n";
+            }
+        }
+
+        $prompt .= "\nWhen you need to perform an action, respond with a clear description of what you'll do, ";
+        $prompt .= "then include an ACTION block in this format:\n";
+        $prompt .= "```action\n{\"type\": \"action_type\", \"params\": {...}}\n```\n\n";
+
+        $prompt .= "Available action types:\n";
+        $prompt .= "- create_page: Create a new page (params: title, content, status)\n";
+        $prompt .= "- create_post: Create a new post (params: title, content, status, categories)\n";
+        $prompt .= "- edit_page: Edit an existing page (params: page_id, title, content)\n";
+        $prompt .= "- edit_post: Edit an existing post (params: post_id, title, content)\n";
+        $prompt .= "- install_plugin: Install a plugin (params: slug)\n";
+        $prompt .= "- activate_plugin: Activate a plugin (params: slug)\n";
+        $prompt .= "- update_option: Update a WordPress option (params: option_name, value)\n\n";
+
+        $prompt .= "Always be helpful, concise, and proactive. When a user confirms an action (e.g., 'yes', 'proceed', 'ok'), ";
+        $prompt .= "execute the action immediately without asking again.";
+
+        return $prompt;
+    }
+
+    /**
+     * Extract actions from AI response
+     *
+     * @param string $response AI response text.
+     * @return array
+     */
+    private function extract_actions( string $response ): array {
+        $actions = [];
+
+        // Look for action blocks in the response
+        if ( preg_match_all( '/```action\s*([\s\S]*?)```/m', $response, $matches ) ) {
+            foreach ( $matches[1] as $action_json ) {
+                $action = json_decode( trim( $action_json ), true );
+                if ( $action && isset( $action['type'] ) ) {
+                    $action['id']     = wp_generate_uuid4();
+                    $action['status'] = 'pending';
+                    $actions[]        = $action;
+                }
+            }
+        }
+
+        return $actions;
     }
 
     /**
