@@ -298,19 +298,22 @@ class Loader {
             $current_user = wp_get_current_user();
             $chat_id      = isset( $_GET['chat_id'] ) ? absint( $_GET['chat_id'] ) : null;
             wp_localize_script( 'creator-chat-interface', 'creatorChat', [
-                'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
-                'restUrl'    => rest_url( 'creator/v1/' ),
-                'nonce'      => wp_create_nonce( 'creator_chat_nonce' ),
-                'restNonce'  => wp_create_nonce( 'wp_rest' ),
-                'chatId'     => $chat_id,
-                'userName'   => $current_user->display_name,
-                'userAvatar' => get_avatar_url( $current_user->ID, [ 'size' => 32 ] ),
-                'i18n'       => [
+                'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
+                'restUrl'     => rest_url( 'creator/v1/' ),
+                'adminUrl'    => admin_url( 'admin.php' ),
+                'settingsUrl' => admin_url( 'admin.php?page=creator-settings' ),
+                'nonce'       => wp_create_nonce( 'creator_chat_nonce' ),
+                'restNonce'   => wp_create_nonce( 'wp_rest' ),
+                'chatId'      => $chat_id,
+                'userName'    => $current_user->display_name,
+                'userAvatar'  => get_avatar_url( $current_user->ID, [ 'size' => 32 ] ),
+                'i18n'        => [
                     'sending'       => __( 'Sending...', 'creator-core' ),
                     'error'         => __( 'An error occurred. Please try again.', 'creator-core' ),
                     'confirmUndo'   => __( 'Are you sure you want to undo this action?', 'creator-core' ),
                     'undoSuccess'   => __( 'Action undone successfully.', 'creator-core' ),
                     'processing'    => __( 'Processing...', 'creator-core' ),
+                    'goToSettings'  => __( 'Go to Settings', 'creator-core' ),
                 ],
             ]);
         }

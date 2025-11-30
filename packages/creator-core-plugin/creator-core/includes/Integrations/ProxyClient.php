@@ -16,321 +16,242 @@ defined( 'ABSPATH' ) || exit;
  */
 class ProxyClient {
 
-    /**
-     * Admin license key for unlimited access
-     * This license bypasses the proxy and grants unlimited usage
-     *
-     * @var string
-     */
-    private const ADMIN_LICENSE_KEY = 'CREATOR-ADMIN-7f3d9c2e1a8b4f6d';
+	/**
+	 * Admin license key for unlimited access
+	 * This license has unlimited tokens and 100 year expiration in Firestore
+	 *
+	 * @var string
+	 */
+	public const ADMIN_LICENSE_KEY = 'CREATOR-2024-ADMIN-ADMIN';
 
-    /**
-     * Proxy base URL
-     *
-     * @var string
-     */
-    private string $proxy_url;
+	/**
+	 * Proxy base URL
+	 *
+	 * @var string
+	 */
+	private string $proxy_url;
 
-    /**
-     * Request timeout in seconds
-     *
-     * @var int
-     */
-    private int $timeout = 30;
+	/**
+	 * Request timeout in seconds
+	 *
+	 * @var int
+	 */
+	private int $timeout = 30;
 
-    /**
-     * Constructor
-     */
-    public function __construct() {
-        $this->proxy_url = get_option( 'creator_proxy_url', CREATOR_PROXY_URL );
-    }
+	/**
+	 * Constructor
+	 */
+	public function __construct() {
+		$this->proxy_url = get_option( 'creator_proxy_url', CREATOR_PROXY_URL );
+	}
 
-    /**
-     * Check if current license is admin license
-     *
-     * @return bool
-     */
-    private function is_admin_license(): bool {
-        $license_key = get_option( 'creator_license_key', '' );
-        return $license_key === self::ADMIN_LICENSE_KEY;
-    }
+	/**
+	 * Check if current license is admin license
+	 *
+	 * @return bool
+	 */
+	public function is_admin_license(): bool {
+		$license_key = get_option( 'creator_license_key', '' );
+		return $license_key === self::ADMIN_LICENSE_KEY;
+	}
 
-    /**
-     * Validate license key
-     *
-     * @param string $license_key License key to validate.
-     * @return array
-     */
-    public function validate_license( string $license_key ): array {
-        // Check for admin license (unlimited access)
-        if ( $license_key === self::ADMIN_LICENSE_KEY ) {
-            $response = [
-                'success'    => true,
-                'license_id' => 'ADMIN-LICENSE-UNLIMITED',
-                'plan'       => 'admin',
-                'features'   => [ 'elementor', 'acf', 'rank_math', 'woocommerce', 'development', 'unlimited' ],
-                'expires_at' => gmdate( 'Y-m-d', strtotime( '+100 years' ) ),
-                'site_token' => 'admin_site_token_' . wp_generate_password( 32, false ),
-                'usage'      => [
-                    'tokens_used'  => 0,
-                    'tokens_limit' => PHP_INT_MAX,
-                    'requests'     => 0,
-                ],
-                'admin_mode' => true,
-            ];
+	/**
+	 * Validate license key
+	 *
+	 * @param string $license_key License key to validate.
+	 * @return array
+	 */
+	public function validate_license( string $license_key ): array {
+		// All licenses go through the proxy - no exceptions
+		$response = $this->make_request( 'POST', '/api/auth/validate-license', [
+			'license_key' => $license_key,
+			'site_url'    => get_site_url(),
+		]);
 
-            update_option( 'creator_site_token', $response['site_token'] );
-            update_option( 'creator_license_validated', true );
-            update_option( 'creator_license_key', $license_key );
-            set_transient( 'creator_license_status', $response, YEAR_IN_SECONDS );
+		if ( is_wp_error( $response ) ) {
+			return [
+				'success' => false,
+				'error'   => $response->get_error_message(),
+			];
+		}
 
-            return $response;
-        }
+		if ( ! empty( $response['success'] ) && ! empty( $response['site_token'] ) ) {
+			update_option( 'creator_site_token', $response['site_token'] );
+			update_option( 'creator_license_validated', true );
+			update_option( 'creator_license_key', $license_key );
+			set_transient( 'creator_license_status', $response, DAY_IN_SECONDS );
+		}
 
-        // Regular license validation through proxy
-        $response = $this->make_request( 'POST', '/api/auth/validate-license', [
-            'license_key' => $license_key,
-            'site_url'    => get_site_url(),
-            'site_name'   => get_bloginfo( 'name' ),
-        ]);
+		return $response;
+	}
 
-        if ( is_wp_error( $response ) ) {
-            return [
-                'success' => false,
-                'error'   => $response->get_error_message(),
-            ];
-        }
+	/**
+	 * Send request to AI provider through proxy
+	 *
+	 * @param string $prompt    The prompt to send.
+	 * @param string $task_type Task type (TEXT_GEN, CODE_GEN, ANALYSIS, etc).
+	 * @param array  $options   Additional options.
+	 * @return array
+	 */
+	public function send_to_ai( string $prompt, string $task_type = 'TEXT_GEN', array $options = [] ): array {
+		$site_token = get_option( 'creator_site_token' );
 
-        if ( ! empty( $response['success'] ) && ! empty( $response['site_token'] ) ) {
-            update_option( 'creator_site_token', $response['site_token'] );
-            update_option( 'creator_license_validated', true );
-            update_option( 'creator_license_key', $license_key );
-            set_transient( 'creator_license_status', $response, DAY_IN_SECONDS );
-        }
+		if ( empty( $site_token ) ) {
+			return [
+				'success' => false,
+				'error'   => __( 'Site not authenticated. Please validate your license.', 'creator-core' ),
+			];
+		}
 
-        return $response;
-    }
+		$context = $this->get_site_context();
 
-    /**
-     * Send request to AI provider through proxy
-     *
-     * @param string $prompt    The prompt to send.
-     * @param string $task_type Task type (TEXT_GEN, CODE_GEN, ANALYSIS, etc).
-     * @param array  $options   Additional options.
-     * @return array
-     */
-    public function send_to_ai( string $prompt, string $task_type = 'TEXT_GEN', array $options = [] ): array {
-        $site_token = get_option( 'creator_site_token' );
+		$response = $this->make_request( 'POST', '/api/ai/route-request', [
+			'task_type' => $task_type,
+			'prompt'    => $prompt,
+			'context'   => $context,
+			'options'   => $options,
+		], [
+			'Authorization' => 'Bearer ' . $site_token,
+		]);
 
-        if ( empty( $site_token ) ) {
-            return [
-                'success' => false,
-                'error'   => __( 'Site not authenticated. Please validate your license.', 'creator-core' ),
-            ];
-        }
+		if ( is_wp_error( $response ) ) {
+			return [
+				'success' => false,
+				'error'   => $response->get_error_message(),
+			];
+		}
 
-        $context = $this->get_site_context();
+		return $response;
+	}
 
-        $response = $this->make_request( 'POST', '/api/ai/route-request', [
-            'task_type' => $task_type,
-            'prompt'    => $prompt,
-            'context'   => $context,
-            'options'   => $options,
-        ], [
-            'Authorization' => 'Bearer ' . $site_token,
-        ]);
+	/**
+	 * Get site context for AI requests
+	 *
+	 * @return array
+	 */
+	private function get_site_context(): array {
+		$plugin_detector = new PluginDetector();
 
-        if ( is_wp_error( $response ) ) {
-            return [
-                'success' => false,
-                'error'   => $response->get_error_message(),
-            ];
-        }
+		return [
+			'site_info'    => [
+				'site_title'        => get_bloginfo( 'name' ),
+				'site_url'          => get_site_url(),
+				'wordpress_version' => get_bloginfo( 'version' ),
+				'php_version'       => PHP_VERSION,
+			],
+			'theme_info'   => [
+				'theme_name'   => wp_get_theme()->get( 'Name' ),
+				'theme_author' => wp_get_theme()->get( 'Author' ),
+				'theme_uri'    => wp_get_theme()->get( 'ThemeURI' ),
+			],
+			'integrations' => $plugin_detector->get_all_integrations(),
+			'current_user' => [
+				'id'    => get_current_user_id(),
+				'email' => wp_get_current_user()->user_email,
+				'role'  => implode( ',', wp_get_current_user()->roles ),
+			],
+		];
+	}
 
-        return $response;
-    }
+	/**
+	 * Check connection status
+	 *
+	 * @return array
+	 */
+	public function check_connection(): array {
+		$response = $this->make_request( 'GET', '/api/health' );
 
-    /**
-     * Get site context for AI requests
-     *
-     * @return array
-     */
-    private function get_site_context(): array {
-        $plugin_detector = new PluginDetector();
+		if ( is_wp_error( $response ) ) {
+			return [
+				'connected' => false,
+				'error'     => $response->get_error_message(),
+				'proxy_url' => $this->proxy_url,
+			];
+		}
 
-        return [
-            'site_info'    => [
-                'site_title'        => get_bloginfo( 'name' ),
-                'site_url'          => get_site_url(),
-                'wordpress_version' => get_bloginfo( 'version' ),
-                'php_version'       => PHP_VERSION,
-            ],
-            'theme_info'   => [
-                'theme_name'   => wp_get_theme()->get( 'Name' ),
-                'theme_author' => wp_get_theme()->get( 'Author' ),
-                'theme_uri'    => wp_get_theme()->get( 'ThemeURI' ),
-            ],
-            'integrations' => $plugin_detector->get_all_integrations(),
-            'current_user' => [
-                'id'    => get_current_user_id(),
-                'email' => wp_get_current_user()->user_email,
-                'role'  => implode( ',', wp_get_current_user()->roles ),
-            ],
-        ];
-    }
+		return [
+			'connected'   => true,
+			'admin_mode'  => $this->is_admin_license(),
+			'proxy_url'   => $this->proxy_url,
+			'site_token'  => get_option( 'creator_site_token' ) ? 'configured' : 'missing',
+			'status'      => $response,
+		];
+	}
 
-    /**
-     * Check connection status
-     *
-     * @return array
-     */
-    public function check_connection(): array {
-        // Check if using admin license
-        if ( $this->is_admin_license() ) {
-            return [
-                'connected'   => true,
-                'admin_mode'  => true,
-                'proxy_url'   => $this->proxy_url,
-                'site_token'  => get_option( 'creator_site_token' ) ? 'configured' : 'missing',
-                'license'     => get_transient( 'creator_license_status' ) ?: null,
-            ];
-        }
+	/**
+	 * Get usage statistics
+	 *
+	 * @return array
+	 */
+	public function get_usage_stats(): array {
+		$site_token = get_option( 'creator_site_token' );
 
-        $response = $this->make_request( 'GET', '/api/health' );
+		if ( empty( $site_token ) ) {
+			return [
+				'error' => __( 'Site not authenticated', 'creator-core' ),
+			];
+		}
 
-        if ( is_wp_error( $response ) ) {
-            return [
-                'connected' => false,
-                'error'     => $response->get_error_message(),
-                'proxy_url' => $this->proxy_url,
-            ];
-        }
+		$response = $this->make_request( 'GET', '/api/usage/stats', [], [
+			'Authorization' => 'Bearer ' . $site_token,
+		]);
 
-        return [
-            'connected'  => true,
-            'admin_mode' => false,
-            'proxy_url'  => $this->proxy_url,
-            'site_token' => get_option( 'creator_site_token' ) ? 'configured' : 'missing',
-            'status'     => $response,
-        ];
-    }
+		if ( is_wp_error( $response ) ) {
+			return [
+				'error' => $response->get_error_message(),
+			];
+		}
 
-    /**
-     * Get usage statistics
-     *
-     * @return array
-     */
-    public function get_usage_stats(): array {
-        // Admin license has unlimited usage
-        if ( $this->is_admin_license() ) {
-            return [
-                'tokens_used'      => 0,
-                'tokens_limit'     => PHP_INT_MAX,
-                'tokens_remaining' => PHP_INT_MAX,
-                'requests_today'   => 0,
-                'cost_estimate'    => '$0.00',
-                'admin_mode'       => true,
-                'unlimited'        => true,
-            ];
-        }
+		// Add admin_mode flag for display purposes
+		$response['admin_mode'] = $this->is_admin_license();
 
-        $site_token = get_option( 'creator_site_token' );
+		return $response;
+	}
 
-        if ( empty( $site_token ) ) {
-            return [
-                'error' => __( 'Site not authenticated', 'creator-core' ),
-            ];
-        }
+	/**
+	 * Make HTTP request to proxy
+	 *
+	 * @param string $method   HTTP method.
+	 * @param string $endpoint API endpoint.
+	 * @param array  $body     Request body.
+	 * @param array  $headers  Additional headers.
+	 * @return array|\WP_Error
+	 */
+	private function make_request( string $method, string $endpoint, array $body = [], array $headers = [] ) {
+		$url = rtrim( $this->proxy_url, '/' ) . $endpoint;
 
-        $response = $this->make_request( 'GET', '/api/usage/stats', [], [
-            'Authorization' => 'Bearer ' . $site_token,
-        ]);
+		$default_headers = [
+			'Content-Type'      => 'application/json',
+			'Accept'            => 'application/json',
+			'X-Creator-Version' => CREATOR_CORE_VERSION,
+			'X-Site-URL'        => get_site_url(),
+		];
 
-        if ( is_wp_error( $response ) ) {
-            return [
-                'error' => $response->get_error_message(),
-            ];
-        }
+		$args = [
+			'method'  => $method,
+			'timeout' => $this->timeout,
+			'headers' => array_merge( $default_headers, $headers ),
+		];
 
-        return $response;
-    }
+		if ( ! empty( $body ) && in_array( $method, [ 'POST', 'PUT', 'PATCH' ], true ) ) {
+			$args['body'] = wp_json_encode( $body );
+		}
 
-    /**
-     * Make HTTP request to proxy
-     *
-     * @param string $method   HTTP method.
-     * @param string $endpoint API endpoint.
-     * @param array  $body     Request body.
-     * @param array  $headers  Additional headers.
-     * @return array|\WP_Error
-     */
-    private function make_request( string $method, string $endpoint, array $body = [], array $headers = [] ) {
-        $url = rtrim( $this->proxy_url, '/' ) . $endpoint;
+		$response = wp_remote_request( $url, $args );
 
-        $default_headers = [
-            'Content-Type' => 'application/json',
-            'Accept'       => 'application/json',
-            'X-Creator-Version' => CREATOR_CORE_VERSION,
-            'X-Site-URL'   => get_site_url(),
-        ];
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
 
-        $args = [
-            'method'  => $method,
-            'timeout' => $this->timeout,
-            'headers' => array_merge( $default_headers, $headers ),
-        ];
+		$status_code = wp_remote_retrieve_response_code( $response );
+		$body        = wp_remote_retrieve_body( $response );
+		$data        = json_decode( $body, true );
 
-        if ( ! empty( $body ) && in_array( $method, [ 'POST', 'PUT', 'PATCH' ], true ) ) {
-            $args['body'] = wp_json_encode( $body );
-        }
+		if ( $status_code >= 400 ) {
+			$error_message = $data['error'] ?? $data['message'] ?? __( 'Request failed', 'creator-core' );
+			return new \WP_Error( 'proxy_error', $error_message, [ 'status' => $status_code ] );
+		}
 
-        $response = wp_remote_request( $url, $args );
-
-        if ( is_wp_error( $response ) ) {
-            return $response;
-        }
-
-        $status_code = wp_remote_retrieve_response_code( $response );
-        $body        = wp_remote_retrieve_body( $response );
-        $data        = json_decode( $body, true );
-
-        if ( $status_code >= 400 ) {
-            $error_message = $data['error'] ?? $data['message'] ?? __( 'Request failed', 'creator-core' );
-            return new \WP_Error( 'proxy_error', $error_message, [ 'status' => $status_code ] );
-        }
-
-        return $data ?? [];
-    }
-
-    /**
-     * Set proxy URL
-     *
-     * @param string $url Proxy URL.
-     * @return void
-     */
-    public function set_proxy_url( string $url ): void {
-        $this->proxy_url = $url;
-        update_option( 'creator_proxy_url', $url );
-    }
-
-    /**
-     * Get current proxy URL
-     *
-     * @return string
-     */
-    public function get_proxy_url(): string {
-        return $this->proxy_url;
-    }
-
-    /**
-     * Clear stored authentication
-     *
-     * @return void
-     */
-    public function clear_authentication(): void {
-        delete_option( 'creator_site_token' );
-        delete_option( 'creator_license_validated' );
-        delete_option( 'creator_license_key' );
-        delete_transient( 'creator_license_status' );
-    }
+		return $data ?? [];
+	}
 }

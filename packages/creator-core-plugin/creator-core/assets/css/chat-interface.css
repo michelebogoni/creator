@@ -192,6 +192,26 @@
     border-bottom-left-radius: 4px;
 }
 
+/* Error Text */
+.creator-error-text {
+    color: #dc3545;
+}
+
+/* Links in messages */
+.creator-link {
+    color: var(--creator-primary);
+    text-decoration: underline;
+}
+
+.creator-link:hover {
+    color: var(--creator-primary-dark, #0056b3);
+}
+
+.creator-error-text .creator-link {
+    color: #dc3545;
+    font-weight: 600;
+}
+
 /* Message Actions */
 .creator-message-actions {
     margin-top: 12px;

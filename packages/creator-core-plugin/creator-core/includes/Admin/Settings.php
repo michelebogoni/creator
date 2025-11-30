@@ -163,7 +163,6 @@ class Settings {
         if ( isset( $_POST['creator_proxy_url'] ) ) {
             update_option( 'creator_proxy_url', esc_url_raw( $_POST['creator_proxy_url'] ) );
         }
-
         // Backup Settings
         if ( isset( $_POST['creator_backup_retention'] ) ) {
             update_option( 'creator_backup_retention', absint( $_POST['creator_backup_retention'] ) );
