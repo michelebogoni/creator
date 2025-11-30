@@ -159,22 +159,17 @@ class ProxyClient {
 	 * @return array
 	 */
 	public function check_connection(): array {
-		$response = $this->make_request( 'GET', '/api/health' );
+		$site_token       = get_option( 'creator_site_token' );
+		$license_validated = get_option( 'creator_license_validated', false );
 
-		if ( is_wp_error( $response ) ) {
-			return [
-				'connected' => false,
-				'error'     => $response->get_error_message(),
-				'proxy_url' => $this->proxy_url,
-			];
-		}
+		// Connection is valid if we have a token and license is validated
+		$connected = ! empty( $site_token ) && $license_validated;
 
 		return [
-			'connected'   => true,
+			'connected'   => $connected,
 			'admin_mode'  => $this->is_admin_license(),
 			'proxy_url'   => $this->proxy_url,
-			'site_token'  => get_option( 'creator_site_token' ) ? 'configured' : 'missing',
-			'status'      => $response,
+			'site_token'  => $site_token ? 'configured' : 'missing',
 		];
 	}
 

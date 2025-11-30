@@ -50,17 +50,6 @@ $settings_page = new \CreatorCore\Admin\Settings(
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">
-                            <label for="creator_proxy_url"><?php esc_html_e( 'Proxy URL', 'creator-core' ); ?></label>
-                        </th>
-                        <td>
-                            <input type="url" id="creator_proxy_url" name="creator_proxy_url"
-                                   value="<?php echo esc_attr( $data['settings']['proxy_url'] ); ?>"
-                                   class="regular-text">
-                            <p class="description"><?php esc_html_e( 'Firebase Proxy endpoint URL', 'creator-core' ); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
                         <th scope="row"><?php esc_html_e( 'Connection Status', 'creator-core' ); ?></th>
                         <td>
                             <?php if ( $data['connection']['connected'] ) : ?>
