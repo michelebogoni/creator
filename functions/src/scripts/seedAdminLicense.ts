@@ -19,7 +19,7 @@ const db = admin.firestore();
  * Admin license configuration
  */
 const ADMIN_LICENSE = {
-  license_key: "CREATOR-2024-ADMIN-ADMIN",
+  license_key: "CREATOR-2025-ADMIN-ADMIN",
   site_url: "https://micheleb174.sg-host.com",
   user_id: "admin_michele",
   plan: "enterprise" as const,
