@@ -118,7 +118,7 @@
                 url: creatorSetup.ajaxUrl,
                 type: 'POST',
                 data: {
-                    action: 'creator_validate_license',
+                    action: 'creator_wizard_validate_license',
                     nonce: creatorSetup.nonce,
                     license_key: licenseKey
                 },

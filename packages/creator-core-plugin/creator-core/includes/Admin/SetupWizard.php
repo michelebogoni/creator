@@ -62,7 +62,7 @@ class SetupWizard {
         add_action( 'wp_ajax_creator_install_plugin', [ $this, 'ajax_install_plugin' ] );
         add_action( 'wp_ajax_creator_activate_plugin', [ $this, 'ajax_activate_plugin' ] );
         add_action( 'wp_ajax_creator_skip_setup', [ $this, 'ajax_skip_setup' ] );
-        add_action( 'wp_ajax_creator_validate_license', [ $this, 'ajax_validate_license' ] );
+        add_action( 'wp_ajax_creator_wizard_validate_license', [ $this, 'ajax_validate_license' ] );
     }
 
     /**
