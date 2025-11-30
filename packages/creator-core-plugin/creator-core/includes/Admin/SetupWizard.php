@@ -212,6 +212,10 @@ class SetupWizard {
      * @return array
      */
     private function get_finish_data(): array {
+        // Mark setup as complete when finish step is displayed
+        // This ensures the user can navigate away without being redirected back
+        update_option( 'creator_setup_completed', true );
+
         return [
             'integrations' => $this->plugin_detector->get_all_integrations(),
             'features'     => $this->plugin_detector->get_available_features(),
