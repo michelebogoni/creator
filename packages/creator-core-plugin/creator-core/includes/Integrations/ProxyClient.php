@@ -22,7 +22,7 @@ class ProxyClient {
 	 *
 	 * @var string
 	 */
-	public const ADMIN_LICENSE_KEY = 'CREATOR-2024-ADMIN-ADMIN';
+	public const ADMIN_LICENSE_KEY = 'CREATOR-2025-ADMIN-ADMIN';
 
 	/**
 	 * Proxy base URL
