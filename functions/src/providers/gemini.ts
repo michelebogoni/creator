@@ -28,9 +28,9 @@ import { Logger } from "../lib/logger";
 
 /**
  * Default model for Gemini
- * Note: gemini-2.0-flash-exp is the latest flash model as of late 2024
+ * Note: gemini-2.5-flash-preview-05-20 is the latest flash model as of late 2024
  */
-const DEFAULT_MODEL = "gemini-2.0-flash-exp";
+const DEFAULT_MODEL = "gemini-2.5-flash-preview-05-20";
 
 /**
  * Safety settings to allow most content (business use case)

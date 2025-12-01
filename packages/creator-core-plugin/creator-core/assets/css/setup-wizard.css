@@ -538,3 +538,200 @@
         padding: 3px 8px;
     }
 }
+
+/* ============================================
+   Performance Tier Selector Styles
+   ============================================ */
+
+.creator-section-divider {
+    margin: 32px 0;
+    border: 0;
+    border-top: 1px solid var(--creator-gray-200);
+}
+
+.creator-tier-selector {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    max-width: 100%;
+}
+
+.creator-tier-option {
+    display: block;
+    cursor: pointer;
+}
+
+.creator-tier-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.creator-tier-card {
+    position: relative;
+    border: 2px solid var(--creator-gray-200);
+    border-radius: var(--creator-border-radius);
+    padding: 24px;
+    transition: all 0.2s ease;
+    background: white;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.creator-tier-option:hover .creator-tier-card {
+    border-color: var(--creator-primary);
+    background: var(--creator-gray-50);
+}
+
+.creator-tier-option.selected .creator-tier-card,
+.creator-tier-option input:checked + .creator-tier-card {
+    border-color: var(--creator-primary);
+    background: linear-gradient(to bottom, #f0f7ff, white);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+}
+
+/* Selected indicator for tier cards */
+.creator-tier-option input:checked + .creator-tier-card::before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 28px;
+    height: 28px;
+    background: var(--creator-primary);
+    border-radius: 0 var(--creator-border-radius) 0 10px;
+}
+
+.creator-tier-option input:checked + .creator-tier-card::after {
+    content: "\f147";
+    font-family: dashicons;
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    color: white;
+    font-size: 16px;
+}
+
+.creator-tier-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.creator-tier-icon {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.creator-tier-label {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--creator-gray-900);
+}
+
+.creator-tier-credits {
+    margin-left: auto;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 20px;
+    background: var(--creator-primary);
+    color: white;
+}
+
+/* Flow mode - green accent */
+.creator-tier-option:first-child .creator-tier-credits {
+    background: #22c55e;
+}
+
+/* Craft mode - purple accent */
+.creator-tier-option:last-child .creator-tier-credits {
+    background: #8b5cf6;
+}
+
+.creator-tier-meta {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--creator-gray-200);
+}
+
+.creator-tier-meta span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--creator-gray-600);
+}
+
+.creator-tier-meta .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: var(--creator-gray-400);
+}
+
+.creator-tier-description {
+    font-size: 14px;
+    color: var(--creator-gray-600);
+    line-height: 1.6;
+    margin: 0 0 16px;
+}
+
+.creator-tier-best-for {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--creator-gray-200);
+}
+
+.creator-tier-best-for strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--creator-gray-500);
+    margin-bottom: 8px;
+}
+
+.creator-tier-best-for ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.creator-tier-best-for li {
+    position: relative;
+    padding-left: 16px;
+    font-size: 13px;
+    color: var(--creator-gray-700);
+    line-height: 1.8;
+}
+
+.creator-tier-best-for li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--creator-primary);
+    font-weight: bold;
+}
+
+/* Responsive tier selector */
+@media (max-width: 700px) {
+    .creator-tier-selector {
+        grid-template-columns: 1fr;
+    }
+
+    .creator-tier-header {
+        flex-wrap: wrap;
+    }
+
+    .creator-tier-credits {
+        margin-left: 0;
+        margin-top: 8px;
+    }
+}

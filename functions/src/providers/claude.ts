@@ -25,7 +25,7 @@ import { Logger } from "../lib/logger";
 /**
  * Default model for Claude
  */
-const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
+const DEFAULT_MODEL = "claude-sonnet-4-20250514";
 
 /**
  * Claude Provider implementation

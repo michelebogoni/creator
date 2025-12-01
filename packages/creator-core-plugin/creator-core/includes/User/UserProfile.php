@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Class UserProfile
  *
- * Manages user competency levels and provides AI instructions based on profile
+ * Manages user competency levels, performance tier preferences, and provides AI instructions based on profile
  */
 class UserProfile {
 
@@ -24,9 +24,20 @@ class UserProfile {
 	public const LEVEL_ADVANCED     = 'advanced';
 
 	/**
+	 * Performance tier constants
+	 */
+	public const TIER_FLOW  = 'flow';
+	public const TIER_CRAFT = 'craft';
+
+	/**
 	 * Option name for storing user level
 	 */
 	private const OPTION_NAME = 'creator_user_profile';
+
+	/**
+	 * Option name for storing default performance tier
+	 */
+	private const TIER_OPTION_NAME = 'creator_default_tier';
 
 	/**
 	 * Get current user competency level
@@ -432,5 +443,123 @@ RULES;
 	public static function get_level_label( string $level ): string {
 		$levels = self::get_levels_info();
 		return $levels[ $level ]['label'] ?? ucfirst( $level );
+	}
+
+	// ==================== PERFORMANCE TIER METHODS ====================
+
+	/**
+	 * Get current default performance tier
+	 *
+	 * @return string
+	 */
+	public static function get_default_tier(): string {
+		$tier = get_option( self::TIER_OPTION_NAME, self::TIER_FLOW );
+		return in_array( $tier, self::get_valid_tiers(), true ) ? $tier : self::TIER_FLOW;
+	}
+
+	/**
+	 * Set default performance tier
+	 *
+	 * @param string $tier Tier to set.
+	 * @return bool
+	 */
+	public static function set_default_tier( string $tier ): bool {
+		if ( ! in_array( $tier, self::get_valid_tiers(), true ) ) {
+			return false;
+		}
+
+		$current = self::get_default_tier();
+		if ( $current === $tier ) {
+			return true;
+		}
+
+		return update_option( self::TIER_OPTION_NAME, $tier );
+	}
+
+	/**
+	 * Check if default tier is set
+	 *
+	 * @return bool
+	 */
+	public static function is_tier_set(): bool {
+		return get_option( self::TIER_OPTION_NAME ) !== false;
+	}
+
+	/**
+	 * Get all valid tiers
+	 *
+	 * @return array
+	 */
+	public static function get_valid_tiers(): array {
+		return [
+			self::TIER_FLOW,
+			self::TIER_CRAFT,
+		];
+	}
+
+	/**
+	 * Get tier display info for UI
+	 *
+	 * @return array
+	 */
+	public static function get_tiers_info(): array {
+		return [
+			self::TIER_FLOW => [
+				'label'       => __( 'Flow', 'creator-core' ),
+				'icon'        => '✍🏼',
+				'credits'     => 0.5,
+				'time'        => '20-30 sec',
+				'quality'     => '85%',
+				'title'       => __( 'Fast & Efficient', 'creator-core' ),
+				'description' => __( 'Optimized for speed and iterative work. Best for content editing, CSS changes, quick snippets, and standard modifications.', 'creator-core' ),
+				'best_for'    => [
+					__( 'Iterative content editing', 'creator-core' ),
+					__( 'CSS and style modifications', 'creator-core' ),
+					__( 'Quick code snippets', 'creator-core' ),
+					__( 'Configuration changes', 'creator-core' ),
+					__( 'Standard template modifications', 'creator-core' ),
+				],
+				'chain'       => 'Gemini 2.5 Flash → Claude 4 Sonnet',
+			],
+			self::TIER_CRAFT => [
+				'label'       => __( 'Craft', 'creator-core' ),
+				'icon'        => '⚙️',
+				'credits'     => 2.0,
+				'time'        => '45-60 sec',
+				'quality'     => '95%',
+				'title'       => __( 'Maximum Quality', 'creator-core' ),
+				'description' => __( 'Full-power AI chain for complex tasks. Best for critical code, architecture planning, custom templates, and multi-plugin integrations.', 'creator-core' ),
+				'best_for'    => [
+					__( 'Complex CPT + ACF + Elementor operations', 'creator-core' ),
+					__( 'Site architecture planning', 'creator-core' ),
+					__( 'Custom Elementor templates', 'creator-core' ),
+					__( 'Multi-plugin integrations', 'creator-core' ),
+					__( 'Critical code generation', 'creator-core' ),
+				],
+				'chain'       => 'Gemini 2.5 Flash → Gemini 2.5 Pro → Claude 4.5 Opus',
+			],
+		];
+	}
+
+	/**
+	 * Get tier label for display
+	 *
+	 * @param string $tier Tier key.
+	 * @return string
+	 */
+	public static function get_tier_label( string $tier ): string {
+		$tiers = self::get_tiers_info();
+		return $tiers[ $tier ]['label'] ?? ucfirst( $tier );
+	}
+
+	/**
+	 * Get tier credit cost
+	 *
+	 * @param string $tier Tier key.
+	 * @return float
+	 */
+	public static function get_tier_credits( string $tier ): float {
+		$tiers = self::get_tiers_info();
+		return $tiers[ $tier ]['credits'] ?? 0.5;
 	}
 }

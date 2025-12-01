@@ -109,6 +109,30 @@ export async function incrementTokensUsed(
   });
 }
 
+/**
+ * Deducts credits from a license
+ *
+ * @param {string} licenseKey - The license key
+ * @param {number} creditsToDeduct - Number of credits to deduct
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await deductCredits("CREATOR-2024-ABCDE-FGHIJ", 0.5);
+ * ```
+ */
+export async function deductCredits(
+  licenseKey: string,
+  creditsToDeduct: number
+): Promise<void> {
+  const docRef = db.collection(COLLECTIONS.LICENSES).doc(licenseKey);
+  await docRef.update({
+    credits_available: FieldValue.increment(-creditsToDeduct),
+    credits_used: FieldValue.increment(creditsToDeduct),
+    updated_at: Timestamp.now(),
+  });
+}
+
 // ==================== AUDIT LOG OPERATIONS ====================
 
 /**

@@ -58,6 +58,28 @@ export interface RouteRequest {
    * Optional max tokens override
    */
   max_tokens?: number;
+
+  /**
+   * Performance tier selection
+   * - 'flow': Fast, cost-effective chain (0.5 credits)
+   * - 'craft': Full power chain for complex tasks (2 credits)
+   */
+  performance_tier?: "flow" | "craft";
+
+  /**
+   * Task complexity assessment (used for auto-tier selection)
+   */
+  task_complexity?: "simple" | "moderate" | "complex";
+
+  /**
+   * Whether this request involves Elementor template generation
+   */
+  is_elementor_template?: boolean;
+
+  /**
+   * Chat session ID for tier locking
+   */
+  chat_id?: string;
 }
 
 /**
@@ -147,31 +169,34 @@ export type RoutingMatrix = Record<TaskType, TaskRouteConfig>;
  * Default routing matrix as per roadmap specifications
  *
  * @description
- * TEXT_GEN: Gemini 2.0 Flash (fast/cheap) → OpenAI GPT-4o-mini → Claude
+ * TEXT_GEN: Gemini 2.5 Flash (fast/cheap) → OpenAI GPT-4o-mini → Claude
  * CODE_GEN: Claude (best code) → OpenAI GPT-4o → Gemini Pro
  * DESIGN_GEN: Gemini Pro (large context) → OpenAI GPT-4o → Claude
  * ECOMMERCE_GEN: Gemini Pro (large context) → OpenAI GPT-4o → Claude
+ *
+ * Note: This routing matrix is used as fallback when performance tiers are not specified.
+ * The new tier-based routing (FLOW/CRAFT) should be preferred.
  */
 export const DEFAULT_ROUTING_MATRIX: RoutingMatrix = {
   TEXT_GEN: {
-    primary: { provider: "gemini", model: "gemini-2.0-flash-exp" },
+    primary: { provider: "gemini", model: "gemini-2.5-flash-preview-05-20" },
     fallback1: { provider: "openai", model: "gpt-4o-mini" },
-    fallback2: { provider: "claude", model: "claude-3-5-sonnet-20241022" },
+    fallback2: { provider: "claude", model: "claude-sonnet-4-20250514" },
   },
   CODE_GEN: {
-    primary: { provider: "claude", model: "claude-3-5-sonnet-20241022" },
+    primary: { provider: "claude", model: "claude-sonnet-4-20250514" },
     fallback1: { provider: "openai", model: "gpt-4o" },
-    fallback2: { provider: "gemini", model: "gemini-1.5-pro" },
+    fallback2: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
   },
   DESIGN_GEN: {
-    primary: { provider: "gemini", model: "gemini-1.5-pro" },
+    primary: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
     fallback1: { provider: "openai", model: "gpt-4o" },
-    fallback2: { provider: "claude", model: "claude-3-5-sonnet-20241022" },
+    fallback2: { provider: "claude", model: "claude-sonnet-4-20250514" },
   },
   ECOMMERCE_GEN: {
-    primary: { provider: "gemini", model: "gemini-1.5-pro" },
+    primary: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
     fallback1: { provider: "openai", model: "gpt-4o" },
-    fallback2: { provider: "claude", model: "claude-3-5-sonnet-20241022" },
+    fallback2: { provider: "claude", model: "claude-sonnet-4-20250514" },
   },
 };
 

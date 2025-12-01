@@ -61,6 +61,12 @@ export interface License {
   /** Tokens consumed in current billing period */
   tokens_used: number;
 
+  /** Available credits for AI requests */
+  credits_available?: number;
+
+  /** Credits consumed in current billing period */
+  credits_used?: number;
+
   /** Current license status */
   status: LicenseStatus;
 

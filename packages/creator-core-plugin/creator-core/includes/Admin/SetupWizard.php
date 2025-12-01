@@ -563,7 +563,7 @@ class SetupWizard {
     }
 
     /**
-     * AJAX: Save user profile (competency level)
+     * AJAX: Save user profile (competency level and default tier)
      *
      * @return void
      */
@@ -575,6 +575,7 @@ class SetupWizard {
         }
 
         $level = isset( $_POST['user_level'] ) ? sanitize_key( wp_unslash( $_POST['user_level'] ) ) : '';
+        $tier  = isset( $_POST['default_tier'] ) ? sanitize_key( wp_unslash( $_POST['default_tier'] ) ) : '';
 
         if ( empty( $level ) ) {
             wp_send_json_error( [ 'message' => __( 'Please select your competency level', 'creator-core' ) ] );
@@ -584,11 +585,25 @@ class SetupWizard {
             wp_send_json_error( [ 'message' => __( 'Invalid competency level', 'creator-core' ) ] );
         }
 
-        $saved = UserProfile::set_level( $level );
+        // Validate tier if provided
+        if ( ! empty( $tier ) && ! in_array( $tier, UserProfile::get_valid_tiers(), true ) ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid processing mode', 'creator-core' ) ] );
+        }
 
-        if ( $saved ) {
+        // Save competency level
+        $level_saved = UserProfile::set_level( $level );
+
+        // Save default tier if provided
+        $tier_saved = true;
+        if ( ! empty( $tier ) ) {
+            $tier_saved = UserProfile::set_default_tier( $tier );
+        }
+
+        if ( $level_saved && $tier_saved ) {
             $levels_info = UserProfile::get_levels_info();
-            wp_send_json_success( [
+            $tiers_info  = UserProfile::get_tiers_info();
+
+            $response = [
                 'message' => sprintf(
                     /* translators: %s: Level label */
                     __( 'Profile set to: %s', 'creator-core' ),
@@ -596,7 +611,14 @@ class SetupWizard {
                 ),
                 'level'   => $level,
                 'label'   => $levels_info[ $level ]['label'],
-            ]);
+            ];
+
+            if ( ! empty( $tier ) ) {
+                $response['tier']       = $tier;
+                $response['tier_label'] = $tiers_info[ $tier ]['label'];
+            }
+
+            wp_send_json_success( $response );
         } else {
             wp_send_json_error( [ 'message' => __( 'Failed to save profile', 'creator-core' ) ] );
         }

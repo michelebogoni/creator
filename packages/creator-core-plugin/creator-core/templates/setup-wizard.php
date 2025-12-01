@@ -141,8 +141,60 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                 break;
 
             case 'profile':
+                $tiers_info = \CreatorCore\User\UserProfile::get_tiers_info();
+                $current_tier = \CreatorCore\User\UserProfile::get_default_tier();
                 ?>
                 <div class="creator-setup-section">
+                    <!-- Performance Mode Section -->
+                    <h2><?php esc_html_e( 'Default Processing Mode', 'creator-core' ); ?></h2>
+                    <p><?php esc_html_e( 'Choose your preferred AI processing mode. This will be the default for new chats, but you can change it per-chat.', 'creator-core' ); ?></p>
+
+                    <form id="creator-tier-form" class="creator-setup-form">
+                        <div class="creator-tier-selector">
+                            <?php foreach ( $tiers_info as $tier_key => $tier_info ) : ?>
+                                <label class="creator-tier-option <?php echo $current_tier === $tier_key ? 'selected' : ''; ?>">
+                                    <input type="radio" name="default_tier" value="<?php echo esc_attr( $tier_key ); ?>"
+                                           <?php checked( $current_tier, $tier_key ); ?>>
+
+                                    <div class="creator-tier-card">
+                                        <div class="creator-tier-header">
+                                            <span class="creator-tier-icon"><?php echo esc_html( $tier_info['icon'] ); ?></span>
+                                            <span class="creator-tier-label"><?php echo esc_html( $tier_info['label'] ); ?></span>
+                                            <span class="creator-tier-credits"><?php echo esc_html( $tier_info['credits'] ); ?> <?php esc_html_e( 'credits', 'creator-core' ); ?></span>
+                                        </div>
+
+                                        <div class="creator-tier-meta">
+                                            <span class="creator-tier-time">
+                                                <span class="dashicons dashicons-clock"></span>
+                                                <?php echo esc_html( $tier_info['time'] ); ?>
+                                            </span>
+                                            <span class="creator-tier-quality">
+                                                <span class="dashicons dashicons-star-filled"></span>
+                                                <?php echo esc_html( $tier_info['quality'] ); ?>
+                                            </span>
+                                        </div>
+
+                                        <p class="creator-tier-description">
+                                            <?php echo esc_html( $tier_info['description'] ); ?>
+                                        </p>
+
+                                        <div class="creator-tier-best-for">
+                                            <strong><?php esc_html_e( 'Best for:', 'creator-core' ); ?></strong>
+                                            <ul>
+                                                <?php foreach ( array_slice( $tier_info['best_for'], 0, 3 ) as $use_case ) : ?>
+                                                    <li><?php echo esc_html( $use_case ); ?></li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </form>
+
+                    <hr class="creator-section-divider">
+
+                    <!-- Competency Level Section -->
                     <h2><?php esc_html_e( 'Your Competency Level', 'creator-core' ); ?></h2>
                     <p><?php esc_html_e( 'Help Creator understand your technical background so it can communicate and suggest solutions appropriately.', 'creator-core' ); ?></p>
 

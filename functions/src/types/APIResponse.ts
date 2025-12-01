@@ -80,6 +80,9 @@ export interface AuditLogEntry {
   /** Client IP address */
   ip_address: string;
 
+  /** Additional metadata (tier info, steps, etc.) */
+  metadata?: Record<string, unknown>;
+
   /** Timestamp of the request */
   created_at: FirebaseFirestore.Timestamp;
 }

@@ -11,11 +11,13 @@ CREATE TABLE IF NOT EXISTS wp_creator_chats (
     user_id bigint(20) unsigned NOT NULL,
     title varchar(255) DEFAULT '',
     status varchar(20) DEFAULT 'active',
+    performance_tier varchar(20) DEFAULT 'flow',
     created_at datetime DEFAULT CURRENT_TIMESTAMP,
     updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY user_id (user_id),
     KEY status (status),
+    KEY performance_tier (performance_tier),
     KEY created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
