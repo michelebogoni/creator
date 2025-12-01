@@ -5,8 +5,8 @@
  * @description
  * POST /api/ai/route-request
  *
- * Routes AI generation requests to the optimal provider based on task type,
- * with automatic fallback when primary providers fail.
+ * Routes AI generation requests to the selected model (Gemini or Claude)
+ * with automatic fallback to the other model if primary fails.
  *
  * Requires: Bearer token authentication (site_token)
  */
@@ -15,7 +15,7 @@ import { onRequest } from "firebase-functions/v2/https";
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 
-import { jwtSecret, openaiApiKey, geminiApiKey, claudeApiKey } from "../../lib/secrets";
+import { jwtSecret, geminiApiKey, claudeApiKey } from "../../lib/secrets";
 import { createRequestLogger } from "../../lib/logger";
 import { authenticateRequest, sendAuthErrorResponse } from "../../middleware/auth";
 import {
@@ -24,10 +24,13 @@ import {
   createAuditLog,
   updateCostTracking,
   checkAndIncrementRateLimit,
-  deductCredits,
 } from "../../lib/firestore";
 import { sanitizePrompt, validatePrompt } from "../../services/aiRouter";
-import { TierChainService } from "../../services/tierChain";
+import { ModelService } from "../../services/modelService";
+import {
+  AIModel,
+  isValidModel,
+} from "../../types/ModelConfig";
 import {
   RouteRequest,
   isValidTaskType,
@@ -36,12 +39,6 @@ import {
   QUOTA_EXCEEDED_THRESHOLD,
   AI_RATE_LIMIT_PER_MINUTE,
 } from "../../types/Route";
-import {
-  PerformanceTier,
-  isValidTier,
-  determineOptimalTier,
-  TIER_CREDITS,
-} from "../../types/PerformanceTier";
 
 /**
  * Extracts client IP from request
@@ -57,7 +54,7 @@ function getClientIP(req: Request): string {
 /**
  * POST /api/ai/route-request
  *
- * Routes an AI generation request to the optimal provider.
+ * Routes an AI generation request to the selected model with fallback.
  *
  * @description
  * Request body:
@@ -65,6 +62,7 @@ function getClientIP(req: Request): string {
  * {
  *   "task_type": "TEXT_GEN" | "CODE_GEN" | "DESIGN_GEN" | "ECOMMERCE_GEN",
  *   "prompt": "string (max 10000 chars)",
+ *   "model": "gemini" | "claude",
  *   "context": { optional site context },
  *   "system_prompt": "optional system prompt",
  *   "temperature": 0.7,
@@ -80,8 +78,9 @@ function getClientIP(req: Request): string {
  * {
  *   "success": true,
  *   "content": "generated content",
- *   "provider": "gemini",
- *   "model": "gemini-1.5-flash",
+ *   "model": "gemini",
+ *   "model_id": "gemini-3-pro-preview",
+ *   "used_fallback": false,
  *   "tokens_used": 1250,
  *   "cost_usd": 0.0942,
  *   "latency_ms": 2341
@@ -97,9 +96,10 @@ function getClientIP(req: Request): string {
  */
 export const routeRequest = onRequest(
   {
-    secrets: [jwtSecret, openaiApiKey, geminiApiKey, claudeApiKey],
+    secrets: [jwtSecret, geminiApiKey, claudeApiKey],
     cors: true,
     maxInstances: 100,
+    timeoutSeconds: 120, // Increased for longer model responses
   },
   async (req: Request, res: Response) => {
     const requestId = uuidv4();
@@ -185,17 +185,19 @@ export const routeRequest = onRequest(
 
       const sanitizedPrompt = sanitizePrompt(body.prompt);
 
-      // Validate performance_tier if provided
-      const requestedTier = body.performance_tier as string | undefined;
-      if (requestedTier && !isValidTier(requestedTier)) {
-        logger.warn("Invalid performance tier", { tier: requestedTier });
+      // Validate model if provided (default to gemini)
+      const requestedModel = (body.model as string) || "gemini";
+      if (!isValidModel(requestedModel)) {
+        logger.warn("Invalid model", { model: requestedModel });
         res.status(400).json({
           success: false,
-          error: "Invalid performance_tier. Must be 'flow' or 'craft'",
-          code: "INVALID_TIER",
+          error: "Invalid model. Must be 'gemini' or 'claude'",
+          code: "INVALID_MODEL",
         });
         return;
       }
+
+      const selectedModel: AIModel = requestedModel;
 
       // 4. Check quota
       const license = await getLicenseByKey(licenseId);
@@ -241,48 +243,8 @@ export const routeRequest = onRequest(
         res.setHeader("X-Tokens-Remaining", tokensRemaining.toString());
       }
 
-      // 5. Determine performance tier and check credits
-      const creditsAvailable = license.credits_available ?? 100; // Default credits if not set
-
-      // Build tier request
-      const tierRequest = {
-        user_id: licenseId,
-        credits_available: creditsAvailable,
-        performance_tier: requestedTier as PerformanceTier | undefined,
-        task_complexity: body.task_complexity as "simple" | "moderate" | "complex" | undefined,
-        is_elementor_template: body.is_elementor_template ?? false,
-        prompt: sanitizedPrompt,
-        context: body.context,
-        system_prompt: body.system_prompt,
-        chat_id: body.chat_id,
-      };
-
-      // Determine optimal tier
-      const selectedTier = determineOptimalTier(tierRequest);
-      const requiredCredits = TIER_CREDITS[selectedTier];
-
-      // Check if user has enough credits
-      if (creditsAvailable < requiredCredits) {
-        logger.warn("Insufficient credits", {
-          license_id: licenseId,
-          tier: selectedTier,
-          required: requiredCredits,
-          available: creditsAvailable,
-        });
-
-        res.status(403).json({
-          success: false,
-          error: `Insufficient credits for ${selectedTier.toUpperCase()} mode. Required: ${requiredCredits}, Available: ${creditsAvailable}`,
-          code: "INSUFFICIENT_CREDITS",
-          tier: selectedTier,
-          credits_required: requiredCredits,
-          credits_available: creditsAvailable,
-        });
-        return;
-      }
-
-      // 6. Execute tier chain
-      const tierChainService = new TierChainService(
+      // 5. Execute model request with fallback
+      const modelService = new ModelService(
         {
           gemini: geminiApiKey.value(),
           claude: claudeApiKey.value(),
@@ -290,93 +252,85 @@ export const routeRequest = onRequest(
         logger
       );
 
-      const result = await tierChainService.execute(tierRequest, selectedTier);
+      const result = await modelService.generate({
+        model: selectedModel,
+        prompt: sanitizedPrompt,
+        context: body.context,
+        system_prompt: body.system_prompt,
+        chat_id: body.chat_id,
+        temperature: body.temperature,
+        max_tokens: body.max_tokens,
+      });
 
-      // 7. Handle result
+      // 6. Handle result
       if (result.success) {
         // Update license tokens
         await incrementTokensUsed(licenseId, result.total_tokens);
 
-        // Deduct credits
-        await deductCredits(licenseId, result.credits_used);
-
-        // Update cost tracking for each step
-        for (const step of result.steps) {
-          await updateCostTracking(
-            licenseId,
-            step.provider as "openai" | "gemini" | "claude",
-            step.tokens_input,
-            step.tokens_output,
-            step.cost_usd
-          );
-        }
+        // Update cost tracking
+        await updateCostTracking(
+          licenseId,
+          result.model === "gemini" ? "gemini" : "claude",
+          result.tokens_input,
+          result.tokens_output,
+          result.cost_usd
+        );
 
         // Create audit log
-        const lastProvider = result.steps.length > 0
-          ? result.steps[result.steps.length - 1].provider as "openai" | "gemini" | "claude"
-          : "gemini";
-
         await createAuditLog({
           license_id: licenseId,
           request_type: "ai_request",
-          provider_used: lastProvider,
-          tokens_input: result.steps.reduce((sum, s) => sum + s.tokens_input, 0),
-          tokens_output: result.steps.reduce((sum, s) => sum + s.tokens_output, 0),
-          cost_usd: result.total_cost_usd,
+          provider_used: result.model === "gemini" ? "gemini" : "claude",
+          tokens_input: result.tokens_input,
+          tokens_output: result.tokens_output,
+          cost_usd: result.cost_usd,
           status: "success",
-          response_time_ms: result.total_latency_ms,
+          response_time_ms: result.latency_ms,
           ip_address: ipAddress,
           metadata: {
-            tier: selectedTier,
-            credits_used: result.credits_used,
-            steps: result.steps.map((s) => ({ step: s.step, provider: s.provider, model: s.model })),
+            model: result.model,
+            model_id: result.model_id,
+            used_fallback: result.used_fallback,
           },
         });
 
         logger.info("Request completed successfully", {
           license_id: licenseId,
           task_type: body.task_type,
-          tier: selectedTier,
+          model: result.model,
+          used_fallback: result.used_fallback,
           tokens_used: result.total_tokens,
-          cost_usd: result.total_cost_usd,
-          credits_used: result.credits_used,
+          cost_usd: result.cost_usd,
         });
 
         res.status(200).json({
           success: true,
           content: result.content,
-          tier: selectedTier,
-          strategy: result.strategy,
-          validation: result.validation,
-          steps: result.steps.map((s) => ({
-            step: s.step,
-            provider: s.provider,
-            model: s.model,
-            latency_ms: s.latency_ms,
-          })),
+          model: result.model,
+          model_id: result.model_id,
+          used_fallback: result.used_fallback,
           tokens_used: result.total_tokens,
-          cost_usd: result.total_cost_usd,
-          credits_used: result.credits_used,
-          latency_ms: result.total_latency_ms,
+          cost_usd: result.cost_usd,
+          latency_ms: result.latency_ms,
         });
       } else {
-        // Chain failed
+        // All models failed
         await createAuditLog({
           license_id: licenseId,
           request_type: "ai_request",
           status: "failed",
-          error_message: result.error || "Tier chain failed",
+          error_message: result.error || "All models failed",
           ip_address: ipAddress,
           metadata: {
-            tier: selectedTier,
-            steps_completed: result.steps.length,
+            model: selectedModel,
+            used_fallback: result.used_fallback,
           },
         });
 
-        logger.error("Tier chain failed", {
+        logger.error("All models failed", {
           license_id: licenseId,
           task_type: body.task_type,
-          tier: selectedTier,
+          model: selectedModel,
           error: result.error,
         });
 
@@ -384,7 +338,7 @@ export const routeRequest = onRequest(
           success: false,
           error: result.error || "Service temporarily unavailable. Please try again later.",
           code: result.error_code || "SERVICE_UNAVAILABLE",
-          tier: selectedTier,
+          model: selectedModel,
         });
       }
     } catch (error) {

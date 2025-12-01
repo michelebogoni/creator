@@ -141,50 +141,48 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                 break;
 
             case 'profile':
-                $tiers_info = \CreatorCore\User\UserProfile::get_tiers_info();
-                $current_tier = \CreatorCore\User\UserProfile::get_default_tier();
+                $models_info = \CreatorCore\User\UserProfile::get_models_info();
+                $current_model = \CreatorCore\User\UserProfile::get_default_model();
                 ?>
                 <div class="creator-setup-section">
-                    <!-- Performance Mode Section -->
-                    <h2><?php esc_html_e( 'Default Processing Mode', 'creator-core' ); ?></h2>
-                    <p><?php esc_html_e( 'Choose your preferred AI processing mode. This will be the default for new chats, but you can change it per-chat.', 'creator-core' ); ?></p>
+                    <!-- AI Model Selection Section -->
+                    <h2><?php esc_html_e( 'Default AI Model', 'creator-core' ); ?></h2>
+                    <p><?php esc_html_e( 'Choose your preferred AI model. This will be the default for new chats, but you can change it per-chat. Each model automatically falls back to the other if unavailable.', 'creator-core' ); ?></p>
 
-                    <form id="creator-tier-form" class="creator-setup-form">
-                        <div class="creator-tier-selector">
-                            <?php foreach ( $tiers_info as $tier_key => $tier_info ) : ?>
-                                <label class="creator-tier-option <?php echo $current_tier === $tier_key ? 'selected' : ''; ?>">
-                                    <input type="radio" name="default_tier" value="<?php echo esc_attr( $tier_key ); ?>"
-                                           <?php checked( $current_tier, $tier_key ); ?>>
+                    <form id="creator-model-form" class="creator-setup-form">
+                        <div class="creator-model-selector">
+                            <?php foreach ( $models_info as $model_key => $model_info ) : ?>
+                                <label class="creator-model-option <?php echo $current_model === $model_key ? 'selected' : ''; ?>">
+                                    <input type="radio" name="default_model" value="<?php echo esc_attr( $model_key ); ?>"
+                                           <?php checked( $current_model, $model_key ); ?>>
 
-                                    <div class="creator-tier-card">
-                                        <div class="creator-tier-header">
-                                            <span class="creator-tier-icon"><?php echo esc_html( $tier_info['icon'] ); ?></span>
-                                            <span class="creator-tier-label"><?php echo esc_html( $tier_info['label'] ); ?></span>
-                                            <span class="creator-tier-credits"><?php echo esc_html( $tier_info['credits'] ); ?> <?php esc_html_e( 'credits', 'creator-core' ); ?></span>
+                                    <div class="creator-model-card">
+                                        <div class="creator-model-header">
+                                            <span class="creator-model-icon"><?php echo esc_html( $model_info['icon'] ); ?></span>
+                                            <span class="creator-model-label"><?php echo esc_html( $model_info['label'] ); ?></span>
+                                            <span class="creator-model-provider"><?php echo esc_html( $model_info['provider'] ); ?></span>
                                         </div>
 
-                                        <div class="creator-tier-meta">
-                                            <span class="creator-tier-time">
-                                                <span class="dashicons dashicons-clock"></span>
-                                                <?php echo esc_html( $tier_info['time'] ); ?>
-                                            </span>
-                                            <span class="creator-tier-quality">
-                                                <span class="dashicons dashicons-star-filled"></span>
-                                                <?php echo esc_html( $tier_info['quality'] ); ?>
-                                            </span>
+                                        <div class="creator-model-title">
+                                            <?php echo esc_html( $model_info['title'] ); ?>
                                         </div>
 
-                                        <p class="creator-tier-description">
-                                            <?php echo esc_html( $tier_info['description'] ); ?>
+                                        <p class="creator-model-description">
+                                            <?php echo esc_html( $model_info['description'] ); ?>
                                         </p>
 
-                                        <div class="creator-tier-best-for">
+                                        <div class="creator-model-best-for">
                                             <strong><?php esc_html_e( 'Best for:', 'creator-core' ); ?></strong>
                                             <ul>
-                                                <?php foreach ( array_slice( $tier_info['best_for'], 0, 3 ) as $use_case ) : ?>
+                                                <?php foreach ( $model_info['best_for'] as $use_case ) : ?>
                                                     <li><?php echo esc_html( $use_case ); ?></li>
                                                 <?php endforeach; ?>
                                             </ul>
+                                        </div>
+
+                                        <div class="creator-model-fallback">
+                                            <span class="dashicons dashicons-update"></span>
+                                            <?php echo esc_html( $model_info['fallback'] ); ?>
                                         </div>
                                     </div>
                                 </label>

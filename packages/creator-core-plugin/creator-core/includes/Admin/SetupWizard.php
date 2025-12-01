@@ -563,7 +563,7 @@ class SetupWizard {
     }
 
     /**
-     * AJAX: Save user profile (competency level and default tier)
+     * AJAX: Save user profile (competency level and default AI model)
      *
      * @return void
      */
@@ -575,7 +575,7 @@ class SetupWizard {
         }
 
         $level = isset( $_POST['user_level'] ) ? sanitize_key( wp_unslash( $_POST['user_level'] ) ) : '';
-        $tier  = isset( $_POST['default_tier'] ) ? sanitize_key( wp_unslash( $_POST['default_tier'] ) ) : '';
+        $model = isset( $_POST['default_model'] ) ? sanitize_key( wp_unslash( $_POST['default_model'] ) ) : '';
 
         if ( empty( $level ) ) {
             wp_send_json_error( [ 'message' => __( 'Please select your competency level', 'creator-core' ) ] );
@@ -585,23 +585,23 @@ class SetupWizard {
             wp_send_json_error( [ 'message' => __( 'Invalid competency level', 'creator-core' ) ] );
         }
 
-        // Validate tier if provided
-        if ( ! empty( $tier ) && ! in_array( $tier, UserProfile::get_valid_tiers(), true ) ) {
-            wp_send_json_error( [ 'message' => __( 'Invalid processing mode', 'creator-core' ) ] );
+        // Validate model if provided
+        if ( ! empty( $model ) && ! in_array( $model, UserProfile::get_valid_models(), true ) ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid AI model', 'creator-core' ) ] );
         }
 
         // Save competency level
         $level_saved = UserProfile::set_level( $level );
 
-        // Save default tier if provided
-        $tier_saved = true;
-        if ( ! empty( $tier ) ) {
-            $tier_saved = UserProfile::set_default_tier( $tier );
+        // Save default model if provided
+        $model_saved = true;
+        if ( ! empty( $model ) ) {
+            $model_saved = UserProfile::set_default_model( $model );
         }
 
-        if ( $level_saved && $tier_saved ) {
+        if ( $level_saved && $model_saved ) {
             $levels_info = UserProfile::get_levels_info();
-            $tiers_info  = UserProfile::get_tiers_info();
+            $models_info = UserProfile::get_models_info();
 
             $response = [
                 'message' => sprintf(
@@ -613,9 +613,9 @@ class SetupWizard {
                 'label'   => $levels_info[ $level ]['label'],
             ];
 
-            if ( ! empty( $tier ) ) {
-                $response['tier']       = $tier;
-                $response['tier_label'] = $tiers_info[ $tier ]['label'];
+            if ( ! empty( $model ) ) {
+                $response['model']       = $model;
+                $response['model_label'] = $models_info[ $model ]['label'];
             }
 
             wp_send_json_success( $response );
