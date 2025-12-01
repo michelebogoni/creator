@@ -147,14 +147,14 @@ export type RoutingMatrix = Record<TaskType, TaskRouteConfig>;
  * Default routing matrix as per roadmap specifications
  *
  * @description
- * TEXT_GEN: Gemini Flash (fast/cheap) → OpenAI GPT-4o-mini → Claude
+ * TEXT_GEN: Gemini 2.0 Flash (fast/cheap) → OpenAI GPT-4o-mini → Claude
  * CODE_GEN: Claude (best code) → OpenAI GPT-4o → Gemini Pro
  * DESIGN_GEN: Gemini Pro (large context) → OpenAI GPT-4o → Claude
  * ECOMMERCE_GEN: Gemini Pro (large context) → OpenAI GPT-4o → Claude
  */
 export const DEFAULT_ROUTING_MATRIX: RoutingMatrix = {
   TEXT_GEN: {
-    primary: { provider: "gemini", model: "gemini-1.5-flash" },
+    primary: { provider: "gemini", model: "gemini-2.0-flash-exp" },
     fallback1: { provider: "openai", model: "gpt-4o-mini" },
     fallback2: { provider: "claude", model: "claude-3-5-sonnet-20241022" },
   },
