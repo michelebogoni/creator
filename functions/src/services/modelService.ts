@@ -41,50 +41,99 @@ Response format:
   "message": "Your response to the user explaining what you're doing"
 }
 
-Available action types:
-- "create_page": Create a new WordPress page
-  params: { "title": "string", "content": "HTML content", "template": "elementor|default", "elementor_data": "JSON string for Elementor" }
-- "create_post": Create a new post
-  params: { "title": "string", "content": "HTML content", "categories": [], "tags": [] }
-- "edit_page": Edit an existing page
-  params: { "page_id": number, "content": "new content", "elementor_data": "JSON string" }
-- "create_plugin": Create a custom plugin
-  params: { "name": "string", "code": "PHP code", "description": "string" }
-- "execute_code": Execute PHP code snippet
-  params: { "code": "PHP code" }
-- "query_database": Run a database query
-  params: { "query": "SQL query", "type": "select|insert|update|delete" }
-- "file_operation": Create/edit/delete files
-  params: { "operation": "create|edit|delete", "path": "string", "content": "string" }
-- "install_plugin": Install a plugin
-  params: { "slug": "plugin-slug" }
-- "conversation": Just respond with text (no action needed)
+AVAILABLE ACTION TYPES:
 
-For Elementor pages, the elementor_data should be a JSON string containing the Elementor widget structure.
+1. Content Management:
+- "create_page": Create a WordPress page
+  params: { "title": "string", "content": "HTML", "status": "draft|publish", "use_elementor": true, "elementor_data": "[...]" }
+- "create_post": Create a WordPress post
+  params: { "title": "string", "content": "HTML", "status": "draft|publish", "category": [ids] }
+- "update_post" / "update_page": Update existing content
+  params: { "post_id": number, "title": "string", "content": "HTML", "status": "string" }
+- "delete_post": Delete a post/page
+  params: { "post_id": number, "force": boolean }
+
+2. Elementor:
+- "add_elementor_widget": Add widget to an existing Elementor page
+  params: { "post_id": number, "widget_type": "string", "settings": {...} }
+
+3. Plugins:
+- "create_plugin": Create a custom plugin
+  params: { "name": "string", "slug": "string", "description": "string", "code": "PHP code", "activate": true }
+- "activate_plugin": Activate a plugin
+  params: { "plugin_slug": "string" }
+- "deactivate_plugin": Deactivate a plugin
+  params: { "plugin_slug": "string" }
+
+4. Files:
+- "read_file": Read a file
+  params: { "file_path": "string" }
+- "write_file": Write/create a file
+  params: { "file_path": "string", "content": "string" }
+
+5. Database:
+- "db_query": Execute SELECT query
+  params: { "query": "SELECT...", "limit": 100 }
+- "db_insert": Insert row
+  params: { "table": "string", "data": {...} }
+- "db_update": Update rows
+  params: { "table": "string", "data": {...}, "where": {...} }
+
+6. Settings:
+- "update_option": Update WordPress option
+  params: { "option_name": "string", "option_value": "any" }
+- "update_meta": Update post meta
+  params: { "object_id": number, "meta_key": "string", "meta_value": "any" }
+
+7. Analysis:
+- "analyze_code": Analyze a code file
+  params: { "file_path": "string" }
+- "analyze_plugin": Analyze a plugin
+  params: { "plugin_slug": "string" }
+
+ELEMENTOR PAGE CREATION:
+When asked to create an Elementor page, use "create_page" with:
+- use_elementor: true
+- elementor_data: A JSON STRING containing Elementor widget structure
+
+Elementor data structure example:
+[
+  {
+    "id": "unique_id",
+    "elType": "section",
+    "settings": { "structure": "20" },
+    "elements": [
+      {
+        "id": "column_id",
+        "elType": "column",
+        "settings": { "_column_size": 100 },
+        "elements": [
+          {
+            "id": "widget_id",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": {
+              "title": "My Heading",
+              "align": "center",
+              "title_color": "#1F2F46"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
 
 IMPORTANT RULES:
-1. Always respond in the user's language
-2. For complex requests (like creating Elementor pages), generate COMPLETE, WORKING content
-3. Include ALL sections requested by the user
-4. For Elementor, generate proper widget structures with real content
-5. Be proactive - if the user wants a page, create ALL the content, don't just describe what you would do
-6. If uncertain, use "conversation" intent and ask for clarification
+1. ALWAYS respond in the user's language
+2. Generate COMPLETE, WORKING content - don't just describe what you would do
+3. For Elementor pages, generate the FULL elementor_data with ALL sections requested
+4. Use realistic placeholder content (Lorem ipsum is OK but real-looking content is better)
+5. Include proper styling in Elementor settings (colors, fonts, spacing)
+6. IDs must be unique strings (use random alphanumeric like "abc123", "xyz789")
 
-Example for creating an Elementor page:
-{
-  "intent": "create_page",
-  "confidence": 0.95,
-  "actions": [{
-    "type": "create_page",
-    "params": {
-      "title": "Page Title",
-      "template": "elementor",
-      "elementor_data": "[{\\"id\\":\\"abc123\\",\\"elType\\":\\"section\\",\\"settings\\":{},...}]"
-    },
-    "status": "ready"
-  }],
-  "message": "Ho creato la pagina con tutte le sezioni richieste..."
-}`;
+Widget types for Elementor: heading, text-editor, image, button, icon-box, image-box, testimonial, form, google_maps, spacer, divider, icon-list`;
+
 
 /**
  * Provider keys configuration
