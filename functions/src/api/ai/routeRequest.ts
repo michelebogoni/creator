@@ -24,8 +24,10 @@ import {
   createAuditLog,
   updateCostTracking,
   checkAndIncrementRateLimit,
+  deductCredits,
 } from "../../lib/firestore";
-import { AIRouter, sanitizePrompt, validatePrompt } from "../../services/aiRouter";
+import { sanitizePrompt, validatePrompt } from "../../services/aiRouter";
+import { TierChainService } from "../../services/tierChain";
 import {
   RouteRequest,
   isValidTaskType,
@@ -34,6 +36,12 @@ import {
   QUOTA_EXCEEDED_THRESHOLD,
   AI_RATE_LIMIT_PER_MINUTE,
 } from "../../types/Route";
+import {
+  PerformanceTier,
+  isValidTier,
+  determineOptimalTier,
+  TIER_CREDITS,
+} from "../../types/PerformanceTier";
 
 /**
  * Extracts client IP from request
@@ -177,6 +185,18 @@ export const routeRequest = onRequest(
 
       const sanitizedPrompt = sanitizePrompt(body.prompt);
 
+      // Validate performance_tier if provided
+      const requestedTier = body.performance_tier as string | undefined;
+      if (requestedTier && !isValidTier(requestedTier)) {
+        logger.warn("Invalid performance tier", { tier: requestedTier });
+        res.status(400).json({
+          success: false,
+          error: "Invalid performance_tier. Must be 'flow' or 'craft'",
+          code: "INVALID_TIER",
+        });
+        return;
+      }
+
       // 4. Check quota
       const license = await getLicenseByKey(licenseId);
 
@@ -221,87 +241,150 @@ export const routeRequest = onRequest(
         res.setHeader("X-Tokens-Remaining", tokensRemaining.toString());
       }
 
-      // 5. Route request to AI provider
-      const router = new AIRouter(
+      // 5. Determine performance tier and check credits
+      const creditsAvailable = license.credits_available ?? 100; // Default credits if not set
+
+      // Build tier request
+      const tierRequest = {
+        user_id: licenseId,
+        credits_available: creditsAvailable,
+        performance_tier: requestedTier as PerformanceTier | undefined,
+        task_complexity: body.task_complexity as "simple" | "moderate" | "complex" | undefined,
+        is_elementor_template: body.is_elementor_template ?? false,
+        prompt: sanitizedPrompt,
+        context: body.context,
+        system_prompt: body.system_prompt,
+        chat_id: body.chat_id,
+      };
+
+      // Determine optimal tier
+      const selectedTier = determineOptimalTier(tierRequest);
+      const requiredCredits = TIER_CREDITS[selectedTier];
+
+      // Check if user has enough credits
+      if (creditsAvailable < requiredCredits) {
+        logger.warn("Insufficient credits", {
+          license_id: licenseId,
+          tier: selectedTier,
+          required: requiredCredits,
+          available: creditsAvailable,
+        });
+
+        res.status(403).json({
+          success: false,
+          error: `Insufficient credits for ${selectedTier.toUpperCase()} mode. Required: ${requiredCredits}, Available: ${creditsAvailable}`,
+          code: "INSUFFICIENT_CREDITS",
+          tier: selectedTier,
+          credits_required: requiredCredits,
+          credits_available: creditsAvailable,
+        });
+        return;
+      }
+
+      // 6. Execute tier chain
+      const tierChainService = new TierChainService(
         {
-          openai: openaiApiKey.value(),
           gemini: geminiApiKey.value(),
           claude: claudeApiKey.value(),
         },
         logger
       );
 
-      const result = await router.route(body.task_type, sanitizedPrompt, {
-        temperature: body.temperature,
-        max_tokens: body.max_tokens,
-        system_prompt: body.system_prompt,
-      });
+      const result = await tierChainService.execute(tierRequest, selectedTier);
 
-      // 6. Handle result
+      // 7. Handle result
       if (result.success) {
         // Update license tokens
         await incrementTokensUsed(licenseId, result.total_tokens);
 
-        // Update cost tracking
-        await updateCostTracking(
-          licenseId,
-          result.provider,
-          result.tokens_input,
-          result.tokens_output,
-          result.cost_usd
-        );
+        // Deduct credits
+        await deductCredits(licenseId, result.credits_used);
+
+        // Update cost tracking for each step
+        for (const step of result.steps) {
+          await updateCostTracking(
+            licenseId,
+            step.provider as "openai" | "gemini" | "claude",
+            step.tokens_input,
+            step.tokens_output,
+            step.cost_usd
+          );
+        }
 
         // Create audit log
+        const lastProvider = result.steps.length > 0
+          ? result.steps[result.steps.length - 1].provider as "openai" | "gemini" | "claude"
+          : "gemini";
+
         await createAuditLog({
           license_id: licenseId,
           request_type: "ai_request",
-          provider_used: result.provider,
-          tokens_input: result.tokens_input,
-          tokens_output: result.tokens_output,
-          cost_usd: result.cost_usd,
+          provider_used: lastProvider,
+          tokens_input: result.steps.reduce((sum, s) => sum + s.tokens_input, 0),
+          tokens_output: result.steps.reduce((sum, s) => sum + s.tokens_output, 0),
+          cost_usd: result.total_cost_usd,
           status: "success",
-          response_time_ms: result.latency_ms,
+          response_time_ms: result.total_latency_ms,
           ip_address: ipAddress,
+          metadata: {
+            tier: selectedTier,
+            credits_used: result.credits_used,
+            steps: result.steps.map((s) => ({ step: s.step, provider: s.provider, model: s.model })),
+          },
         });
 
         logger.info("Request completed successfully", {
           license_id: licenseId,
           task_type: body.task_type,
-          provider: result.provider,
+          tier: selectedTier,
           tokens_used: result.total_tokens,
-          cost_usd: result.cost_usd,
+          cost_usd: result.total_cost_usd,
+          credits_used: result.credits_used,
         });
 
         res.status(200).json({
           success: true,
           content: result.content,
-          provider: result.provider,
-          model: result.model,
+          tier: selectedTier,
+          strategy: result.strategy,
+          validation: result.validation,
+          steps: result.steps.map((s) => ({
+            step: s.step,
+            provider: s.provider,
+            model: s.model,
+            latency_ms: s.latency_ms,
+          })),
           tokens_used: result.total_tokens,
-          cost_usd: result.cost_usd,
-          latency_ms: result.latency_ms,
+          cost_usd: result.total_cost_usd,
+          credits_used: result.credits_used,
+          latency_ms: result.total_latency_ms,
         });
       } else {
-        // All providers failed
+        // Chain failed
         await createAuditLog({
           license_id: licenseId,
           request_type: "ai_request",
           status: "failed",
-          error_message: result.error || "All providers failed",
+          error_message: result.error || "Tier chain failed",
           ip_address: ipAddress,
+          metadata: {
+            tier: selectedTier,
+            steps_completed: result.steps.length,
+          },
         });
 
-        logger.error("All providers failed", {
+        logger.error("Tier chain failed", {
           license_id: licenseId,
           task_type: body.task_type,
-          providers_attempted: result.providers_attempted,
+          tier: selectedTier,
           error: result.error,
         });
 
         res.status(503).json({
           success: false,
-          error: "Service temporarily unavailable. Please try again later.",
-          code: "SERVICE_UNAVAILABLE",
+          error: result.error || "Service temporarily unavailable. Please try again later.",
+          code: result.error_code || "SERVICE_UNAVAILABLE",
+          tier: selectedTier,
         });
       }
     } catch (error) {

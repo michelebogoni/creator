@@ -34,6 +34,9 @@
             // Profile selection
             $('.creator-profile-option input[type="radio"]').on('change', this.handleProfileSelection.bind(this));
 
+            // Tier selection
+            $('.creator-tier-option input[type="radio"]').on('change', this.handleTierSelection.bind(this));
+
             // If on profile step, intercept the Continue button
             if (typeof creatorSetupData !== 'undefined' && creatorSetupData.currentStep === 'profile') {
                 $('#next-step-btn').on('click', this.saveProfileAndContinue.bind(this));
@@ -219,6 +222,20 @@
         },
 
         /**
+         * Handle tier selection (visual feedback)
+         */
+        handleTierSelection: function(e) {
+            const $radio = $(e.currentTarget);
+            const $option = $radio.closest('.creator-tier-option');
+
+            // Remove selected class from all tier options
+            $('.creator-tier-option').removeClass('selected');
+
+            // Add selected class to current option
+            $option.addClass('selected');
+        },
+
+        /**
          * Save profile and continue to next step
          */
         saveProfileAndContinue: function(e) {
@@ -227,13 +244,19 @@
 
             const $btn = $(e.currentTarget);
             const selectedLevel = $('input[name="user_level"]:checked').val();
+            const selectedTier = $('input[name="default_tier"]:checked').val();
 
             // Get the next URL from the button's href or from creatorSetupData
             const nextUrl = $btn.attr('href') || (typeof creatorSetupData !== 'undefined' ? creatorSetupData.nextUrl : '');
 
-            // Validate selection
+            // Validate selections
             if (!selectedLevel) {
                 alert('Please select your competency level before continuing.');
+                return false;
+            }
+
+            if (!selectedTier) {
+                alert('Please select your default processing mode before continuing.');
                 return false;
             }
 
@@ -247,7 +270,8 @@
                 data: {
                     action: 'creator_save_user_profile',
                     nonce: creatorSetup.nonce,
-                    user_level: selectedLevel
+                    user_level: selectedLevel,
+                    default_tier: selectedTier
                 },
                 success: function(response) {
                     if (response.success) {

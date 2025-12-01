@@ -80,8 +80,7 @@ class Migrations {
     private function get_migrations(): array {
         return [
             '1.0.0' => [ $this, 'migrate_1_0_0' ],
-            // Future migrations will be added here
-            // '1.1.0' => [ $this, 'migrate_1_1_0' ],
+            '1.1.0' => [ $this, 'migrate_1_1_0' ],
         ];
     }
 
@@ -95,6 +94,38 @@ class Migrations {
     private function migrate_1_0_0(): bool {
         // Initial setup is handled by Activator::create_tables()
         // This migration is here for completeness and future reference
+        return true;
+    }
+
+    /**
+     * Migration for version 1.1.0
+     *
+     * Adds performance_tier column to chats table for AI processing tiers
+     *
+     * @return bool
+     */
+    private function migrate_1_1_0(): bool {
+        global $wpdb;
+
+        $table_name = $wpdb->prefix . 'creator_chats';
+
+        // Check if column already exists
+        $column_exists = $wpdb->get_results(
+            $wpdb->prepare(
+                "SHOW COLUMNS FROM {$table_name} LIKE %s",
+                'performance_tier'
+            )
+        );
+
+        if ( empty( $column_exists ) ) {
+            // Add performance_tier column
+            $wpdb->query(
+                "ALTER TABLE {$table_name}
+                 ADD COLUMN performance_tier varchar(20) DEFAULT 'flow' AFTER status,
+                 ADD KEY performance_tier (performance_tier)"
+            );
+        }
+
         return true;
     }
 

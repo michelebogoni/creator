@@ -257,7 +257,7 @@ export interface ProviderPricing {
 
 /**
  * Provider pricing constants
- * Updated as of November 2024
+ * Updated as of December 2024
  */
 export const PROVIDER_PRICING: Record<ProviderName, Record<string, ProviderPricing>> = {
   openai: {
@@ -271,6 +271,17 @@ export const PROVIDER_PRICING: Record<ProviderName, Record<string, ProviderPrici
     },
   },
   gemini: {
+    // Gemini 2.5 Flash (latest)
+    "gemini-2.5-flash-preview-05-20": {
+      input_cost_per_1k: 0.00015,
+      output_cost_per_1k: 0.0006,
+    },
+    // Gemini 2.5 Pro (latest)
+    "gemini-2.5-pro-preview-05-06": {
+      input_cost_per_1k: 0.00125,
+      output_cost_per_1k: 0.01,
+    },
+    // Legacy models
     "gemini-2.0-flash-exp": {
       input_cost_per_1k: 0.0001,
       output_cost_per_1k: 0.0004,
@@ -285,6 +296,17 @@ export const PROVIDER_PRICING: Record<ProviderName, Record<string, ProviderPrici
     },
   },
   claude: {
+    // Claude 4.5 Opus (highest quality)
+    "claude-opus-4-5-20251101": {
+      input_cost_per_1k: 0.015,
+      output_cost_per_1k: 0.075,
+    },
+    // Claude 4 Sonnet (balanced)
+    "claude-sonnet-4-20250514": {
+      input_cost_per_1k: 0.003,
+      output_cost_per_1k: 0.015,
+    },
+    // Legacy
     "claude-3-5-sonnet-20241022": {
       input_cost_per_1k: 0.003,
       output_cost_per_1k: 0.015,
