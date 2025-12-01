@@ -511,8 +511,11 @@ class ChatInterface {
      * @return array
      */
     private function parse_ai_response( string $response ): array {
+        // Clean up the response - remove markdown code blocks if present
+        $cleaned_response = $this->extract_json_from_response( $response );
+
         // Try to parse as JSON
-        $json = json_decode( $response, true );
+        $json = json_decode( $cleaned_response, true );
 
         if ( json_last_error() === JSON_ERROR_NONE && is_array( $json ) ) {
             return [
@@ -532,6 +535,29 @@ class ChatInterface {
             'confidence'  => 1.0,
             'has_actions' => false,
         ];
+    }
+
+    /**
+     * Extract JSON from AI response (handles markdown code blocks)
+     *
+     * @param string $response Raw AI response.
+     * @return string Cleaned JSON string.
+     */
+    private function extract_json_from_response( string $response ): string {
+        $response = trim( $response );
+
+        // Remove markdown code blocks: ```json ... ``` or ``` ... ```
+        if ( preg_match( '/```(?:json)?\s*([\s\S]*?)\s*```/', $response, $matches ) ) {
+            return trim( $matches[1] );
+        }
+
+        // Try to extract JSON object from the response (in case there's text before/after)
+        if ( preg_match( '/\{[\s\S]*"message"[\s\S]*\}/', $response, $matches ) ) {
+            return $matches[0];
+        }
+
+        // Return as-is
+        return $response;
     }
 
     /**
