@@ -210,7 +210,7 @@
 
 /* Setup Form */
 .creator-setup-form {
-    max-width: 400px;
+    max-width: 100%;
 }
 
 /* Finish Screen */
@@ -341,8 +341,9 @@
 
 .creator-profile-header {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
     margin-bottom: 12px;
 }
 
