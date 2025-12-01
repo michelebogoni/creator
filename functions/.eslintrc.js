@@ -17,6 +17,9 @@ module.exports = {
     "/lib/**/*",
     "/node_modules/**/*",
     "jest.config.js",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "src/__tests__/**/*",
   ],
   plugins: [
     "@typescript-eslint",
