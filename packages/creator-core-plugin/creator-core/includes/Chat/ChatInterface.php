@@ -108,7 +108,7 @@ class ChatInterface {
      * @param string $performance_tier Performance tier (flow or craft).
      * @return int|false Chat ID or false on failure.
      */
-    public function create_chat( string $title = '', string $performance_tier = '' ): int {
+    public function create_chat( string $title = '', string $performance_tier = '' ) {
         global $wpdb;
 
         $user_id = get_current_user_id();
