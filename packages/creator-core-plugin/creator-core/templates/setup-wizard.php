@@ -140,6 +140,72 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                 <?php
                 break;
 
+            case 'profile':
+                ?>
+                <div class="creator-setup-section">
+                    <h2><?php esc_html_e( 'Your Competency Level', 'creator-core' ); ?></h2>
+                    <p><?php esc_html_e( 'Help Creator understand your technical background so it can communicate and suggest solutions appropriately.', 'creator-core' ); ?></p>
+
+                    <form id="creator-profile-form" class="creator-setup-form">
+                        <div class="creator-profile-selector">
+                            <?php foreach ( $data['step_data']['levels'] as $level_key => $level_info ) : ?>
+                                <label class="creator-profile-option <?php echo $data['step_data']['current_level'] === $level_key ? 'selected' : ''; ?>">
+                                    <input type="radio" name="user_level" value="<?php echo esc_attr( $level_key ); ?>"
+                                           <?php checked( $data['step_data']['current_level'], $level_key ); ?>>
+
+                                    <div class="creator-profile-card">
+                                        <div class="creator-profile-header">
+                                            <span class="creator-profile-label"><?php echo esc_html( $level_info['label'] ); ?></span>
+                                            <span class="creator-profile-title"><?php echo esc_html( $level_info['title'] ); ?></span>
+                                        </div>
+
+                                        <p class="creator-profile-description">
+                                            <?php echo esc_html( $level_info['description'] ); ?>
+                                        </p>
+
+                                        <div class="creator-profile-capabilities">
+                                            <?php if ( ! empty( $level_info['capabilities']['can'] ) ) : ?>
+                                                <div class="creator-caps-can">
+                                                    <?php foreach ( $level_info['capabilities']['can'] as $cap ) : ?>
+                                                        <span class="creator-cap-item creator-cap-yes">
+                                                            <span class="dashicons dashicons-yes"></span>
+                                                            <?php echo esc_html( $cap ); ?>
+                                                        </span>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if ( ! empty( $level_info['capabilities']['cannot'] ) ) : ?>
+                                                <div class="creator-caps-cannot">
+                                                    <?php foreach ( $level_info['capabilities']['cannot'] as $cap ) : ?>
+                                                        <span class="creator-cap-item creator-cap-no">
+                                                            <span class="dashicons dashicons-no-alt"></span>
+                                                            <?php echo esc_html( $cap ); ?>
+                                                        </span>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <div class="creator-profile-behavior">
+                                            <strong><?php esc_html_e( 'Creator will:', 'creator-core' ); ?></strong>
+                                            <p><?php echo esc_html( $level_info['behavior'] ); ?></p>
+                                        </div>
+                                    </div>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div class="creator-form-row creator-profile-note">
+                            <p class="description">
+                                <span class="dashicons dashicons-info"></span>
+                                <?php esc_html_e( 'You can change this later in Creator Settings. Your choice affects how Creator communicates with you and what solutions it suggests.', 'creator-core' ); ?>
+                            </p>
+                        </div>
+                    </form>
+                </div>
+                <?php
+                break;
+
             case 'finish':
                 ?>
                 <div class="creator-setup-section creator-setup-finish">

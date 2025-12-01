@@ -13,6 +13,7 @@ use CreatorCore\Integrations\ProxyClient;
 use CreatorCore\Permission\CapabilityChecker;
 use CreatorCore\Backup\SnapshotManager;
 use CreatorCore\Audit\AuditLogger;
+use CreatorCore\User\UserProfile;
 
 /**
  * Class ChatInterface
@@ -396,9 +397,25 @@ class ChatInterface {
      */
     private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [] ): string {
         $context_collector = new ContextCollector();
-        $context_summary  = $context_collector->get_context_summary();
+        $context_summary   = $context_collector->get_context_summary();
+
+        // Get user profile AI instructions (level-specific behavior)
+        $user_level      = UserProfile::get_user_level();
+        $ai_instructions = UserProfile::get_ai_instructions( $user_level );
+
+        // Get maxi-onboarding summary for comprehensive site context
+        $maxi_onboarding = $context_collector->get_maxi_onboarding_summary();
 
         $prompt = "You are Creator, an AI assistant for WordPress development.\n\n";
+
+        // Include AI behavior instructions based on user level
+        $prompt .= "## Your Behavior Guidelines\n";
+        $prompt .= $ai_instructions . "\n\n";
+
+        // Include maxi-onboarding (comprehensive site context)
+        $prompt .= "## Site Overview (Maxi-Onboarding)\n";
+        $prompt .= $maxi_onboarding . "\n\n";
+
         $prompt .= "## Current WordPress Environment\n";
         $prompt .= $context_summary . "\n\n";
 

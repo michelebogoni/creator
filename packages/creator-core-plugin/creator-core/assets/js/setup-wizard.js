@@ -33,6 +33,14 @@
             // Plugin installation
             $(document).on('click', '.creator-install-plugin', this.installPlugin.bind(this));
             $(document).on('click', '.creator-activate-plugin', this.activatePlugin.bind(this));
+
+            // Profile selection
+            $('.creator-profile-option input[type="radio"]').on('change', this.handleProfileSelection.bind(this));
+
+            // If on profile step, intercept the Continue button
+            if (typeof creatorSetupData !== 'undefined' && creatorSetupData.currentStep === 'profile') {
+                $('#next-step-btn').on('click', this.saveProfileAndContinue.bind(this));
+            }
         },
 
         /**
@@ -226,6 +234,70 @@
                     $btn.html('Activate');
                     $btn.prop('disabled', false);
                     alert('Activation failed. Please try again.');
+                }
+            });
+        },
+
+        /**
+         * Handle profile selection (visual feedback)
+         */
+        handleProfileSelection: function(e) {
+            const $radio = $(e.currentTarget);
+            const $option = $radio.closest('.creator-profile-option');
+
+            // Remove selected class from all options
+            $('.creator-profile-option').removeClass('selected');
+
+            // Add selected class to current option
+            $option.addClass('selected');
+        },
+
+        /**
+         * Save profile and continue to next step
+         */
+        saveProfileAndContinue: function(e) {
+            e.preventDefault();
+
+            const $btn = $(e.currentTarget);
+            const selectedLevel = $('input[name="user_level"]:checked').val();
+
+            // Validate selection
+            if (!selectedLevel) {
+                alert('Please select your competency level before continuing.');
+                return;
+            }
+
+            // Show loading
+            $btn.addClass('loading');
+            $btn.html('<span class="dashicons dashicons-update creator-spin"></span> Saving...');
+
+            $.ajax({
+                url: creatorSetup.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'creator_save_user_profile',
+                    nonce: creatorSetup.nonce,
+                    user_level: selectedLevel
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Navigate to next step
+                        if (typeof creatorSetupData !== 'undefined' && creatorSetupData.nextUrl) {
+                            window.location.href = creatorSetupData.nextUrl;
+                        } else {
+                            // Fallback: reload page
+                            window.location.reload();
+                        }
+                    } else {
+                        alert('Failed to save profile: ' + (response.data?.message || 'Unknown error'));
+                        $btn.removeClass('loading');
+                        $btn.html('Continue <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                    }
+                },
+                error: function() {
+                    alert('Failed to save profile. Please try again.');
+                    $btn.removeClass('loading');
+                    $btn.html('Continue <span class="dashicons dashicons-arrow-right-alt2"></span>');
                 }
             });
         }
