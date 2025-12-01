@@ -106,16 +106,16 @@ class ProxyClient {
 
 		$context = $this->get_site_context();
 
-		// Build request body with performance tier support
+		// Build request body with model selection
 		$request_body = [
 			'task_type' => $task_type,
 			'prompt'    => $prompt,
 			'context'   => $context,
 		];
 
-		// Add performance tier if provided (passed from ChatInterface)
-		if ( ! empty( $options['performance_tier'] ) ) {
-			$request_body['performance_tier'] = $options['performance_tier'];
+		// Add AI model if provided (passed from ChatInterface)
+		if ( ! empty( $options['model'] ) ) {
+			$request_body['model'] = $options['model'];
 		}
 
 		// Add chat_id if provided
@@ -123,9 +123,9 @@ class ProxyClient {
 			$request_body['chat_id'] = (string) $options['chat_id'];
 		}
 
-		// Remove tier-related keys from options before adding to request
+		// Remove model-related keys from options before adding to request
 		$clean_options = $options;
-		unset( $clean_options['performance_tier'], $clean_options['chat_id'] );
+		unset( $clean_options['model'], $clean_options['chat_id'] );
 		$request_body['options'] = $clean_options;
 
 		$response = $this->make_request( 'POST', '/api/ai/route-request', $request_body, [

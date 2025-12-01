@@ -39,6 +39,14 @@ export interface RouteRequest {
   prompt: string;
 
   /**
+   * Selected AI model
+   * - 'gemini': Gemini 3 Pro (Google)
+   * - 'claude': Claude Sonnet 4 (Anthropic)
+   * Each model falls back to the other if unavailable
+   */
+  model?: "gemini" | "claude";
+
+  /**
    * Optional context about the requesting site
    * Can include site_title, theme, plugins, etc.
    */
@@ -60,24 +68,7 @@ export interface RouteRequest {
   max_tokens?: number;
 
   /**
-   * Performance tier selection
-   * - 'flow': Fast, cost-effective chain (0.5 credits)
-   * - 'craft': Full power chain for complex tasks (2 credits)
-   */
-  performance_tier?: "flow" | "craft";
-
-  /**
-   * Task complexity assessment (used for auto-tier selection)
-   */
-  task_complexity?: "simple" | "moderate" | "complex";
-
-  /**
-   * Whether this request involves Elementor template generation
-   */
-  is_elementor_template?: boolean;
-
-  /**
-   * Chat session ID for tier locking
+   * Chat session ID for model locking
    */
   chat_id?: string;
 }

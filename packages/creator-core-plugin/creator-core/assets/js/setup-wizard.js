@@ -34,8 +34,8 @@
             // Profile selection
             $('.creator-profile-option input[type="radio"]').on('change', this.handleProfileSelection.bind(this));
 
-            // Tier selection
-            $('.creator-tier-option input[type="radio"]').on('change', this.handleTierSelection.bind(this));
+            // Model selection
+            $('.creator-model-option input[type="radio"]').on('change', this.handleModelSelection.bind(this));
 
             // If on profile step, intercept the Continue button
             if (typeof creatorSetupData !== 'undefined' && creatorSetupData.currentStep === 'profile') {
@@ -222,14 +222,14 @@
         },
 
         /**
-         * Handle tier selection (visual feedback)
+         * Handle model selection (visual feedback)
          */
-        handleTierSelection: function(e) {
+        handleModelSelection: function(e) {
             const $radio = $(e.currentTarget);
-            const $option = $radio.closest('.creator-tier-option');
+            const $option = $radio.closest('.creator-model-option');
 
-            // Remove selected class from all tier options
-            $('.creator-tier-option').removeClass('selected');
+            // Remove selected class from all model options
+            $('.creator-model-option').removeClass('selected');
 
             // Add selected class to current option
             $option.addClass('selected');
@@ -244,7 +244,7 @@
 
             const $btn = $(e.currentTarget);
             const selectedLevel = $('input[name="user_level"]:checked').val();
-            const selectedTier = $('input[name="default_tier"]:checked').val();
+            const selectedModel = $('input[name="default_model"]:checked').val();
 
             // Get the next URL from the button's href or from creatorSetupData
             const nextUrl = $btn.attr('href') || (typeof creatorSetupData !== 'undefined' ? creatorSetupData.nextUrl : '');
@@ -255,8 +255,8 @@
                 return false;
             }
 
-            if (!selectedTier) {
-                alert('Please select your default processing mode before continuing.');
+            if (!selectedModel) {
+                alert('Please select your default AI model before continuing.');
                 return false;
             }
 
@@ -271,7 +271,7 @@
                     action: 'creator_save_user_profile',
                     nonce: creatorSetup.nonce,
                     user_level: selectedLevel,
-                    default_tier: selectedTier
+                    default_model: selectedModel
                 },
                 success: function(response) {
                     if (response.success) {

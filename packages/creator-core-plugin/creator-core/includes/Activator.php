@@ -60,16 +60,19 @@ class Activator {
             user_id bigint(20) unsigned NOT NULL,
             title varchar(255) DEFAULT '',
             status varchar(20) DEFAULT 'active',
-            performance_tier varchar(20) DEFAULT 'flow',
+            ai_model varchar(20) DEFAULT 'gemini',
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY user_id (user_id),
             KEY status (status),
-            KEY performance_tier (performance_tier),
+            KEY ai_model (ai_model),
             KEY created_at (created_at)
         ) {$charset_collate};";
         dbDelta( $sql_chats );
+
+        // Migration: Rename performance_tier to ai_model if it exists
+        self::migrate_tier_to_model();
 
         // Messages table
         $table_messages = $wpdb->prefix . 'creator_messages';
@@ -291,6 +294,67 @@ class Activator {
         if ( ! get_option( 'creator_setup_completed' ) ) {
             // Use update_option to ensure value is always written (add_option won't overwrite)
             update_option( 'creator_do_activation_redirect', 'yes' );
+        }
+    }
+
+    /**
+     * Migrate from performance_tier to ai_model column
+     *
+     * This handles existing installations that have the old column name.
+     * Maps old tier values to new model values:
+     * - flow -> gemini (was the fast/default option)
+     * - craft -> gemini (was the quality option, now both use same model)
+     *
+     * @return void
+     */
+    private static function migrate_tier_to_model(): void {
+        global $wpdb;
+
+        $table_chats = $wpdb->prefix . 'creator_chats';
+
+        // Check if performance_tier column exists
+        $column_exists = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'performance_tier'",
+                DB_NAME,
+                $table_chats
+            )
+        );
+
+        if ( $column_exists ) {
+            // Check if ai_model column already exists
+            $new_column_exists = $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                     WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'ai_model'",
+                    DB_NAME,
+                    $table_chats
+                )
+            );
+
+            if ( ! $new_column_exists ) {
+                // Add new ai_model column
+                $wpdb->query( "ALTER TABLE {$table_chats} ADD COLUMN ai_model varchar(20) DEFAULT 'gemini' AFTER status" );
+
+                // Migrate data: all old tiers become gemini (the new default)
+                $wpdb->query( "UPDATE {$table_chats} SET ai_model = 'gemini'" );
+
+                // Add index on new column
+                $wpdb->query( "ALTER TABLE {$table_chats} ADD KEY ai_model (ai_model)" );
+            }
+
+            // Drop old column and its index
+            $wpdb->query( "ALTER TABLE {$table_chats} DROP KEY IF EXISTS performance_tier" );
+            $wpdb->query( "ALTER TABLE {$table_chats} DROP COLUMN IF EXISTS performance_tier" );
+        }
+
+        // Also migrate the option from default_tier to default_model
+        $old_tier = get_option( 'creator_default_tier' );
+        if ( $old_tier !== false ) {
+            // Map old tier to model (both map to gemini as default)
+            update_option( 'creator_default_model', 'gemini' );
+            delete_option( 'creator_default_tier' );
         }
     }
 }

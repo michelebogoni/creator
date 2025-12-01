@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Class UserProfile
  *
- * Manages user competency levels, performance tier preferences, and provides AI instructions based on profile
+ * Manages user competency levels, AI model preferences, and provides AI instructions based on profile
  */
 class UserProfile {
 
@@ -24,10 +24,10 @@ class UserProfile {
 	public const LEVEL_ADVANCED     = 'advanced';
 
 	/**
-	 * Performance tier constants
+	 * AI model constants
 	 */
-	public const TIER_FLOW  = 'flow';
-	public const TIER_CRAFT = 'craft';
+	public const MODEL_GEMINI = 'gemini';
+	public const MODEL_CLAUDE = 'claude';
 
 	/**
 	 * Option name for storing user level
@@ -35,9 +35,9 @@ class UserProfile {
 	private const OPTION_NAME = 'creator_user_profile';
 
 	/**
-	 * Option name for storing default performance tier
+	 * Option name for storing default AI model
 	 */
-	private const TIER_OPTION_NAME = 'creator_default_tier';
+	private const MODEL_OPTION_NAME = 'creator_default_model';
 
 	/**
 	 * Get current user competency level
@@ -445,121 +445,114 @@ RULES;
 		return $levels[ $level ]['label'] ?? ucfirst( $level );
 	}
 
-	// ==================== PERFORMANCE TIER METHODS ====================
+	// ==================== AI MODEL METHODS ====================
 
 	/**
-	 * Get current default performance tier
+	 * Get current default AI model
 	 *
 	 * @return string
 	 */
-	public static function get_default_tier(): string {
-		$tier = get_option( self::TIER_OPTION_NAME, self::TIER_FLOW );
-		return in_array( $tier, self::get_valid_tiers(), true ) ? $tier : self::TIER_FLOW;
+	public static function get_default_model(): string {
+		$model = get_option( self::MODEL_OPTION_NAME, self::MODEL_GEMINI );
+		return in_array( $model, self::get_valid_models(), true ) ? $model : self::MODEL_GEMINI;
 	}
 
 	/**
-	 * Set default performance tier
+	 * Set default AI model
 	 *
-	 * @param string $tier Tier to set.
+	 * @param string $model Model to set.
 	 * @return bool
 	 */
-	public static function set_default_tier( string $tier ): bool {
-		if ( ! in_array( $tier, self::get_valid_tiers(), true ) ) {
+	public static function set_default_model( string $model ): bool {
+		if ( ! in_array( $model, self::get_valid_models(), true ) ) {
 			return false;
 		}
 
-		$current = self::get_default_tier();
-		if ( $current === $tier ) {
+		$current = self::get_default_model();
+		if ( $current === $model ) {
 			return true;
 		}
 
-		return update_option( self::TIER_OPTION_NAME, $tier );
+		return update_option( self::MODEL_OPTION_NAME, $model );
 	}
 
 	/**
-	 * Check if default tier is set
+	 * Check if default model is set
 	 *
 	 * @return bool
 	 */
-	public static function is_tier_set(): bool {
-		return get_option( self::TIER_OPTION_NAME ) !== false;
+	public static function is_model_set(): bool {
+		return get_option( self::MODEL_OPTION_NAME ) !== false;
 	}
 
 	/**
-	 * Get all valid tiers
+	 * Get all valid models
 	 *
 	 * @return array
 	 */
-	public static function get_valid_tiers(): array {
+	public static function get_valid_models(): array {
 		return [
-			self::TIER_FLOW,
-			self::TIER_CRAFT,
+			self::MODEL_GEMINI,
+			self::MODEL_CLAUDE,
 		];
 	}
 
 	/**
-	 * Get tier display info for UI
+	 * Get model display info for UI
 	 *
 	 * @return array
 	 */
-	public static function get_tiers_info(): array {
+	public static function get_models_info(): array {
 		return [
-			self::TIER_FLOW => [
-				'label'       => __( 'Flow', 'creator-core' ),
-				'icon'        => '✍🏼',
-				'credits'     => 0.5,
-				'time'        => '20-30 sec',
-				'quality'     => '85%',
-				'title'       => __( 'Fast & Efficient', 'creator-core' ),
-				'description' => __( 'Optimized for speed and iterative work. Best for content editing, CSS changes, quick snippets, and standard modifications.', 'creator-core' ),
+			self::MODEL_GEMINI => [
+				'label'       => __( 'Gemini 3 Pro', 'creator-core' ),
+				'icon'        => '🔷',
+				'provider'    => 'Google',
+				'title'       => __( 'Advanced Reasoning', 'creator-core' ),
+				'description' => __( 'Google\'s most advanced model. Excellent for complex reasoning, multi-step tasks, and detailed analysis.', 'creator-core' ),
 				'best_for'    => [
-					__( 'Iterative content editing', 'creator-core' ),
-					__( 'CSS and style modifications', 'creator-core' ),
-					__( 'Quick code snippets', 'creator-core' ),
-					__( 'Configuration changes', 'creator-core' ),
-					__( 'Standard template modifications', 'creator-core' ),
+					__( 'Complex WordPress architecture', 'creator-core' ),
+					__( 'Multi-step plugin integrations', 'creator-core' ),
+					__( 'Detailed code analysis', 'creator-core' ),
+					__( 'Site optimization planning', 'creator-core' ),
 				],
-				'chain'       => 'Gemini 2.5 Flash → Claude 4 Sonnet',
+				'fallback'    => __( 'Falls back to Claude Sonnet 4 if unavailable', 'creator-core' ),
 			],
-			self::TIER_CRAFT => [
-				'label'       => __( 'Craft', 'creator-core' ),
-				'icon'        => '⚙️',
-				'credits'     => 2.0,
-				'time'        => '45-60 sec',
-				'quality'     => '95%',
-				'title'       => __( 'Maximum Quality', 'creator-core' ),
-				'description' => __( 'Full-power AI chain for complex tasks. Best for critical code, architecture planning, custom templates, and multi-plugin integrations.', 'creator-core' ),
+			self::MODEL_CLAUDE => [
+				'label'       => __( 'Claude Sonnet 4', 'creator-core' ),
+				'icon'        => '🟠',
+				'provider'    => 'Anthropic',
+				'title'       => __( 'Creative & Precise', 'creator-core' ),
+				'description' => __( 'Anthropic\'s balanced model. Strong at coding, creative content, and clear explanations.', 'creator-core' ),
 				'best_for'    => [
-					__( 'Complex CPT + ACF + Elementor operations', 'creator-core' ),
-					__( 'Site architecture planning', 'creator-core' ),
-					__( 'Custom Elementor templates', 'creator-core' ),
-					__( 'Multi-plugin integrations', 'creator-core' ),
-					__( 'Critical code generation', 'creator-core' ),
+					__( 'Code generation and debugging', 'creator-core' ),
+					__( 'Content creation and editing', 'creator-core' ),
+					__( 'Technical documentation', 'creator-core' ),
+					__( 'Step-by-step guidance', 'creator-core' ),
 				],
-				'chain'       => 'Gemini 2.5 Flash → Gemini 2.5 Pro → Claude 4.5 Opus',
+				'fallback'    => __( 'Falls back to Gemini 3 Pro if unavailable', 'creator-core' ),
 			],
 		];
 	}
 
 	/**
-	 * Get tier label for display
+	 * Get model label for display
 	 *
-	 * @param string $tier Tier key.
+	 * @param string $model Model key.
 	 * @return string
 	 */
-	public static function get_tier_label( string $tier ): string {
-		$tiers = self::get_tiers_info();
-		return $tiers[ $tier ]['label'] ?? ucfirst( $tier );
+	public static function get_model_label( string $model ): string {
+		$models = self::get_models_info();
+		return $models[ $model ]['label'] ?? ucfirst( $model );
 	}
 
 	/**
-	 * Get tier credit cost
+	 * Get fallback model
 	 *
-	 * @param string $tier Tier key.
-	 * @return float
+	 * @param string $model Current model.
+	 * @return string
 	 */
-	public static function get_tier_credits( string $tier ): float {
-		$tiers = self::get_tiers_info();
-		return $tiers[ $tier ]['credits'] ?? 0.5;
+	public static function get_fallback_model( string $model ): string {
+		return $model === self::MODEL_GEMINI ? self::MODEL_CLAUDE : self::MODEL_GEMINI;
 	}
 }

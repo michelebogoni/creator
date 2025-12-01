@@ -81,6 +81,7 @@ class Migrations {
         return [
             '1.0.0' => [ $this, 'migrate_1_0_0' ],
             '1.1.0' => [ $this, 'migrate_1_1_0' ],
+            '1.2.0' => [ $this, 'migrate_1_2_0' ],
         ];
     }
 
@@ -124,6 +125,80 @@ class Migrations {
                  ADD COLUMN performance_tier varchar(20) DEFAULT 'flow' AFTER status,
                  ADD KEY performance_tier (performance_tier)"
             );
+        }
+
+        return true;
+    }
+
+    /**
+     * Migration for version 1.2.0
+     *
+     * Converts performance_tier column to ai_model for simplified model selection
+     * Maps: flow -> gemini, craft -> gemini (both map to gemini as new default)
+     *
+     * @return bool
+     */
+    private function migrate_1_2_0(): bool {
+        global $wpdb;
+
+        $table_name = $wpdb->prefix . 'creator_chats';
+
+        // Check if performance_tier column exists (old column)
+        $old_column_exists = $wpdb->get_results(
+            $wpdb->prepare(
+                "SHOW COLUMNS FROM {$table_name} LIKE %s",
+                'performance_tier'
+            )
+        );
+
+        // Check if ai_model column already exists (new column)
+        $new_column_exists = $wpdb->get_results(
+            $wpdb->prepare(
+                "SHOW COLUMNS FROM {$table_name} LIKE %s",
+                'ai_model'
+            )
+        );
+
+        // Add new ai_model column if it doesn't exist
+        if ( empty( $new_column_exists ) ) {
+            $wpdb->query(
+                "ALTER TABLE {$table_name}
+                 ADD COLUMN ai_model varchar(20) DEFAULT 'gemini' AFTER status"
+            );
+
+            // Add index
+            $wpdb->query(
+                "ALTER TABLE {$table_name}
+                 ADD KEY ai_model (ai_model)"
+            );
+
+            // Migrate data: all old tiers become gemini (the new default)
+            $wpdb->query(
+                "UPDATE {$table_name} SET ai_model = 'gemini'"
+            );
+        }
+
+        // Drop old performance_tier column and index if they exist
+        if ( ! empty( $old_column_exists ) ) {
+            // Drop the index first (if exists)
+            $index_exists = $wpdb->get_results(
+                "SHOW INDEX FROM {$table_name} WHERE Key_name = 'performance_tier'"
+            );
+
+            if ( ! empty( $index_exists ) ) {
+                $wpdb->query( "ALTER TABLE {$table_name} DROP KEY performance_tier" );
+            }
+
+            // Drop the column
+            $wpdb->query( "ALTER TABLE {$table_name} DROP COLUMN performance_tier" );
+        }
+
+        // Migrate the user preference option
+        $old_tier = get_option( 'creator_default_tier' );
+        if ( $old_tier !== false ) {
+            // Map old tier to model (gemini as default)
+            update_option( 'creator_default_model', 'gemini' );
+            delete_option( 'creator_default_tier' );
         }
 
         return true;

@@ -105,10 +105,10 @@ class ChatInterface {
      * Create a new chat
      *
      * @param string $title Chat title.
-     * @param string $performance_tier Performance tier (flow or craft).
+     * @param string $ai_model AI model (gemini or claude).
      * @return int|false Chat ID or false on failure.
      */
-    public function create_chat( string $title = '', string $performance_tier = '' ) {
+    public function create_chat( string $title = '', string $ai_model = '' ) {
         global $wpdb;
 
         $user_id = get_current_user_id();
@@ -121,20 +121,20 @@ class ChatInterface {
             );
         }
 
-        // Use user's default tier if not specified
-        if ( empty( $performance_tier ) || ! in_array( $performance_tier, UserProfile::get_valid_tiers(), true ) ) {
-            $performance_tier = UserProfile::get_default_tier();
+        // Use user's default model if not specified
+        if ( empty( $ai_model ) || ! in_array( $ai_model, UserProfile::get_valid_models(), true ) ) {
+            $ai_model = UserProfile::get_default_model();
         }
 
         $result = $wpdb->insert(
             $wpdb->prefix . 'creator_chats',
             [
-                'user_id'          => $user_id,
-                'title'            => sanitize_text_field( $title ),
-                'status'           => 'active',
-                'performance_tier' => $performance_tier,
-                'created_at'       => current_time( 'mysql' ),
-                'updated_at'       => current_time( 'mysql' ),
+                'user_id'    => $user_id,
+                'title'      => sanitize_text_field( $title ),
+                'status'     => 'active',
+                'ai_model'   => $ai_model,
+                'created_at' => current_time( 'mysql' ),
+                'updated_at' => current_time( 'mysql' ),
             ],
             [ '%d', '%s', '%s', '%s', '%s', '%s' ]
         );
@@ -146,31 +146,31 @@ class ChatInterface {
         $chat_id = $wpdb->insert_id;
 
         $this->logger->success( 'chat_created', [
-            'chat_id'          => $chat_id,
-            'title'            => $title,
-            'performance_tier' => $performance_tier,
+            'chat_id'  => $chat_id,
+            'title'    => $title,
+            'ai_model' => $ai_model,
         ]);
 
         return $chat_id;
     }
 
     /**
-     * Get chat performance tier
+     * Get chat AI model
      *
      * @param int $chat_id Chat ID.
-     * @return string|null Tier or null if not found.
+     * @return string|null Model or null if not found.
      */
-    public function get_chat_tier( int $chat_id ): ?string {
+    public function get_chat_model( int $chat_id ): ?string {
         global $wpdb;
 
-        $tier = $wpdb->get_var(
+        $model = $wpdb->get_var(
             $wpdb->prepare(
-                "SELECT performance_tier FROM {$wpdb->prefix}creator_chats WHERE id = %d",
+                "SELECT ai_model FROM {$wpdb->prefix}creator_chats WHERE id = %d",
                 $chat_id
             )
         );
 
-        return $tier ?: null;
+        return $model ?: null;
     }
 
     /**
@@ -316,17 +316,17 @@ class ChatInterface {
         // Prepare prompt with context (include pending actions info)
         $prompt = $this->prepare_prompt( $content, $context, $history, $pending_actions );
 
-        // Get the chat's performance tier (locked per chat)
-        $performance_tier = $chat['performance_tier'] ?? UserProfile::get_default_tier();
+        // Get the chat's AI model (locked per chat)
+        $ai_model = $chat['ai_model'] ?? UserProfile::get_default_model();
 
         // Send to AI
         $ai_response = $this->proxy_client->send_to_ai( $prompt, 'TEXT_GEN', [
-            'chat_id'          => $chat_id,
-            'message_id'       => $user_message_id,
-            'user_message'     => $content, // Original user message for mock mode intent detection
-            'pending_actions'  => $pending_actions, // Pending actions for confirmation handling
-            'conversation'     => $history, // Conversation history for context extraction
-            'performance_tier' => $performance_tier, // Performance tier (flow or craft)
+            'chat_id'         => $chat_id,
+            'message_id'      => $user_message_id,
+            'user_message'    => $content, // Original user message for mock mode intent detection
+            'pending_actions' => $pending_actions, // Pending actions for confirmation handling
+            'conversation'    => $history, // Conversation history for context extraction
+            'model'           => $ai_model, // AI model (gemini or claude)
         ]);
 
         if ( ! $ai_response['success'] ) {
