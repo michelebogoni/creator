@@ -22,9 +22,6 @@
          * Bind event handlers
          */
         bindEvents: function() {
-            // Skip setup button
-            $('#skip-setup-btn').on('click', this.skipSetup.bind(this));
-
             // Note: Next step button is now a direct link (<a> tag), no JS needed
 
             // License validation
@@ -69,37 +66,6 @@
                 console.error('creatorSetupData.nextUrl not defined');
                 alert('Error: Unable to navigate to next step. Please refresh the page.');
             }
-        },
-
-        /**
-         * Skip setup and go to dashboard
-         */
-        skipSetup: function(e) {
-            e.preventDefault();
-
-            const $btn = $(e.currentTarget);
-            $btn.prop('disabled', true).text('Redirecting...');
-
-            $.ajax({
-                url: creatorSetup.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'creator_skip_setup',
-                    nonce: creatorSetup.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        window.location.href = response.data.redirect_url || creatorSetup.dashboardUrl;
-                    } else {
-                        alert('Failed to skip setup: ' + (response.data?.message || 'Unknown error'));
-                        $btn.prop('disabled', false).text('Skip Setup');
-                    }
-                },
-                error: function() {
-                    // Still redirect on error
-                    window.location.href = creatorSetup.dashboardUrl;
-                }
-            });
         },
 
         /**
@@ -257,18 +223,22 @@
          */
         saveProfileAndContinue: function(e) {
             e.preventDefault();
+            e.stopPropagation();
 
             const $btn = $(e.currentTarget);
             const selectedLevel = $('input[name="user_level"]:checked').val();
 
+            // Get the next URL from the button's href or from creatorSetupData
+            const nextUrl = $btn.attr('href') || (typeof creatorSetupData !== 'undefined' ? creatorSetupData.nextUrl : '');
+
             // Validate selection
             if (!selectedLevel) {
                 alert('Please select your competency level before continuing.');
-                return;
+                return false;
             }
 
             // Show loading
-            $btn.addClass('loading');
+            $btn.addClass('loading').css('pointer-events', 'none');
             $btn.html('<span class="dashicons dashicons-update creator-spin"></span> Saving...');
 
             $.ajax({
@@ -281,25 +251,27 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        // Navigate to next step
-                        if (typeof creatorSetupData !== 'undefined' && creatorSetupData.nextUrl) {
-                            window.location.href = creatorSetupData.nextUrl;
+                        // Navigate to next step using the stored URL
+                        if (nextUrl) {
+                            window.location.href = nextUrl;
                         } else {
-                            // Fallback: reload page
-                            window.location.reload();
+                            // Fallback: construct URL manually
+                            window.location.href = creatorSetup.adminUrl + 'admin.php?page=creator-setup&step=finish';
                         }
                     } else {
                         alert('Failed to save profile: ' + (response.data?.message || 'Unknown error'));
-                        $btn.removeClass('loading');
+                        $btn.removeClass('loading').css('pointer-events', '');
                         $btn.html('Continue <span class="dashicons dashicons-arrow-right-alt2"></span>');
                     }
                 },
                 error: function() {
                     alert('Failed to save profile. Please try again.');
-                    $btn.removeClass('loading');
+                    $btn.removeClass('loading').css('pointer-events', '');
                     $btn.html('Continue <span class="dashicons dashicons-arrow-right-alt2"></span>');
                 }
             });
+
+            return false;
         }
     };
 

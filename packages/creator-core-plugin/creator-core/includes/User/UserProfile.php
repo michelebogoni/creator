@@ -82,54 +82,54 @@ class UserProfile {
 	public static function get_levels_info(): array {
 		return [
 			self::LEVEL_BASE => [
-				'label'       => __( 'Principiante', 'creator-core' ),
-				'title'       => __( 'Non programmo', 'creator-core' ),
-				'description' => __( 'Uso WordPress tramite la dashboard e plugin visuali come Elementor. Non modifico mai file di tema o codice direttamente.', 'creator-core' ),
+				'label'       => __( 'Beginner', 'creator-core' ),
+				'title'       => __( 'I don\'t code', 'creator-core' ),
+				'description' => __( 'I use WordPress through the dashboard and visual plugins like Elementor. I never edit theme files or code directly.', 'creator-core' ),
 				'capabilities' => [
 					'can'    => [
-						__( 'Creare pagine/post via Dashboard', 'creator-core' ),
-						__( 'Usare Elementor o builder visuali', 'creator-core' ),
-						__( 'Configurare plugin tramite interfaccia', 'creator-core' ),
+						__( 'Create pages/posts via Dashboard', 'creator-core' ),
+						__( 'Use Elementor or visual builders', 'creator-core' ),
+						__( 'Configure plugins via interface', 'creator-core' ),
 					],
 					'cannot' => [
-						__( 'Modificare functions.php, CSS, PHP', 'creator-core' ),
-						__( 'Creare child theme o plugin custom', 'creator-core' ),
+						__( 'Edit functions.php, CSS, PHP', 'creator-core' ),
+						__( 'Create child themes or custom plugins', 'creator-core' ),
 					],
 				],
-				'behavior'    => __( 'Creator userà solo plugin e interfacce visuali, evitando codice. Ti guiderà passo passo con linguaggio semplice.', 'creator-core' ),
+				'behavior'    => __( 'Creator will only use plugins and visual interfaces, avoiding code. It will guide you step by step with simple language.', 'creator-core' ),
 			],
 			self::LEVEL_INTERMEDIATE => [
-				'label'       => __( 'Intermedio', 'creator-core' ),
-				'title'       => __( 'Conosco le basi del codice', 'creator-core' ),
-				'description' => __( 'Ho familiarità con HTML/CSS/PHP. Uso WP Code per snippet e so lavorare con child theme. Non ho paura del codice, ma preferisco evitarlo quando possibile.', 'creator-core' ),
+				'label'       => __( 'Intermediate', 'creator-core' ),
+				'title'       => __( 'I know the basics of code', 'creator-core' ),
+				'description' => __( 'I\'m familiar with HTML/CSS/PHP. I use WP Code for snippets and know how to work with child themes. I\'m not afraid of code, but I prefer to avoid it when possible.', 'creator-core' ),
 				'capabilities' => [
 					'can'    => [
-						__( 'Modificare CSS/HTML via Elementor o WP Code', 'creator-core' ),
-						__( 'Creare snippet semplici in WP Code', 'creator-core' ),
-						__( 'Lavorare su child theme', 'creator-core' ),
-						__( 'Comprendere hook, shortcode, CPT', 'creator-core' ),
+						__( 'Edit CSS/HTML via Elementor or WP Code', 'creator-core' ),
+						__( 'Create simple snippets in WP Code', 'creator-core' ),
+						__( 'Work with child themes', 'creator-core' ),
+						__( 'Understand hooks, shortcodes, CPT', 'creator-core' ),
 					],
 					'cannot' => [
-						__( 'Modificare il tema principale', 'creator-core' ),
-						__( 'Query SQL complesse sul database', 'creator-core' ),
+						__( 'Modify the main theme', 'creator-core' ),
+						__( 'Complex SQL queries on the database', 'creator-core' ),
 					],
 				],
-				'behavior'    => __( 'Creator proporrà soluzioni miste (plugin + codice via WP Code). Userà linguaggio tecnico ma spiegando i concetti.', 'creator-core' ),
+				'behavior'    => __( 'Creator will suggest mixed solutions (plugins + code via WP Code). It will use technical language while explaining concepts.', 'creator-core' ),
 			],
 			self::LEVEL_ADVANCED => [
-				'label'       => __( 'Avanzato', 'creator-core' ),
-				'title'       => __( 'Sono uno sviluppatore', 'creator-core' ),
-				'description' => __( 'Conosco PHP, JavaScript, SQL e la struttura del database WordPress. Lavoro con functions.php, creo plugin e temi custom senza problemi.', 'creator-core' ),
+				'label'       => __( 'Advanced', 'creator-core' ),
+				'title'       => __( 'I\'m a developer', 'creator-core' ),
+				'description' => __( 'I know PHP, JavaScript, SQL and the WordPress database structure. I work with functions.php, create custom plugins and themes without issues.', 'creator-core' ),
 				'capabilities' => [
 					'can'    => [
-						__( 'Scrivere codice in functions.php', 'creator-core' ),
-						__( 'Creare plugin e temi custom', 'creator-core' ),
-						__( 'Query SQL ottimizzate, hook avanzati', 'creator-core' ),
-						__( 'REST API custom e modifiche al database', 'creator-core' ),
+						__( 'Write code in functions.php', 'creator-core' ),
+						__( 'Create custom plugins and themes', 'creator-core' ),
+						__( 'Optimized SQL queries, advanced hooks', 'creator-core' ),
+						__( 'Custom REST API and database modifications', 'creator-core' ),
 					],
 					'cannot' => [],
 				],
-				'behavior'    => __( 'Creator proporrà la soluzione tecnicamente migliore. Linguaggio da sviluppatore, codice diretto, trade-off espliciti.', 'creator-core' ),
+				'behavior'    => __( 'Creator will propose the technically best solution. Developer language, direct code, explicit trade-offs.', 'creator-core' ),
 			],
 		];
 	}
