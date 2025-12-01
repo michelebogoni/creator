@@ -735,3 +735,195 @@
         margin-top: 8px;
     }
 }
+
+/* ============================================
+   AI Model Selector Styles (Wizard)
+   ============================================ */
+
+.creator-model-selector {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    max-width: 100%;
+}
+
+.creator-model-option {
+    display: block;
+    cursor: pointer;
+}
+
+.creator-model-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.creator-model-card {
+    position: relative;
+    border: 2px solid var(--creator-gray-200);
+    border-radius: var(--creator-border-radius);
+    padding: 24px;
+    transition: all 0.2s ease;
+    background: white;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.creator-model-option:hover .creator-model-card {
+    border-color: var(--creator-primary);
+    background: var(--creator-gray-50);
+}
+
+.creator-model-option.selected .creator-model-card,
+.creator-model-option input:checked + .creator-model-card {
+    border-color: var(--creator-primary);
+    background: linear-gradient(to bottom, #f0f7ff, white);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+}
+
+/* Selected indicator for model cards */
+.creator-model-option input:checked + .creator-model-card::before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 28px;
+    height: 28px;
+    background: var(--creator-primary);
+    border-radius: 0 var(--creator-border-radius) 0 10px;
+}
+
+.creator-model-option input:checked + .creator-model-card::after {
+    content: "\f147";
+    font-family: dashicons;
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    color: white;
+    font-size: 16px;
+}
+
+.creator-model-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.creator-model-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.creator-model-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.creator-model-label {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--creator-gray-900);
+}
+
+.creator-model-provider {
+    font-size: 12px;
+    color: var(--creator-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.creator-model-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--creator-primary);
+    margin-bottom: 8px;
+}
+
+.creator-model-description {
+    font-size: 14px;
+    color: var(--creator-gray-600);
+    line-height: 1.6;
+    margin: 0 0 16px;
+}
+
+.creator-model-best-for {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--creator-gray-200);
+}
+
+.creator-model-best-for strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--creator-gray-500);
+    margin-bottom: 8px;
+}
+
+.creator-model-best-for ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.creator-model-best-for li {
+    position: relative;
+    padding-left: 16px;
+    font-size: 13px;
+    color: var(--creator-gray-700);
+    line-height: 1.8;
+}
+
+.creator-model-best-for li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--creator-primary);
+    font-weight: bold;
+}
+
+.creator-model-fallback {
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: var(--creator-gray-50);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--creator-gray-600);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.creator-model-fallback .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--creator-gray-400);
+}
+
+/* Gemini accent color */
+.creator-model-option:first-child .creator-model-title {
+    color: #4285f4;
+}
+
+/* Claude accent color */
+.creator-model-option:last-child .creator-model-title {
+    color: #d97706;
+}
+
+/* Responsive model selector */
+@media (max-width: 700px) {
+    .creator-model-selector {
+        grid-template-columns: 1fr;
+    }
+
+    .creator-model-header {
+        flex-wrap: wrap;
+    }
+}

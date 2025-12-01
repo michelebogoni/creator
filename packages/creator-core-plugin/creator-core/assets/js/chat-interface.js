@@ -53,6 +53,34 @@
 
             // Capability tabs
             $(document).on('click', '.creator-tab', this.handleTabClick.bind(this));
+
+            // Model toggle in chat header
+            $('input[name="chat_model"]').on('change', this.handleModelToggle.bind(this));
+        },
+
+        /**
+         * Handle model toggle selection
+         */
+        handleModelToggle: function(e) {
+            const $radio = $(e.currentTarget);
+            const $option = $radio.closest('.creator-model-toggle-option');
+
+            // Remove active class from all options
+            $('.creator-model-toggle-option').removeClass('active');
+
+            // Add active class to selected option
+            $option.addClass('active');
+
+            // Update data attribute on container
+            $('.creator-chat-container').data('model', $radio.val());
+        },
+
+        /**
+         * Get selected model
+         */
+        getSelectedModel: function() {
+            const selected = $('input[name="chat_model"]:checked').val();
+            return selected || $('.creator-chat-container').data('model') || 'gemini';
         },
 
         /**
@@ -165,6 +193,7 @@
          */
         createChatAndSendMessage: function(message) {
             const self = this;
+            const selectedModel = this.getSelectedModel();
 
             $.ajax({
                 url: creatorChat.restUrl + 'chats',
@@ -174,12 +203,24 @@
                     'X-WP-Nonce': creatorChat.restNonce
                 },
                 data: JSON.stringify({
-                    title: message.substring(0, 50) + (message.length > 50 ? '...' : '')
+                    title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+                    ai_model: selectedModel
                 }),
                 success: function(response) {
                     if (response.success && response.chat && response.chat.id) {
                         self.chatId = response.chat.id;
                         self.updateUrl(response.chat.id);
+
+                        // Hide model toggle after chat is created (model is now locked)
+                        $('.creator-model-toggle').fadeOut(function() {
+                            // Show model badge instead
+                            const modelBadge = '<div class="creator-model-badge">' +
+                                '<span class="creator-model-badge-icon">' + (selectedModel === 'gemini' ? '🔷' : '🟠') + '</span>' +
+                                '<span class="creator-model-badge-label">' + (selectedModel === 'gemini' ? 'Gemini 3 Pro' : 'Claude Sonnet 4') + '</span>' +
+                            '</div>';
+                            $(this).replaceWith(modelBadge);
+                        });
+
                         self.sendMessageToChat(response.chat.id, message);
                     } else {
                         self.hideTypingIndicator();

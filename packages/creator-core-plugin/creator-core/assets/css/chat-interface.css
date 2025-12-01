@@ -685,3 +685,90 @@
 .creator-db-table tr:hover {
     background: var(--creator-gray-50);
 }
+
+/* ============================================
+   Model Toggle (Chat Header)
+   ============================================ */
+
+.creator-model-toggle {
+    display: flex;
+    background: var(--creator-gray-100);
+    border-radius: 8px;
+    padding: 3px;
+    margin-right: 8px;
+}
+
+.creator-model-toggle-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 13px;
+    color: var(--creator-gray-600);
+}
+
+.creator-model-toggle-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.creator-model-toggle-option:hover {
+    color: var(--creator-gray-800);
+}
+
+.creator-model-toggle-option.active {
+    background: white;
+    color: var(--creator-gray-900);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.creator-model-toggle-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.creator-model-toggle-label {
+    font-weight: 500;
+}
+
+/* Model Badge (for existing chats) */
+.creator-model-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--creator-gray-100);
+    border-radius: 6px;
+    margin-right: 8px;
+    font-size: 13px;
+    color: var(--creator-gray-700);
+}
+
+.creator-model-badge-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.creator-model-badge-label {
+    font-weight: 500;
+}
+
+/* Responsive - hide label on small screens */
+@media (max-width: 600px) {
+    .creator-model-toggle-label,
+    .creator-model-badge-label {
+        display: none;
+    }
+
+    .creator-model-toggle-option {
+        padding: 6px 10px;
+    }
+
+    .creator-model-badge {
+        padding: 6px 10px;
+    }
+}
