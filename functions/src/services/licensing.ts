@@ -17,7 +17,7 @@ import {
   isTimestampExpired,
   timestampToISO,
 } from "../lib/firestore";
-import { generateToken } from "../lib/jwt";
+import { generateToken, decodeToken, isTokenExpired } from "../lib/jwt";
 import { Logger } from "../lib/logger";
 import { Timestamp } from "firebase-admin/firestore";
 
@@ -273,8 +273,18 @@ export async function processLicenseValidation(
 
   // Generate or reuse site_token
   let siteToken = license.site_token;
+  let needsNewToken = !siteToken;
 
-  if (!siteToken) {
+  // Check if existing token is expired
+  if (siteToken) {
+    const decoded = decodeToken(siteToken);
+    if (!decoded || isTokenExpired(decoded)) {
+      logger.info("Existing token is expired, generating new one", { license_key: normalizedKey });
+      needsNewToken = true;
+    }
+  }
+
+  if (needsNewToken) {
     // Generate new JWT
     siteToken = generateToken(
       {
@@ -313,7 +323,7 @@ export async function processLicenseValidation(
   return {
     success: true,
     user_id: license.user_id,
-    site_token: siteToken,
+    site_token: siteToken!, // Always defined: either existing valid token or newly generated
     plan: license.plan,
     tokens_limit: license.tokens_limit,
     tokens_remaining: tokensRemaining,
