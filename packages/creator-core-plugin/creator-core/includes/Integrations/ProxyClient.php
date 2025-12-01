@@ -33,10 +33,11 @@ class ProxyClient {
 
 	/**
 	 * Request timeout in seconds
+	 * CRAFT chain can take up to 60 seconds, so we use 120 for safety
 	 *
 	 * @var int
 	 */
-	private int $timeout = 30;
+	private int $timeout = 120;
 
 	/**
 	 * Constructor
