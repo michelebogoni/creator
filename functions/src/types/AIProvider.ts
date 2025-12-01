@@ -271,6 +271,10 @@ export const PROVIDER_PRICING: Record<ProviderName, Record<string, ProviderPrici
     },
   },
   gemini: {
+    "gemini-2.0-flash-exp": {
+      input_cost_per_1k: 0.0001,
+      output_cost_per_1k: 0.0004,
+    },
     "gemini-1.5-flash": {
       input_cost_per_1k: 0.000075,
       output_cost_per_1k: 0.0003,

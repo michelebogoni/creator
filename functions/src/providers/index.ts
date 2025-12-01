@@ -97,7 +97,7 @@ export function createProvider(
  */
 export const DEFAULT_MODELS: Record<ProviderName, string> = {
   openai: "gpt-4o",
-  gemini: "gemini-1.5-flash",
+  gemini: "gemini-2.0-flash-exp",
   claude: "claude-3-5-sonnet-20241022",
 };
 
@@ -106,7 +106,7 @@ export const DEFAULT_MODELS: Record<ProviderName, string> = {
  */
 export const ALTERNATIVE_MODELS: Record<ProviderName, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini"],
-  gemini: ["gemini-1.5-flash", "gemini-1.5-pro"],
+  gemini: ["gemini-2.0-flash-exp", "gemini-1.5-pro"],
   claude: ["claude-3-5-sonnet-20241022"],
 };
 
