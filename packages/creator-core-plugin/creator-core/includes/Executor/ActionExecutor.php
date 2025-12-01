@@ -386,18 +386,55 @@ class ActionExecutor {
         $this->tracker->add_step( 'page_created', [ 'post_id' => $post_id ] );
 
         // If Elementor is available and requested, set up for Elementor
-        if ( isset( $params['use_elementor'] ) && $params['use_elementor'] ) {
+        $use_elementor = isset( $params['use_elementor'] ) && $params['use_elementor'];
+        $elementor_data = $params['elementor_data'] ?? null;
+
+        if ( $use_elementor || $elementor_data ) {
+            // Enable Elementor edit mode
             update_post_meta( $post_id, '_elementor_edit_mode', 'builder' );
-            update_post_meta( $post_id, '_elementor_data', '[]' );
+
+            // Set Elementor template type
+            update_post_meta( $post_id, '_elementor_template_type', 'wp-page' );
+
+            // Set Elementor data if provided
+            if ( $elementor_data ) {
+                // Handle both string and array formats
+                if ( is_string( $elementor_data ) ) {
+                    // Validate JSON
+                    $decoded = json_decode( $elementor_data, true );
+                    if ( json_last_error() === JSON_ERROR_NONE ) {
+                        update_post_meta( $post_id, '_elementor_data', $elementor_data );
+                    } else {
+                        // Invalid JSON, store empty array
+                        update_post_meta( $post_id, '_elementor_data', '[]' );
+                        $this->logger->warning( 'invalid_elementor_data', [
+                            'post_id' => $post_id,
+                            'error'   => json_last_error_msg(),
+                        ]);
+                    }
+                } elseif ( is_array( $elementor_data ) ) {
+                    update_post_meta( $post_id, '_elementor_data', wp_json_encode( $elementor_data ) );
+                }
+
+                $this->tracker->add_step( 'elementor_data_set', [ 'post_id' => $post_id ] );
+            } else {
+                update_post_meta( $post_id, '_elementor_data', '[]' );
+            }
+
+            // Clear Elementor CSS cache to regenerate styles
+            if ( class_exists( '\Elementor\Plugin' ) ) {
+                \Elementor\Plugin::$instance->files_manager->clear_cache();
+            }
         }
 
         return [
             'success' => true,
             'data'    => [
-                'post_id'      => $post_id,
-                'edit_url'     => get_edit_post_link( $post_id, 'raw' ),
-                'view_url'     => get_permalink( $post_id ),
+                'post_id'       => $post_id,
+                'edit_url'      => get_edit_post_link( $post_id, 'raw' ),
+                'view_url'      => get_permalink( $post_id ),
                 'elementor_url' => admin_url( 'post.php?post=' . $post_id . '&action=elementor' ),
+                'is_elementor'  => $use_elementor || (bool) $elementor_data,
             ],
             'message' => sprintf(
                 /* translators: %s: Page title */
