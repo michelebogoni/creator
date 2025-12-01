@@ -11,6 +11,7 @@ defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\Integrations\ProxyClient;
+use CreatorCore\User\UserProfile;
 
 /**
  * Class SetupWizard
@@ -44,9 +45,13 @@ class SetupWizard {
             'name'  => 'License Activation',
             'order' => 3,
         ],
+        'profile' => [
+            'name'  => 'Your Profile',
+            'order' => 4,
+        ],
         'finish' => [
             'name'  => 'Ready to Go',
-            'order' => 4,
+            'order' => 5,
         ],
     ];
 
@@ -63,6 +68,7 @@ class SetupWizard {
         add_action( 'wp_ajax_creator_activate_plugin', [ $this, 'ajax_activate_plugin' ] );
         add_action( 'wp_ajax_creator_skip_setup', [ $this, 'ajax_skip_setup' ] );
         add_action( 'wp_ajax_creator_wizard_validate_license', [ $this, 'ajax_validate_license' ] );
+        add_action( 'wp_ajax_creator_save_user_profile', [ $this, 'ajax_save_user_profile' ] );
     }
 
     /**
@@ -152,6 +158,9 @@ class SetupWizard {
             case 'license':
                 return $this->get_license_data();
 
+            case 'profile':
+                return $this->get_profile_data();
+
             case 'finish':
                 return $this->get_finish_data();
 
@@ -203,6 +212,19 @@ class SetupWizard {
             'license_key'    => get_option( 'creator_license_key', '' ),
             'is_validated'   => $license_status && ! empty( $license_status['success'] ),
             'license_status' => $license_status,
+        ];
+    }
+
+    /**
+     * Get profile step data
+     *
+     * @return array
+     */
+    private function get_profile_data(): array {
+        return [
+            'current_level' => UserProfile::get_level(),
+            'levels'        => UserProfile::get_levels_info(),
+            'is_set'        => UserProfile::is_level_set(),
         ];
     }
 
@@ -285,6 +307,10 @@ class SetupWizard {
                 $this->process_license_step( $data );
                 break;
 
+            case 'profile':
+                $this->process_profile_step( $data );
+                break;
+
             case 'finish':
                 $this->complete_setup();
                 break;
@@ -353,6 +379,35 @@ class SetupWizard {
             wp_send_json_error( [
                 'message' => $result['error'] ?? __( 'License validation failed', 'creator-core' ),
             ]);
+        }
+    }
+
+    /**
+     * Process profile step
+     *
+     * @param array $data Form data.
+     * @return void
+     */
+    private function process_profile_step( array $data ): void {
+        $level = isset( $data['user_level'] ) ? sanitize_key( $data['user_level'] ) : '';
+
+        if ( empty( $level ) ) {
+            wp_send_json_error( [ 'message' => __( 'Please select your competency level', 'creator-core' ) ] );
+        }
+
+        if ( ! in_array( $level, UserProfile::get_valid_levels(), true ) ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid competency level', 'creator-core' ) ] );
+        }
+
+        $saved = UserProfile::set_level( $level );
+
+        if ( $saved ) {
+            wp_send_json_success( [
+                'message'  => __( 'Profile saved', 'creator-core' ),
+                'next_url' => $this->get_next_step_url( 'profile' ),
+            ]);
+        } else {
+            wp_send_json_error( [ 'message' => __( 'Failed to save profile', 'creator-core' ) ] );
         }
     }
 
@@ -504,6 +559,46 @@ class SetupWizard {
             wp_send_json_error( [
                 'message' => $result['error'] ?? __( 'License validation failed', 'creator-core' ),
             ]);
+        }
+    }
+
+    /**
+     * AJAX: Save user profile (competency level)
+     *
+     * @return void
+     */
+    public function ajax_save_user_profile(): void {
+        check_ajax_referer( 'creator_setup_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied', 'creator-core' ) ] );
+        }
+
+        $level = isset( $_POST['user_level'] ) ? sanitize_key( wp_unslash( $_POST['user_level'] ) ) : '';
+
+        if ( empty( $level ) ) {
+            wp_send_json_error( [ 'message' => __( 'Please select your competency level', 'creator-core' ) ] );
+        }
+
+        if ( ! in_array( $level, UserProfile::get_valid_levels(), true ) ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid competency level', 'creator-core' ) ] );
+        }
+
+        $saved = UserProfile::set_level( $level );
+
+        if ( $saved ) {
+            $levels_info = UserProfile::get_levels_info();
+            wp_send_json_success( [
+                'message' => sprintf(
+                    /* translators: %s: Level label */
+                    __( 'Profile set to: %s', 'creator-core' ),
+                    $levels_info[ $level ]['label']
+                ),
+                'level'   => $level,
+                'label'   => $levels_info[ $level ]['label'],
+            ]);
+        } else {
+            wp_send_json_error( [ 'message' => __( 'Failed to save profile', 'creator-core' ) ] );
         }
     }
 }

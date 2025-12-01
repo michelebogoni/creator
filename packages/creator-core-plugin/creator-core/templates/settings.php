@@ -24,6 +24,7 @@ $settings_page = new \CreatorCore\Admin\Settings(
         <div class="creator-settings-tabs">
             <nav class="creator-tabs-nav">
                 <a href="#api" class="creator-tab active" data-tab="api"><?php esc_html_e( 'API Configuration', 'creator-core' ); ?></a>
+                <a href="#profile" class="creator-tab" data-tab="profile"><?php esc_html_e( 'Your Profile', 'creator-core' ); ?></a>
                 <a href="#backup" class="creator-tab" data-tab="backup"><?php esc_html_e( 'Backup Settings', 'creator-core' ); ?></a>
                 <a href="#integrations" class="creator-tab" data-tab="integrations"><?php esc_html_e( 'Integrations', 'creator-core' ); ?></a>
                 <a href="#permissions" class="creator-tab" data-tab="permissions"><?php esc_html_e( 'Permissions', 'creator-core' ); ?></a>
@@ -71,6 +72,80 @@ $settings_page = new \CreatorCore\Admin\Settings(
                         </td>
                     </tr>
                 </table>
+            </div>
+
+            <!-- Profile Settings -->
+            <div id="profile" class="creator-tab-content">
+                <h2><?php esc_html_e( 'Your Competency Level', 'creator-core' ); ?></h2>
+                <p><?php esc_html_e( 'This setting helps Creator communicate with you appropriately and suggest solutions that match your skill level.', 'creator-core' ); ?></p>
+
+                <?php if ( $data['user_profile']['is_set'] ) : ?>
+                    <div class="creator-current-profile">
+                        <strong><?php esc_html_e( 'Current Level:', 'creator-core' ); ?></strong>
+                        <span class="creator-profile-badge" id="current-profile-badge">
+                            <?php
+                            $current_level = $data['user_profile']['current_level'];
+                            $levels_info = $data['user_profile']['levels'];
+                            echo esc_html( $levels_info[ $current_level ]['label'] ?? ucfirst( $current_level ) );
+                            ?>
+                        </span>
+                    </div>
+                <?php endif; ?>
+
+                <div class="creator-profile-options">
+                    <?php foreach ( $data['user_profile']['levels'] as $level_key => $level_info ) : ?>
+                        <div class="creator-profile-option-card <?php echo $data['user_profile']['current_level'] === $level_key ? 'selected' : ''; ?>">
+                            <label>
+                                <input type="radio" name="creator_user_level" value="<?php echo esc_attr( $level_key ); ?>"
+                                       <?php checked( $data['user_profile']['current_level'], $level_key ); ?>>
+
+                                <div class="creator-profile-card-content">
+                                    <div class="creator-profile-card-header">
+                                        <span class="creator-profile-level-badge level-<?php echo esc_attr( $level_key ); ?>">
+                                            <?php echo esc_html( $level_info['label'] ); ?>
+                                        </span>
+                                        <span class="creator-profile-level-title"><?php echo esc_html( $level_info['title'] ); ?></span>
+                                    </div>
+
+                                    <p class="creator-profile-description">
+                                        <?php echo esc_html( $level_info['description'] ); ?>
+                                    </p>
+
+                                    <div class="creator-profile-caps">
+                                        <?php if ( ! empty( $level_info['capabilities']['can'] ) ) : ?>
+                                            <?php foreach ( $level_info['capabilities']['can'] as $cap ) : ?>
+                                                <span class="creator-cap-badge cap-yes">
+                                                    <span class="dashicons dashicons-yes-alt"></span>
+                                                    <?php echo esc_html( $cap ); ?>
+                                                </span>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                        <?php if ( ! empty( $level_info['capabilities']['cannot'] ) ) : ?>
+                                            <?php foreach ( $level_info['capabilities']['cannot'] as $cap ) : ?>
+                                                <span class="creator-cap-badge cap-no">
+                                                    <span class="dashicons dashicons-dismiss"></span>
+                                                    <?php echo esc_html( $cap ); ?>
+                                                </span>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="creator-profile-behavior-info">
+                                        <strong><?php esc_html_e( 'Creator will:', 'creator-core' ); ?></strong>
+                                        <?php echo esc_html( $level_info['behavior'] ); ?>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="creator-profile-actions">
+                    <button type="button" id="save-profile-btn" class="button button-primary">
+                        <?php esc_html_e( 'Update Profile', 'creator-core' ); ?>
+                    </button>
+                    <span id="profile-status"></span>
+                </div>
             </div>
 
             <!-- Backup Settings -->

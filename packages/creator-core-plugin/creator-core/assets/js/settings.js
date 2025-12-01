@@ -46,6 +46,10 @@
 
             // Form validation
             $('input[type="number"]').on('input', this.validateNumberInput);
+
+            // Profile selection
+            $('input[name="creator_user_level"]').on('change', this.handleProfileSelection.bind(this));
+            $('#save-profile-btn').on('click', this.saveProfile.bind(this));
         },
 
         /**
@@ -356,6 +360,70 @@
             } else if (value > max) {
                 $input.val(max);
             }
+        },
+
+        /**
+         * Handle profile selection (visual feedback)
+         */
+        handleProfileSelection: function(e) {
+            const $radio = $(e.currentTarget);
+            const $card = $radio.closest('.creator-profile-option-card');
+
+            // Remove selected class from all cards
+            $('.creator-profile-option-card').removeClass('selected');
+
+            // Add selected class to current card
+            $card.addClass('selected');
+
+            // Clear any previous status
+            $('#profile-status').text('').removeClass('success error');
+        },
+
+        /**
+         * Save user profile
+         */
+        saveProfile: function(e) {
+            e.preventDefault();
+
+            const $btn = $(e.currentTarget);
+            const $status = $('#profile-status');
+            const selectedLevel = $('input[name="creator_user_level"]:checked').val();
+
+            if (!selectedLevel) {
+                $status.text('Please select a competency level').addClass('error').removeClass('success');
+                return;
+            }
+
+            // Show loading
+            $btn.prop('disabled', true);
+            $status.text('Saving...').removeClass('success error');
+
+            $.ajax({
+                url: creatorSettings.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'creator_save_profile',
+                    nonce: creatorSettings.nonce,
+                    user_level: selectedLevel
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $status.text(response.data.message).addClass('success').removeClass('error');
+
+                        // Update the badge if it exists
+                        if (response.data.label) {
+                            $('#current-profile-badge').text(response.data.label);
+                        }
+                    } else {
+                        $status.text(response.data?.message || 'Failed to save profile').addClass('error').removeClass('success');
+                    }
+                    $btn.prop('disabled', false);
+                },
+                error: function() {
+                    $status.text('Failed to save profile. Please try again.').addClass('error').removeClass('success');
+                    $btn.prop('disabled', false);
+                }
+            });
         }
     };
 

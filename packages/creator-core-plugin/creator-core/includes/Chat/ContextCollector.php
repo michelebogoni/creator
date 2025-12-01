@@ -497,6 +497,404 @@ class ContextCollector {
     }
 
     /**
+     * Get sitemap with all published pages and posts
+     *
+     * @param int $limit Maximum number of items per post type.
+     * @return array
+     */
+    public function get_sitemap( int $limit = 50 ): array {
+        $sitemap = [];
+
+        // Get pages
+        $pages = get_posts( [
+            'post_type'      => 'page',
+            'post_status'    => 'publish',
+            'posts_per_page' => $limit,
+            'orderby'        => 'menu_order',
+            'order'          => 'ASC',
+        ] );
+
+        foreach ( $pages as $page ) {
+            $sitemap[] = [
+                'url'         => str_replace( home_url(), '', get_permalink( $page->ID ) ),
+                'title'       => $page->post_title,
+                'description' => $this->get_post_summary( $page ),
+                'post_type'   => 'page',
+                'id'          => $page->ID,
+                'parent'      => $page->post_parent,
+                'template'    => get_page_template_slug( $page->ID ) ?: 'default',
+                'elementor'   => $this->is_elementor_page( $page->ID ),
+            ];
+        }
+
+        // Get posts (recent)
+        $posts = get_posts( [
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'posts_per_page' => min( $limit, 20 ),
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ] );
+
+        foreach ( $posts as $post ) {
+            $categories = wp_get_post_categories( $post->ID, [ 'fields' => 'names' ] );
+            $sitemap[] = [
+                'url'         => str_replace( home_url(), '', get_permalink( $post->ID ) ),
+                'title'       => $post->post_title,
+                'description' => $this->get_post_summary( $post ),
+                'post_type'   => 'post',
+                'id'          => $post->ID,
+                'categories'  => $categories,
+            ];
+        }
+
+        // Get custom post types
+        $custom_post_types = get_post_types( [ 'public' => true, '_builtin' => false ], 'names' );
+
+        foreach ( $custom_post_types as $cpt ) {
+            $cpt_posts = get_posts( [
+                'post_type'      => $cpt,
+                'post_status'    => 'publish',
+                'posts_per_page' => min( $limit, 10 ),
+                'orderby'        => 'date',
+                'order'          => 'DESC',
+            ] );
+
+            foreach ( $cpt_posts as $cpt_post ) {
+                $sitemap[] = [
+                    'url'         => str_replace( home_url(), '', get_permalink( $cpt_post->ID ) ),
+                    'title'       => $cpt_post->post_title,
+                    'description' => $this->get_post_summary( $cpt_post ),
+                    'post_type'   => $cpt,
+                    'id'          => $cpt_post->ID,
+                ];
+            }
+        }
+
+        return $sitemap;
+    }
+
+    /**
+     * Get post summary (excerpt or truncated content)
+     *
+     * @param \WP_Post $post Post object.
+     * @return string
+     */
+    private function get_post_summary( \WP_Post $post ): string {
+        if ( ! empty( $post->post_excerpt ) ) {
+            return wp_trim_words( $post->post_excerpt, 20, '...' );
+        }
+
+        $content = wp_strip_all_tags( $post->post_content );
+        return wp_trim_words( $content, 20, '...' );
+    }
+
+    /**
+     * Check if a page is built with Elementor
+     *
+     * @param int $post_id Post ID.
+     * @return bool
+     */
+    private function is_elementor_page( int $post_id ): bool {
+        if ( ! class_exists( '\Elementor\Plugin' ) ) {
+            return false;
+        }
+
+        $document = \Elementor\Plugin::$instance->documents->get( $post_id );
+        return $document && $document->is_built_with_elementor();
+    }
+
+    /**
+     * Get inactive plugins list
+     *
+     * @return array
+     */
+    public function get_inactive_plugins(): array {
+        if ( ! function_exists( 'get_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $all_plugins    = get_plugins();
+        $active_plugins = get_option( 'active_plugins', [] );
+        $inactive       = [];
+
+        foreach ( $all_plugins as $plugin_path => $plugin ) {
+            if ( ! in_array( $plugin_path, $active_plugins, true ) ) {
+                $inactive[] = [
+                    'name'    => $plugin['Name'],
+                    'version' => $plugin['Version'],
+                ];
+            }
+        }
+
+        return $inactive;
+    }
+
+    /**
+     * Get maxi-onboarding data for AI
+     *
+     * This provides a comprehensive snapshot of the site for the AI to understand
+     * the current state and make informed suggestions.
+     *
+     * @return array
+     */
+    public function get_maxi_onboarding(): array {
+        $context = $this->get_wordpress_context();
+
+        // Build theme info
+        $theme_info = [
+            'name'              => $context['theme_info']['name'],
+            'version'           => $context['theme_info']['version'],
+            'is_child_theme'    => $context['theme_info']['is_child'],
+            'parent_theme'      => $context['theme_info']['parent_theme']['name'] ?? null,
+            'custom_post_types' => array_keys( $context['content_stats']['custom_post_types'] ?? [] ),
+        ];
+
+        // Build active plugins list (just names)
+        $active_plugins = array_map( function( $plugin ) {
+            return $plugin['name'];
+        }, $context['active_plugins'] );
+
+        // Get inactive plugins
+        $inactive_plugins = array_map( function( $plugin ) {
+            return $plugin['name'];
+        }, $this->get_inactive_plugins() );
+
+        // Build integrations list
+        $integrations = [];
+        foreach ( $context['integrations'] as $key => $status ) {
+            if ( $status['active'] ) {
+                $integrations[] = $status['name'];
+            }
+        }
+
+        // Get ACF fields if available
+        $acf_fields = $this->get_acf_field_groups();
+
+        // Get WooCommerce info if available
+        $woocommerce = $this->get_woocommerce_info();
+
+        return [
+            'site_info'        => [
+                'title'       => $context['site_info']['site_title'],
+                'description' => $context['site_info']['site_description'],
+                'url'         => $context['site_info']['site_url'],
+                'locale'      => $context['site_info']['locale'],
+            ],
+            'sitemap'          => $this->get_sitemap(),
+            'theme'            => $theme_info,
+            'plugins_active'   => $active_plugins,
+            'plugins_inactive' => $inactive_plugins,
+            'integrations'     => $integrations,
+            'content_stats'    => [
+                'pages_count'    => $context['content_stats']['pages']->publish ?? 0,
+                'posts_count'    => $context['content_stats']['posts']->publish ?? 0,
+                'media_count'    => array_sum( (array) $context['content_stats']['media'] ),
+                'categories'     => $context['content_stats']['categories'],
+                'menus'          => array_keys( $context['content_stats']['menus']['registered'] ?? [] ),
+            ],
+            'acf_fields'       => $acf_fields,
+            'woocommerce'      => $woocommerce,
+            'capabilities'     => $context['development_info']['creator_capabilities'],
+        ];
+    }
+
+    /**
+     * Get ACF field groups if ACF is active
+     *
+     * @return array|null
+     */
+    private function get_acf_field_groups(): ?array {
+        if ( ! function_exists( 'acf_get_field_groups' ) ) {
+            return null;
+        }
+
+        $groups = acf_get_field_groups();
+        $result = [];
+
+        foreach ( $groups as $group ) {
+            $fields = acf_get_fields( $group['key'] );
+            $field_names = [];
+
+            if ( $fields ) {
+                foreach ( $fields as $field ) {
+                    $field_names[] = [
+                        'name' => $field['name'],
+                        'type' => $field['type'],
+                    ];
+                }
+            }
+
+            $result[] = [
+                'title'    => $group['title'],
+                'location' => $this->simplify_acf_location( $group['location'] ?? [] ),
+                'fields'   => $field_names,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Simplify ACF location rules for readability
+     *
+     * @param array $location ACF location array.
+     * @return array
+     */
+    private function simplify_acf_location( array $location ): array {
+        $simplified = [];
+
+        foreach ( $location as $group ) {
+            foreach ( $group as $rule ) {
+                $simplified[] = sprintf(
+                    '%s %s %s',
+                    $rule['param'] ?? '',
+                    $rule['operator'] ?? '',
+                    $rule['value'] ?? ''
+                );
+            }
+        }
+
+        return $simplified;
+    }
+
+    /**
+     * Get WooCommerce info if active
+     *
+     * @return array|null
+     */
+    private function get_woocommerce_info(): ?array {
+        if ( ! class_exists( 'WooCommerce' ) ) {
+            return null;
+        }
+
+        $product_count = wp_count_posts( 'product' );
+        $order_count   = wp_count_posts( 'shop_order' );
+
+        return [
+            'products_count'   => $product_count->publish ?? 0,
+            'orders_count'     => $order_count->{'wc-completed'} ?? 0,
+            'currency'         => get_woocommerce_currency(),
+            'payment_gateways' => $this->get_active_payment_gateways(),
+        ];
+    }
+
+    /**
+     * Get active WooCommerce payment gateways
+     *
+     * @return array
+     */
+    private function get_active_payment_gateways(): array {
+        if ( ! function_exists( 'WC' ) || ! WC()->payment_gateways() ) {
+            return [];
+        }
+
+        $gateways = WC()->payment_gateways()->get_available_payment_gateways();
+        return array_map( function( $gateway ) {
+            return $gateway->get_title();
+        }, $gateways );
+    }
+
+    /**
+     * Get maxi-onboarding as formatted string for AI prompt
+     *
+     * @return string
+     */
+    public function get_maxi_onboarding_summary(): string {
+        $data = $this->get_maxi_onboarding();
+
+        $summary = "## CONTESTO DEL SITO (Maxi-Onboarding)\n\n";
+
+        // Site info
+        $summary .= sprintf(
+            "### Sito: %s\n%s\nURL: %s | Lingua: %s\n\n",
+            $data['site_info']['title'],
+            $data['site_info']['description'],
+            $data['site_info']['url'],
+            $data['site_info']['locale']
+        );
+
+        // Theme
+        $summary .= sprintf(
+            "### Tema: %s v%s%s\n",
+            $data['theme']['name'],
+            $data['theme']['version'],
+            $data['theme']['is_child_theme'] ? ' (child di ' . $data['theme']['parent_theme'] . ')' : ''
+        );
+
+        if ( ! empty( $data['theme']['custom_post_types'] ) ) {
+            $summary .= 'Custom Post Types: ' . implode( ', ', $data['theme']['custom_post_types'] ) . "\n";
+        }
+        $summary .= "\n";
+
+        // Plugins
+        $summary .= "### Plugin Attivi\n";
+        $summary .= implode( ', ', $data['plugins_active'] ) . "\n\n";
+
+        if ( ! empty( $data['plugins_inactive'] ) ) {
+            $summary .= "### Plugin Inattivi\n";
+            $summary .= implode( ', ', $data['plugins_inactive'] ) . "\n\n";
+        }
+
+        // Content stats
+        $summary .= sprintf(
+            "### Contenuti\nPagine: %d | Post: %d | Media: %d | Categorie: %d\n",
+            $data['content_stats']['pages_count'],
+            $data['content_stats']['posts_count'],
+            $data['content_stats']['media_count'],
+            $data['content_stats']['categories']
+        );
+
+        if ( ! empty( $data['content_stats']['menus'] ) ) {
+            $summary .= 'Menu registrati: ' . implode( ', ', $data['content_stats']['menus'] ) . "\n";
+        }
+        $summary .= "\n";
+
+        // Sitemap (condensed)
+        $summary .= "### Struttura Pagine Principali\n";
+        $pages = array_filter( $data['sitemap'], fn( $item ) => $item['post_type'] === 'page' );
+        foreach ( array_slice( $pages, 0, 15 ) as $page ) {
+            $elementor_badge = $page['elementor'] ? ' [Elementor]' : '';
+            $summary .= sprintf( "- %s (%s)%s\n", $page['title'], $page['url'], $elementor_badge );
+        }
+        if ( count( $pages ) > 15 ) {
+            $summary .= sprintf( "... e altre %d pagine\n", count( $pages ) - 15 );
+        }
+        $summary .= "\n";
+
+        // WooCommerce
+        if ( $data['woocommerce'] ) {
+            $summary .= sprintf(
+                "### WooCommerce\nProdotti: %d | Ordini completati: %d | Valuta: %s\n",
+                $data['woocommerce']['products_count'],
+                $data['woocommerce']['orders_count'],
+                $data['woocommerce']['currency']
+            );
+            if ( ! empty( $data['woocommerce']['payment_gateways'] ) ) {
+                $summary .= 'Gateway pagamento: ' . implode( ', ', $data['woocommerce']['payment_gateways'] ) . "\n";
+            }
+            $summary .= "\n";
+        }
+
+        // ACF
+        if ( $data['acf_fields'] ) {
+            $summary .= "### Campi ACF\n";
+            foreach ( array_slice( $data['acf_fields'], 0, 5 ) as $group ) {
+                $field_types = array_map( fn( $f ) => $f['type'], $group['fields'] );
+                $summary .= sprintf(
+                    "- %s: %d campi (%s)\n",
+                    $group['title'],
+                    count( $group['fields'] ),
+                    implode( ', ', array_unique( $field_types ) )
+                );
+            }
+            $summary .= "\n";
+        }
+
+        return $summary;
+    }
+
+    /**
      * Get extended context summary for AI prompt
      *
      * @return string

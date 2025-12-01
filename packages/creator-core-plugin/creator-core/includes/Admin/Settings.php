@@ -13,6 +13,7 @@ use CreatorCore\Integrations\ProxyClient;
 use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\Permission\RoleMapper;
 use CreatorCore\Backup\SnapshotManager;
+use CreatorCore\User\UserProfile;
 
 /**
  * Class Settings
@@ -42,6 +43,7 @@ class Settings {
      */
     private array $settings_groups = [
         'api'          => 'API Configuration',
+        'profile'      => 'Your Profile',
         'backup'       => 'Backup Settings',
         'integrations' => 'Integrations',
         'permissions'  => 'User Permissions',
@@ -62,6 +64,7 @@ class Settings {
         add_action( 'wp_ajax_creator_validate_license', [ $this, 'ajax_validate_license' ] );
         add_action( 'wp_ajax_creator_clear_cache', [ $this, 'ajax_clear_cache' ] );
         add_action( 'wp_ajax_creator_cleanup_backups', [ $this, 'ajax_cleanup_backups' ] );
+        add_action( 'wp_ajax_creator_save_profile', [ $this, 'ajax_save_profile' ] );
     }
 
     /**
@@ -81,6 +84,11 @@ class Settings {
             'roles'        => $this->get_roles_settings(),
             'backup_stats' => $this->get_backup_stats(),
             'connection'   => $this->proxy_client->check_connection(),
+            'user_profile' => [
+                'current_level' => UserProfile::get_level(),
+                'levels'        => UserProfile::get_levels_info(),
+                'is_set'        => UserProfile::is_level_set(),
+            ],
         ];
 
         include CREATOR_CORE_PATH . 'templates/settings.php';
@@ -344,5 +352,45 @@ class Settings {
             'warning' => __( 'Warning', 'creator-core' ),
             'error'   => __( 'Error', 'creator-core' ),
         ];
+    }
+
+    /**
+     * AJAX: Save user profile (competency level)
+     *
+     * @return void
+     */
+    public function ajax_save_profile(): void {
+        check_ajax_referer( 'creator_settings_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied', 'creator-core' ) ] );
+        }
+
+        $level = isset( $_POST['user_level'] ) ? sanitize_key( wp_unslash( $_POST['user_level'] ) ) : '';
+
+        if ( empty( $level ) ) {
+            wp_send_json_error( [ 'message' => __( 'Please select a competency level', 'creator-core' ) ] );
+        }
+
+        if ( ! in_array( $level, UserProfile::get_valid_levels(), true ) ) {
+            wp_send_json_error( [ 'message' => __( 'Invalid competency level', 'creator-core' ) ] );
+        }
+
+        $saved = UserProfile::set_level( $level );
+
+        if ( $saved ) {
+            $levels_info = UserProfile::get_levels_info();
+            wp_send_json_success( [
+                'message' => sprintf(
+                    /* translators: %s: Level label */
+                    __( 'Profile updated to: %s', 'creator-core' ),
+                    $levels_info[ $level ]['label']
+                ),
+                'level'   => $level,
+                'label'   => $levels_info[ $level ]['label'],
+            ]);
+        } else {
+            wp_send_json_error( [ 'message' => __( 'Failed to save profile', 'creator-core' ) ] );
+        }
     }
 }
