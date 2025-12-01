@@ -6,7 +6,7 @@
 
 /* Wizard Container */
 .creator-setup-wizard {
-    max-width: 700px;
+    max-width: 900px;
     margin: 40px auto;
     background: white;
     border-radius: 12px;
@@ -301,8 +301,8 @@
    ============================================ */
 
 .creator-profile-selector {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
     max-width: 100%;
 }
@@ -499,8 +499,29 @@
     position: relative;
 }
 
+/* Profile cards - ensure equal heights */
+.creator-profile-option {
+    display: flex;
+}
+
+.creator-profile-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.creator-profile-behavior {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--creator-gray-200);
+}
+
 /* Responsive */
-@media (max-width: 600px) {
+@media (max-width: 800px) {
+    .creator-profile-selector {
+        grid-template-columns: 1fr;
+    }
+
     .creator-profile-card {
         padding: 16px;
     }
