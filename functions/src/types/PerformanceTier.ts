@@ -105,12 +105,12 @@ export const TIER_CONFIGS: Record<PerformanceTier, TierConfig> = {
  */
 export const TIER_MODELS = {
   flow: {
-    analyzer: "gemini-2.5-flash-preview-05-20",
+    analyzer: "gemini-1.5-flash",
     implementer: "claude-sonnet-4-20250514",
   },
   craft: {
-    analyzer: "gemini-2.5-flash-preview-05-20",
-    strategist: "gemini-2.5-pro-preview-05-06",
+    analyzer: "gemini-1.5-flash",
+    strategist: "gemini-1.5-pro",
     implementer: "claude-opus-4-5-20251101",
     validator: "claude-opus-4-5-20251101",
   },
