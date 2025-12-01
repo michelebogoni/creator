@@ -48,6 +48,12 @@ class UserProfile {
 			return false;
 		}
 
+		// update_option returns false if value is unchanged, so check current value first
+		$current = self::get_level();
+		if ( $current === $level ) {
+			return true; // Already set to this level
+		}
+
 		return update_option( self::OPTION_NAME, $level );
 	}
 

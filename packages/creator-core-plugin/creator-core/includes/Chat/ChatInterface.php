@@ -400,7 +400,7 @@ class ChatInterface {
         $context_summary   = $context_collector->get_context_summary();
 
         // Get user profile AI instructions (level-specific behavior)
-        $user_level      = UserProfile::get_user_level();
+        $user_level      = UserProfile::get_level();
         $ai_instructions = UserProfile::get_ai_instructions( $user_level );
 
         // Get maxi-onboarding summary for comprehensive site context
