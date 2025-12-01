@@ -131,6 +131,29 @@ class ProxyClient {
 			'Authorization' => 'Bearer ' . $site_token,
 		]);
 
+		// Check if token expired and try to refresh
+		if ( is_wp_error( $response ) ) {
+			$error_message = $response->get_error_message();
+
+			// If token expired, try to refresh and retry the request
+			if ( stripos( $error_message, 'token' ) !== false && stripos( $error_message, 'expired' ) !== false ) {
+				$refresh_result = $this->refresh_token();
+
+				if ( $refresh_result['success'] ) {
+					// Retry the request with the new token
+					$new_token = get_option( 'creator_site_token' );
+					$response  = $this->make_request( 'POST', '/api/ai/route-request', $request_body, [
+						'Authorization' => 'Bearer ' . $new_token,
+					]);
+				} else {
+					return [
+						'success' => false,
+						'error'   => __( 'Token expired and refresh failed. Please re-validate your license in settings.', 'creator-core' ),
+					];
+				}
+			}
+		}
+
 		if ( is_wp_error( $response ) ) {
 			return [
 				'success' => false,
@@ -139,6 +162,37 @@ class ProxyClient {
 		}
 
 		return $response;
+	}
+
+	/**
+	 * Refresh the site token by re-validating the license
+	 *
+	 * @return array Result with success status
+	 */
+	public function refresh_token(): array {
+		$license_key = get_option( 'creator_license_key', '' );
+
+		if ( empty( $license_key ) ) {
+			return [
+				'success' => false,
+				'error'   => __( 'No license key found. Please configure your license.', 'creator-core' ),
+			];
+		}
+
+		// Re-validate the license to get a new token
+		$result = $this->validate_license( $license_key );
+
+		if ( ! empty( $result['success'] ) && ! empty( $result['site_token'] ) ) {
+			return [
+				'success' => true,
+				'message' => __( 'Token refreshed successfully.', 'creator-core' ),
+			];
+		}
+
+		return [
+			'success' => false,
+			'error'   => $result['error'] ?? __( 'Failed to refresh token.', 'creator-core' ),
+		];
 	}
 
 	/**
