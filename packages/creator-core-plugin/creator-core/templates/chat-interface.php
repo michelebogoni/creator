@@ -8,9 +8,15 @@
  */
 
 defined( 'ABSPATH' ) || exit;
+
+// Get model info for the toggle
+$models_info = \CreatorCore\User\UserProfile::get_models_info();
+$default_model = \CreatorCore\User\UserProfile::get_default_model();
+$current_model = $chat['ai_model'] ?? $default_model;
+$is_new_chat = empty( $chat_id );
 ?>
 <div class="wrap creator-chat-wrap">
-    <div class="creator-chat-container" data-chat-id="<?php echo esc_attr( $chat_id ?? '' ); ?>">
+    <div class="creator-chat-container" data-chat-id="<?php echo esc_attr( $chat_id ?? '' ); ?>" data-model="<?php echo esc_attr( $current_model ); ?>">
         <!-- Chat Header -->
         <div class="creator-chat-header">
             <div class="creator-chat-header-left">
@@ -29,6 +35,25 @@ defined( 'ABSPATH' ) || exit;
                 </h1>
             </div>
             <div class="creator-chat-header-right">
+                <?php if ( $is_new_chat ) : ?>
+                    <!-- Model Toggle for New Chat -->
+                    <div class="creator-model-toggle" title="<?php esc_attr_e( 'Select AI Model', 'creator-core' ); ?>">
+                        <?php foreach ( $models_info as $model_key => $model_info ) : ?>
+                            <label class="creator-model-toggle-option <?php echo $current_model === $model_key ? 'active' : ''; ?>">
+                                <input type="radio" name="chat_model" value="<?php echo esc_attr( $model_key ); ?>"
+                                       <?php checked( $current_model, $model_key ); ?>>
+                                <span class="creator-model-toggle-icon"><?php echo esc_html( $model_info['icon'] ); ?></span>
+                                <span class="creator-model-toggle-label"><?php echo esc_html( $model_info['label'] ); ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else : ?>
+                    <!-- Show current model badge for existing chats -->
+                    <div class="creator-model-badge" title="<?php echo esc_attr( $models_info[ $current_model ]['label'] ?? '' ); ?>">
+                        <span class="creator-model-badge-icon"><?php echo esc_html( $models_info[ $current_model ]['icon'] ?? '' ); ?></span>
+                        <span class="creator-model-badge-label"><?php echo esc_html( $models_info[ $current_model ]['label'] ?? '' ); ?></span>
+                    </div>
+                <?php endif; ?>
                 <a href="<?php echo esc_url( admin_url( 'admin.php?page=creator-settings' ) ); ?>" class="creator-header-btn" title="<?php esc_attr_e( 'Settings', 'creator-core' ); ?>">
                     <span class="dashicons dashicons-admin-generic"></span>
                 </a>

@@ -428,3 +428,160 @@
         padding: 3px 8px;
     }
 }
+
+/* ============================================
+   Horizontal Profile Options (Settings)
+   ============================================ */
+
+.creator-profile-options-horizontal {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.creator-profile-options-horizontal .creator-profile-option-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.creator-profile-options-horizontal .creator-profile-card-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.creator-profile-options-horizontal .creator-profile-behavior-info {
+    margin-top: auto;
+}
+
+@media (max-width: 900px) {
+    .creator-profile-options-horizontal {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================
+   Model Selector (Settings)
+   ============================================ */
+
+.creator-section-divider {
+    margin: 32px 0;
+    border: 0;
+    border-top: 1px solid var(--creator-gray-200);
+}
+
+.creator-model-selector-horizontal {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.creator-model-option-card {
+    position: relative;
+    display: block;
+    cursor: pointer;
+    border: 2px solid var(--creator-gray-200);
+    border-radius: var(--creator-border-radius);
+    transition: all 0.2s ease;
+}
+
+.creator-model-option-card:hover {
+    border-color: var(--creator-primary);
+    background: var(--creator-gray-50);
+}
+
+.creator-model-option-card.selected {
+    border-color: var(--creator-primary);
+    background: linear-gradient(to bottom, #f0f7ff, white);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+}
+
+.creator-model-option-card input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.creator-model-card-content {
+    padding: 20px;
+}
+
+.creator-model-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.creator-model-card-content .creator-model-icon {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.creator-model-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.creator-model-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--creator-gray-900);
+}
+
+.creator-model-provider-badge {
+    font-size: 11px;
+    color: var(--creator-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.creator-model-card-content .creator-model-description {
+    font-size: 13px;
+    color: var(--creator-gray-600);
+    line-height: 1.5;
+    margin: 0 0 12px;
+}
+
+.creator-model-fallback-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--creator-gray-50);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--creator-gray-600);
+}
+
+.creator-model-fallback-info .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--creator-gray-400);
+}
+
+/* Selected checkmark for model cards */
+.creator-model-option-card.selected::after {
+    content: "\f147";
+    font-family: dashicons;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    background: var(--creator-primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+@media (max-width: 700px) {
+    .creator-model-selector-horizontal {
+        grid-template-columns: 1fr;
+    }
+}

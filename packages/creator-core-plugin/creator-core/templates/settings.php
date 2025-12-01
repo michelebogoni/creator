@@ -76,23 +76,50 @@ $settings_page = new \CreatorCore\Admin\Settings(
 
             <!-- Profile Settings -->
             <div id="profile" class="creator-tab-content">
+                <!-- Default AI Model Section -->
+                <h2><?php esc_html_e( 'Default AI Model', 'creator-core' ); ?></h2>
+                <p><?php esc_html_e( 'Choose your preferred AI model. This will be the default for new chats, but you can change it per-chat.', 'creator-core' ); ?></p>
+
+                <?php
+                $models_info = \CreatorCore\User\UserProfile::get_models_info();
+                $current_model = \CreatorCore\User\UserProfile::get_default_model();
+                ?>
+
+                <div class="creator-model-selector-horizontal">
+                    <?php foreach ( $models_info as $model_key => $model_info ) : ?>
+                        <label class="creator-model-option-card <?php echo $current_model === $model_key ? 'selected' : ''; ?>">
+                            <input type="radio" name="creator_default_model" value="<?php echo esc_attr( $model_key ); ?>"
+                                   <?php checked( $current_model, $model_key ); ?>>
+
+                            <div class="creator-model-card-content">
+                                <div class="creator-model-card-header">
+                                    <span class="creator-model-icon"><?php echo esc_html( $model_info['icon'] ); ?></span>
+                                    <div class="creator-model-info">
+                                        <span class="creator-model-name"><?php echo esc_html( $model_info['label'] ); ?></span>
+                                        <span class="creator-model-provider-badge"><?php echo esc_html( $model_info['provider'] ); ?></span>
+                                    </div>
+                                </div>
+
+                                <p class="creator-model-description">
+                                    <?php echo esc_html( $model_info['description'] ); ?>
+                                </p>
+
+                                <div class="creator-model-fallback-info">
+                                    <span class="dashicons dashicons-update"></span>
+                                    <?php echo esc_html( $model_info['fallback'] ); ?>
+                                </div>
+                            </div>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+
+                <hr class="creator-section-divider">
+
+                <!-- Competency Level Section -->
                 <h2><?php esc_html_e( 'Your Competency Level', 'creator-core' ); ?></h2>
                 <p><?php esc_html_e( 'This setting helps Creator communicate with you appropriately and suggest solutions that match your skill level.', 'creator-core' ); ?></p>
 
-                <?php if ( $data['user_profile']['is_set'] ) : ?>
-                    <div class="creator-current-profile">
-                        <strong><?php esc_html_e( 'Current Level:', 'creator-core' ); ?></strong>
-                        <span class="creator-profile-badge" id="current-profile-badge">
-                            <?php
-                            $current_level = $data['user_profile']['current_level'];
-                            $levels_info = $data['user_profile']['levels'];
-                            echo esc_html( $levels_info[ $current_level ]['label'] ?? ucfirst( $current_level ) );
-                            ?>
-                        </span>
-                    </div>
-                <?php endif; ?>
-
-                <div class="creator-profile-options">
+                <div class="creator-profile-options-horizontal">
                     <?php foreach ( $data['user_profile']['levels'] as $level_key => $level_info ) : ?>
                         <div class="creator-profile-option-card <?php echo $data['user_profile']['current_level'] === $level_key ? 'selected' : ''; ?>">
                             <label>

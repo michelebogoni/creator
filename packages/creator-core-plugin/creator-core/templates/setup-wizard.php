@@ -159,8 +159,10 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                                     <div class="creator-model-card">
                                         <div class="creator-model-header">
                                             <span class="creator-model-icon"><?php echo esc_html( $model_info['icon'] ); ?></span>
-                                            <span class="creator-model-label"><?php echo esc_html( $model_info['label'] ); ?></span>
-                                            <span class="creator-model-provider"><?php echo esc_html( $model_info['provider'] ); ?></span>
+                                            <div class="creator-model-titles">
+                                                <span class="creator-model-label"><?php echo esc_html( $model_info['label'] ); ?></span>
+                                                <span class="creator-model-provider"><?php echo esc_html( $model_info['provider'] ); ?></span>
+                                            </div>
                                         </div>
 
                                         <div class="creator-model-title">

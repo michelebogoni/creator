@@ -50,6 +50,9 @@
             // Profile selection
             $('input[name="creator_user_level"]').on('change', this.handleProfileSelection.bind(this));
             $('#save-profile-btn').on('click', this.saveProfile.bind(this));
+
+            // Model selection
+            $('input[name="creator_default_model"]').on('change', this.handleModelSelection.bind(this));
         },
 
         /**
@@ -369,8 +372,8 @@
             const $radio = $(e.currentTarget);
             const $card = $radio.closest('.creator-profile-option-card');
 
-            // Remove selected class from all cards
-            $('.creator-profile-option-card').removeClass('selected');
+            // Remove selected class from all profile cards
+            $('.creator-profile-options-horizontal .creator-profile-option-card').removeClass('selected');
 
             // Add selected class to current card
             $card.addClass('selected');
@@ -380,7 +383,24 @@
         },
 
         /**
-         * Save user profile
+         * Handle model selection (visual feedback)
+         */
+        handleModelSelection: function(e) {
+            const $radio = $(e.currentTarget);
+            const $card = $radio.closest('.creator-model-option-card');
+
+            // Remove selected class from all model cards
+            $('.creator-model-option-card').removeClass('selected');
+
+            // Add selected class to current card
+            $card.addClass('selected');
+
+            // Clear any previous status
+            $('#profile-status').text('').removeClass('success error');
+        },
+
+        /**
+         * Save user profile (including model selection)
          */
         saveProfile: function(e) {
             e.preventDefault();
@@ -388,6 +408,7 @@
             const $btn = $(e.currentTarget);
             const $status = $('#profile-status');
             const selectedLevel = $('input[name="creator_user_level"]:checked').val();
+            const selectedModel = $('input[name="creator_default_model"]:checked').val();
 
             if (!selectedLevel) {
                 $status.text('Please select a competency level').addClass('error').removeClass('success');
@@ -404,7 +425,8 @@
                 data: {
                     action: 'creator_save_profile',
                     nonce: creatorSettings.nonce,
-                    user_level: selectedLevel
+                    user_level: selectedLevel,
+                    default_model: selectedModel
                 },
                 success: function(response) {
                     if (response.success) {

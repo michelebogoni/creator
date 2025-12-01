@@ -344,8 +344,9 @@ class REST_API {
      * @return \WP_REST_Response|\WP_Error
      */
     public function create_chat( \WP_REST_Request $request ) {
-        $title   = $request->get_param( 'title' ) ?? '';
-        $chat_id = $this->chat_interface->create_chat( $title );
+        $title    = $request->get_param( 'title' ) ?? '';
+        $ai_model = $request->get_param( 'ai_model' ) ?? '';
+        $chat_id  = $this->chat_interface->create_chat( $title, $ai_model );
 
         if ( ! $chat_id ) {
             return new \WP_Error(
