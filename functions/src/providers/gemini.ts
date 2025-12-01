@@ -29,7 +29,7 @@ import { Logger } from "../lib/logger";
 /**
  * Default model for Gemini
  */
-const DEFAULT_MODEL = "gemini-1.5-flash-latest";
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 /**
  * Safety settings to allow most content (business use case)
