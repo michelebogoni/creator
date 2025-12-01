@@ -52,15 +52,15 @@
          * Initialize tabs
          */
         initTabs: function() {
-            // Get hash from URL or default to first tab
-            let activeTab = window.location.hash.replace('#', '') || 'general';
+            // Get hash from URL or default to first tab (api)
+            let activeTab = window.location.hash.replace('#', '') || 'api';
 
             // Activate the tab
             this.activateTab(activeTab);
 
             // Handle browser back/forward
             $(window).on('hashchange', function() {
-                const hash = window.location.hash.replace('#', '') || 'general';
+                const hash = window.location.hash.replace('#', '') || 'api';
                 CreatorSettings.activateTab(hash);
             });
         },
