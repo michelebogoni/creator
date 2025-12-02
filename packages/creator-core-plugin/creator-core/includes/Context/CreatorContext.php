@@ -152,6 +152,9 @@ class CreatorContext {
 	/**
 	 * Get context as formatted string for AI prompt injection
 	 *
+	 * Optimized version: includes only essential info and avoids duplicating
+	 * system prompts that are already in the user profile section.
+	 *
 	 * @return string
 	 */
 	public function get_context_as_prompt(): string {
@@ -161,94 +164,67 @@ class CreatorContext {
 			return '';
 		}
 
-		$prompt = "# CREATOR CONTEXT DOCUMENT\n";
-		$prompt .= sprintf( "Generated: %s | Version: %s\n\n", $context['meta']['generated_at'] ?? 'unknown', $context['meta']['version'] ?? '1.0' );
+		$prompt = "# CREATOR CONTEXT DOCUMENT\n\n";
 
-		// User Profile
+		// Universal Rules (core behavior)
+		$sp = $context['system_prompts'] ?? [];
+		if ( ! empty( $sp['universal'] ) ) {
+			$prompt .= $sp['universal'] . "\n\n";
+		}
+
+		// User Profile with level-specific rules
 		$prompt .= "## USER PROFILE\n";
 		$prompt .= sprintf( "Competence Level: %s\n", strtoupper( $context['user_profile']['level'] ?? 'intermediate' ) );
 		$prompt .= $context['user_profile']['profile_system_prompt'] ?? '';
 		$prompt .= "\n\n";
 
-		// System Info
-		$prompt .= "## SYSTEM INFORMATION\n";
+		// System Info (compact)
 		$si = $context['system_info'] ?? [];
-		$prompt .= sprintf( "WordPress: %s | PHP: %s | MySQL: %s\n", $si['wordpress_version'] ?? '?', $si['php_version'] ?? '?', $si['mysql_version'] ?? '?' );
-		$prompt .= sprintf( "Site: %s (%s)\n", $si['site_title'] ?? '', $si['site_url'] ?? '' );
-		$prompt .= sprintf( "Theme: %s v%s\n", $si['theme_name'] ?? '', $si['theme_version'] ?? '' );
-		$prompt .= "\n";
+		$prompt .= "## ENVIRONMENT\n";
+		$prompt .= sprintf( "WP %s | PHP %s | Theme: %s\n", $si['wordpress_version'] ?? '?', $si['php_version'] ?? '?', $si['theme_name'] ?? '?' );
+		$prompt .= sprintf( "Site: %s\n\n", $si['site_url'] ?? '' );
 
-		// Active Plugins with docs
-		$prompt .= "## ACTIVE PLUGINS\n";
-		foreach ( $context['plugins'] ?? [] as $plugin ) {
-			$prompt .= sprintf( "- **%s** v%s", $plugin['name'] ?? '', $plugin['version'] ?? '' );
-			if ( ! empty( $plugin['docs_url'] ) ) {
-				$prompt .= sprintf( " | Docs: %s", $plugin['docs_url'] );
-			}
-			$prompt .= "\n";
-			if ( ! empty( $plugin['main_functions'] ) ) {
-				$prompt .= sprintf( "  Functions: %s\n", implode( ', ', $plugin['main_functions'] ) );
-			}
+		// Active Plugins (compact - only names and key functions)
+		$plugins = $context['plugins'] ?? [];
+		if ( ! empty( $plugins ) ) {
+			$plugin_names = array_map( fn( $p ) => $p['name'] ?? '', $plugins );
+			$prompt .= "## ACTIVE PLUGINS\n";
+			$prompt .= implode( ', ', array_filter( $plugin_names ) ) . "\n\n";
 		}
-		$prompt .= "\n";
 
-		// Custom Post Types
+		// Custom Post Types (only if present)
 		if ( ! empty( $context['custom_post_types'] ) ) {
 			$prompt .= "## CUSTOM POST TYPES\n";
 			foreach ( $context['custom_post_types'] as $cpt ) {
-				$prompt .= sprintf( "- %s (%s): %s\n", $cpt['label'] ?? '', $cpt['name'] ?? '', $cpt['description'] ?? '' );
+				$prompt .= sprintf( "- %s (%s)\n", $cpt['label'] ?? '', $cpt['name'] ?? '' );
 			}
 			$prompt .= "\n";
 		}
 
-		// Taxonomies
+		// Taxonomies (only if present)
 		if ( ! empty( $context['taxonomies'] ) ) {
 			$prompt .= "## CUSTOM TAXONOMIES\n";
 			foreach ( $context['taxonomies'] as $tax ) {
-				$prompt .= sprintf( "- %s (%s) → %s\n", $tax['label'] ?? '', $tax['name'] ?? '', implode( ', ', $tax['object_types'] ?? [] ) );
+				$prompt .= sprintf( "- %s (%s)\n", $tax['label'] ?? '', $tax['name'] ?? '' );
 			}
 			$prompt .= "\n";
 		}
 
-		// ACF Fields
+		// ACF Fields (compact - only group names and field count)
 		if ( ! empty( $context['acf_fields'] ) ) {
 			$prompt .= "## ACF FIELD GROUPS\n";
 			foreach ( $context['acf_fields'] as $group ) {
-				$prompt .= sprintf( "- **%s**: %d fields\n", $group['title'] ?? '', count( $group['fields'] ?? [] ) );
-				foreach ( $group['fields'] ?? [] as $field ) {
-					$prompt .= sprintf( "  - %s (%s)\n", $field['name'] ?? '', $field['type'] ?? '' );
-				}
+				$prompt .= sprintf( "- %s (%d fields)\n", $group['title'] ?? '', count( $group['fields'] ?? [] ) );
 			}
 			$prompt .= "\n";
 		}
 
-		// Sitemap (condensed)
-		$prompt .= "## SITE STRUCTURE (Sitemap)\n";
-		$pages = array_filter( $context['sitemap'] ?? [], fn( $item ) => ( $item['post_type'] ?? '' ) === 'page' );
-		foreach ( array_slice( $pages, 0, 20 ) as $page ) {
-			$prompt .= sprintf( "- %s (%s)\n", $page['title'] ?? '', $page['url'] ?? '' );
+		// Forbidden Functions (compact)
+		$forbidden = $context['forbidden'] ?? [];
+		if ( ! empty( $forbidden ) ) {
+			$prompt .= "## FORBIDDEN (NEVER USE)\n";
+			$prompt .= implode( ', ', array_slice( $forbidden, 0, 10 ) ) . "\n\n";
 		}
-		if ( count( $pages ) > 20 ) {
-			$prompt .= sprintf( "... and %d more pages\n", count( $pages ) - 20 );
-		}
-		$prompt .= "\n";
-
-		// AI Instructions
-		$prompt .= "## AI INSTRUCTIONS BY CATEGORY\n";
-		foreach ( $context['ai_instructions'] ?? [] as $category => $functions ) {
-			$prompt .= sprintf( "### %s\n%s\n\n", ucfirst( $category ), implode( ', ', $functions ) );
-		}
-
-		// Forbidden Functions
-		$prompt .= "## FORBIDDEN FUNCTIONS (NEVER USE)\n";
-		$prompt .= implode( ', ', $context['forbidden'] ?? [] ) . "\n\n";
-
-		// System Prompts (Phase-specific)
-		$prompt .= "## PHASE-SPECIFIC BEHAVIOR\n";
-		$sp = $context['system_prompts'] ?? [];
-		$prompt .= "### DISCOVERY PHASE\n" . ( $sp['discovery'] ?? '' ) . "\n\n";
-		$prompt .= "### PROPOSAL PHASE\n" . ( $sp['proposal'] ?? '' ) . "\n\n";
-		$prompt .= "### EXECUTION PHASE\n" . ( $sp['execution'] ?? '' ) . "\n\n";
 
 		return $prompt;
 	}
