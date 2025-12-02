@@ -481,17 +481,29 @@ class REST_API {
             );
         }
 
-        $result = $this->chat_interface->send_message( $chat_id, $content );
+        try {
+            $result = $this->chat_interface->send_message( $chat_id, $content );
 
-        if ( ! $result['success'] ) {
+            if ( ! $result['success'] ) {
+                return new \WP_Error(
+                    'message_failed',
+                    $result['error'] ?? __( 'Failed to send message', 'creator-core' ),
+                    [ 'status' => 500 ]
+                );
+            }
+
+            return rest_ensure_response( $result );
+        } catch ( \Throwable $e ) {
+            // Log the error for debugging
+            error_log( 'Creator send_message error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+            error_log( 'Creator send_message trace: ' . $e->getTraceAsString() );
+
             return new \WP_Error(
-                'message_failed',
-                $result['error'] ?? __( 'Failed to send message', 'creator-core' ),
+                'message_exception',
+                sprintf( 'Error: %s (in %s:%d)', $e->getMessage(), basename( $e->getFile() ), $e->getLine() ),
                 [ 'status' => 500 ]
             );
         }
-
-        return rest_ensure_response( $result );
     }
 
     /**
