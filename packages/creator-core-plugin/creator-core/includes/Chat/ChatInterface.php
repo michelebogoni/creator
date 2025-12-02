@@ -379,13 +379,57 @@ class ChatInterface {
     }
 
     /**
+     * Allowed file types for attachments
+     *
+     * @var array
+     */
+    private const ALLOWED_FILE_TYPES = [
+        // Images
+        'image/jpeg'      => 'jpg',
+        'image/png'       => 'png',
+        'image/gif'       => 'gif',
+        'image/webp'      => 'webp',
+        'image/svg+xml'   => 'svg',
+        // Documents
+        'application/pdf' => 'pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+        'text/plain'      => 'txt',
+        // Code
+        'application/x-php' => 'php',
+        'text/x-php'      => 'php',
+        'application/json' => 'json',
+        'text/html'       => 'html',
+        'text/css'        => 'css',
+        'application/javascript' => 'js',
+        'text/javascript' => 'js',
+        'application/sql' => 'sql',
+        'text/x-sql'      => 'sql',
+    ];
+
+    /**
+     * Maximum file size per attachment (10 MB)
+     *
+     * @var int
+     */
+    private const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+    /**
+     * Maximum files per message
+     *
+     * @var int
+     */
+    private const MAX_FILES_PER_MESSAGE = 3;
+
+    /**
      * Send a message
      *
      * @param int    $chat_id Chat ID.
      * @param string $content Message content.
+     * @param array  $files   Optional file attachments.
      * @return array Result with message ID and AI response.
      */
-    public function send_message( int $chat_id, string $content ): array {
+    public function send_message( int $chat_id, string $content, array $files = [] ): array {
         // Verify chat exists and belongs to user
         $chat = $this->get_chat( $chat_id );
 
@@ -403,9 +447,30 @@ class ChatInterface {
             ];
         }
 
-        // Save user message
+        // Process file attachments
+        $processed_files = [];
+        if ( ! empty( $files ) ) {
+            $file_result = $this->process_file_attachments( $files );
+            if ( ! $file_result['success'] ) {
+                return $file_result;
+            }
+            $processed_files = $file_result['files'];
+        }
+
+        // Save user message with attachment metadata
+        $message_metadata = [];
+        if ( ! empty( $processed_files ) ) {
+            $message_metadata['attachments'] = array_map( function( $file ) {
+                return [
+                    'name' => $file['name'],
+                    'type' => $file['type'],
+                    'size' => $file['size'],
+                ];
+            }, $processed_files );
+        }
+
         try {
-            $user_message_id = $this->message_handler->save_message( $chat_id, $content, 'user' );
+            $user_message_id = $this->message_handler->save_message( $chat_id, $content, 'user', $message_metadata );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error saving user message: ' . $e->getMessage() );
             return [
@@ -473,7 +538,7 @@ class ChatInterface {
 
         // Send to AI with system_prompt separated from main prompt
         try {
-            $ai_response = $this->proxy_client->send_to_ai( $prompts['prompt'], 'TEXT_GEN', [
+            $ai_options = [
                 'chat_id'         => $chat_id,
                 'message_id'      => $user_message_id,
                 'user_message'    => $content, // Original user message for mock mode intent detection
@@ -481,7 +546,14 @@ class ChatInterface {
                 'conversation'    => $history, // Conversation history for context extraction
                 'model'           => $ai_model, // AI model (gemini or claude)
                 'system_prompt'   => $prompts['system_prompt'], // Static context (Creator rules, site info)
-            ]);
+            ];
+
+            // Include file attachments if present
+            if ( ! empty( $processed_files ) ) {
+                $ai_options['files'] = $processed_files;
+            }
+
+            $ai_response = $this->proxy_client->send_to_ai( $prompts['prompt'], 'TEXT_GEN', $ai_options );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error sending to AI: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
             return [
@@ -1199,5 +1271,122 @@ class ChatInterface {
             'per_page' => $limit,
             'status'   => 'active',
         ]);
+    }
+
+    /**
+     * Process file attachments for a message
+     *
+     * Validates and converts files to base64 for AI processing.
+     *
+     * @param array $files Array of files from upload (each with name, type, base64).
+     * @return array Result with success status and processed files.
+     */
+    private function process_file_attachments( array $files ): array {
+        // Check max files limit
+        if ( count( $files ) > self::MAX_FILES_PER_MESSAGE ) {
+            return [
+                'success' => false,
+                'error'   => sprintf(
+                    /* translators: %d: maximum number of files */
+                    __( 'Maximum %d files per message allowed.', 'creator-core' ),
+                    self::MAX_FILES_PER_MESSAGE
+                ),
+            ];
+        }
+
+        $processed = [];
+
+        foreach ( $files as $file ) {
+            // Validate required fields
+            if ( empty( $file['name'] ) || empty( $file['type'] ) || empty( $file['base64'] ) ) {
+                return [
+                    'success' => false,
+                    'error'   => __( 'Invalid file format. Each file must have name, type, and base64 data.', 'creator-core' ),
+                ];
+            }
+
+            // Validate file type
+            if ( ! $this->is_allowed_file_type( $file['type'] ) ) {
+                return [
+                    'success' => false,
+                    'error'   => sprintf(
+                        /* translators: %s: file name */
+                        __( 'File type not allowed: %s', 'creator-core' ),
+                        $file['name']
+                    ),
+                ];
+            }
+
+            // Validate and get file size from base64
+            $base64_data = $file['base64'];
+            // Remove data URI prefix if present (e.g., "data:image/png;base64,")
+            if ( strpos( $base64_data, ',') !== false ) {
+                $base64_data = substr( $base64_data, strpos( $base64_data, ',' ) + 1 );
+            }
+
+            // Calculate file size (base64 is ~33% larger than original)
+            $file_size = strlen( base64_decode( $base64_data ) );
+
+            if ( $file_size > self::MAX_FILE_SIZE ) {
+                return [
+                    'success' => false,
+                    'error'   => sprintf(
+                        /* translators: 1: file name, 2: max size in MB */
+                        __( 'File too large: %1$s (max %2$d MB)', 'creator-core' ),
+                        $file['name'],
+                        self::MAX_FILE_SIZE / ( 1024 * 1024 )
+                    ),
+                ];
+            }
+
+            $processed[] = [
+                'name'   => sanitize_file_name( $file['name'] ),
+                'type'   => sanitize_mime_type( $file['type'] ),
+                'base64' => $file['base64'], // Keep original with data URI prefix for AI
+                'size'   => $file_size,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'files'   => $processed,
+        ];
+    }
+
+    /**
+     * Check if a file type is allowed
+     *
+     * @param string $mime_type The MIME type to check.
+     * @return bool
+     */
+    private function is_allowed_file_type( string $mime_type ): bool {
+        return isset( self::ALLOWED_FILE_TYPES[ $mime_type ] );
+    }
+
+    /**
+     * Get allowed file types for frontend validation
+     *
+     * @return array
+     */
+    public static function get_allowed_file_types(): array {
+        return self::ALLOWED_FILE_TYPES;
+    }
+
+    /**
+     * Get max file size for frontend validation
+     *
+     * @return int
+     */
+    public static function get_max_file_size(): int {
+        return self::MAX_FILE_SIZE;
+    }
+
+    /**
+     * Get max files per message for frontend validation
+     *
+     * @return int
+     */
+    public static function get_max_files_per_message(): int {
+        return self::MAX_FILES_PER_MESSAGE;
     }
 }

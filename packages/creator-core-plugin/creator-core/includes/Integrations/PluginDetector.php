@@ -19,6 +19,9 @@ class PluginDetector {
     /**
      * Supported integrations
      *
+     * All plugins are OPTIONAL. Creator works with zero plugins installed.
+     * These are suggestions for enhanced capabilities, not requirements.
+     *
      * @var array
      */
     private array $supported_integrations = [
@@ -26,33 +29,41 @@ class PluginDetector {
             'name'        => 'Elementor',
             'slug'        => 'elementor/elementor.php',
             'class'       => 'Elementor\Plugin',
-            'required'    => true,
+            'required'    => false,
+            'suggested'   => true,
             'min_version' => '3.0.0',
             'features'    => [ 'page_builder', 'widgets', 'templates' ],
+            'benefit'     => 'Visual page builder for easier content creation',
         ],
         'elementor_pro' => [
             'name'        => 'Elementor Pro',
             'slug'        => 'elementor-pro/elementor-pro.php',
             'class'       => 'ElementorPro\Plugin',
             'required'    => false,
+            'suggested'   => false,
             'min_version' => '3.0.0',
             'features'    => [ 'theme_builder', 'forms', 'popup' ],
+            'benefit'     => 'Advanced page builder features like theme builder and forms',
         ],
         'wpcode' => [
             'name'        => 'WP Code',
             'slug'        => 'insert-headers-and-footers/ihaf.php',
             'function'    => 'wpcode',
-            'required'    => true,
+            'required'    => false,
+            'suggested'   => true,
             'min_version' => '2.0.0',
             'features'    => [ 'code_snippets', 'header_footer' ],
+            'benefit'     => 'Safe code snippet management with easy rollback',
         ],
         'acf' => [
             'name'        => 'Advanced Custom Fields',
             'slug'        => 'advanced-custom-fields/acf.php',
             'class'       => 'ACF',
             'required'    => false,
+            'suggested'   => false,
             'min_version' => '5.0.0',
             'features'    => [ 'custom_fields', 'field_groups' ],
+            'benefit'     => 'Define custom fields without coding',
         ],
         'acf_pro' => [
             'name'        => 'Advanced Custom Fields PRO',
@@ -60,32 +71,40 @@ class PluginDetector {
             'class'       => 'ACF',
             'function'    => 'acf_get_setting',
             'required'    => false,
+            'suggested'   => true,
             'min_version' => '5.0.0',
             'features'    => [ 'custom_fields', 'field_groups', 'options_page', 'repeater', 'flexible_content' ],
+            'benefit'     => 'Professional custom fields with repeaters and flexible content',
         ],
         'rank_math' => [
             'name'        => 'Rank Math SEO',
             'slug'        => 'seo-by-rank-math/rank-math.php',
             'function'    => 'rank_math',
             'required'    => false,
+            'suggested'   => true,
             'min_version' => '1.0.0',
             'features'    => [ 'seo', 'schema', 'sitemap' ],
+            'benefit'     => 'Professional SEO management and optimization',
         ],
         'woocommerce' => [
             'name'        => 'WooCommerce',
             'slug'        => 'woocommerce/woocommerce.php',
             'class'       => 'WooCommerce',
             'required'    => false,
+            'suggested'   => false,
             'min_version' => '5.0.0',
             'features'    => [ 'products', 'orders', 'customers', 'coupons' ],
+            'benefit'     => 'Full e-commerce functionality',
         ],
         'litespeed' => [
             'name'        => 'LiteSpeed Cache',
             'slug'        => 'litespeed-cache/litespeed-cache.php',
             'constant'    => 'LSCWP_V',
             'required'    => false,
+            'suggested'   => false,
             'min_version' => '4.0.0',
             'features'    => [ 'cache', 'optimization', 'cdn' ],
+            'benefit'     => 'Performance optimization and caching',
         ],
     ];
 
@@ -145,7 +164,9 @@ class PluginDetector {
         $result = [
             'key'          => $integration_key,
             'name'         => $integration['name'],
-            'required'     => $integration['required'],
+            'required'     => false, // No plugins are required
+            'suggested'    => $integration['suggested'] ?? false,
+            'benefit'      => $integration['benefit'] ?? '',
             'installed'    => false,
             'active'       => false,
             'version'      => null,
@@ -260,33 +281,40 @@ class PluginDetector {
     /**
      * Check if all required plugins are active
      *
+     * Creator has NO mandatory plugin requirements.
+     * This method now always returns 'met' = true.
+     *
      * @return array
      */
     public function check_requirements(): array {
-        $required = $this->get_required_plugins();
-        $missing  = [];
-        $inactive = [];
+        // Creator works with zero plugins installed
+        // All requirements are always met
+        return [
+            'met'      => true,
+            'missing'  => [],
+            'inactive' => [],
+        ];
+    }
 
-        foreach ( $required as $key => $status ) {
-            if ( ! $status['installed'] ) {
-                $missing[] = $status['name'];
-            } elseif ( ! $status['active'] ) {
-                $inactive[] = $status['name'];
-            } elseif ( ! $status['compatible'] ) {
-                $missing[] = sprintf(
-                    '%s (requires v%s+, found v%s)',
-                    $status['name'],
-                    $status['min_version'],
-                    $status['version']
-                );
+    /**
+     * Get suggested plugins (not required, but recommended for enhanced features)
+     *
+     * @return array
+     */
+    public function get_suggested_plugins(): array {
+        $suggested = [];
+
+        foreach ( $this->supported_integrations as $key => $integration ) {
+            if ( ! empty( $integration['suggested'] ) ) {
+                $status = $this->detect_integration( $key );
+                // Only suggest plugins that are not already installed and active
+                if ( ! $status['active'] ) {
+                    $suggested[ $key ] = $status;
+                }
             }
         }
 
-        return [
-            'met'      => empty( $missing ) && empty( $inactive ),
-            'missing'  => $missing,
-            'inactive' => $inactive,
-        ];
+        return $suggested;
     }
 
     /**

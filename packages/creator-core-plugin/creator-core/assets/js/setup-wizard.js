@@ -16,20 +16,27 @@
          */
         init: function() {
             this.bindEvents();
+            this.initializeStepSpecificBehavior();
         },
 
         /**
          * Bind event handlers
          */
         bindEvents: function() {
-            // Note: Next step button is now a direct link (<a> tag), no JS needed
+            // Safety step - checkbox and accept button
+            $('#accept-responsibility').on('change', this.handleSafetyCheckbox.bind(this));
+            $('#accept-and-continue-btn').on('click', this.acceptSafetyAndContinue.bind(this));
+
+            // Overview step - plugins list toggle
+            $('#toggle-plugins-list').on('click', this.togglePluginsList.bind(this));
+
+            // Overview step - suggested plugin actions
+            $(document).on('click', '.creator-install-plugin', this.installPlugin.bind(this));
+            $(document).on('click', '.creator-activate-plugin', this.activatePlugin.bind(this));
+            $(document).on('click', '.creator-dismiss-suggestion', this.dismissPluginSuggestion.bind(this));
 
             // License validation
             $('#validate-license-btn').on('click', this.validateLicense.bind(this));
-
-            // Plugin installation
-            $(document).on('click', '.creator-install-plugin', this.installPlugin.bind(this));
-            $(document).on('click', '.creator-activate-plugin', this.activatePlugin.bind(this));
 
             // Profile selection
             $('.creator-profile-option input[type="radio"]').on('change', this.handleProfileSelection.bind(this));
@@ -41,6 +48,141 @@
             if (typeof creatorSetupData !== 'undefined' && creatorSetupData.currentStep === 'profile') {
                 $('#next-step-btn').on('click', this.saveProfileAndContinue.bind(this));
             }
+        },
+
+        /**
+         * Initialize step-specific behavior
+         */
+        initializeStepSpecificBehavior: function() {
+            if (typeof creatorSetupData === 'undefined') return;
+
+            switch (creatorSetupData.currentStep) {
+                case 'safety':
+                    // Ensure button is disabled initially
+                    $('#accept-and-continue-btn').prop('disabled', true);
+                    break;
+            }
+        },
+
+        /**
+         * Handle safety checkbox change
+         */
+        handleSafetyCheckbox: function(e) {
+            const isChecked = $(e.currentTarget).is(':checked');
+            const $btn = $('#accept-and-continue-btn');
+            const $error = $('#safety-error');
+
+            // Enable/disable button based on checkbox state
+            $btn.prop('disabled', !isChecked);
+
+            // Hide error message when checked
+            if (isChecked) {
+                $error.hide();
+            }
+        },
+
+        /**
+         * Accept safety terms and continue
+         */
+        acceptSafetyAndContinue: function(e) {
+            e.preventDefault();
+
+            const $btn = $(e.currentTarget);
+            const $checkbox = $('#accept-responsibility');
+            const $error = $('#safety-error');
+
+            // Validate checkbox is checked
+            if (!$checkbox.is(':checked')) {
+                $error.show();
+                return;
+            }
+
+            // Show loading state
+            $btn.prop('disabled', true);
+            $btn.html('<span class="dashicons dashicons-update creator-spin"></span> Processing...');
+
+            // Send AJAX request to save acceptance
+            $.ajax({
+                url: creatorSetup.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'creator_accept_safety',
+                    nonce: creatorSetup.nonce,
+                    accepted: 'true'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Navigate to next step
+                        const nextUrl = response.data?.next_url || creatorSetupData.nextUrl;
+                        if (nextUrl) {
+                            window.location.href = nextUrl;
+                        } else {
+                            window.location.href = creatorSetup.adminUrl + 'admin.php?page=creator-setup&step=overview';
+                        }
+                    } else {
+                        $error.text(response.data?.message || 'An error occurred').show();
+                        $btn.prop('disabled', false);
+                        $btn.html('I understand and accept - Continue to Setup <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                    }
+                },
+                error: function() {
+                    $error.text('An error occurred. Please try again.').show();
+                    $btn.prop('disabled', false);
+                    $btn.html('I understand and accept - Continue to Setup <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                }
+            });
+        },
+
+        /**
+         * Toggle plugins list visibility
+         */
+        togglePluginsList: function(e) {
+            e.preventDefault();
+            const $btn = $(e.currentTarget);
+            const $content = $('#plugins-list-content');
+            const $icon = $btn.find('.dashicons');
+
+            $content.slideToggle(200, function() {
+                if ($content.is(':visible')) {
+                    $icon.removeClass('dashicons-arrow-down-alt2').addClass('dashicons-arrow-up-alt2');
+                    $btn.find('span:not(.dashicons)').text('Hide installed plugins');
+                } else {
+                    $icon.removeClass('dashicons-arrow-up-alt2').addClass('dashicons-arrow-down-alt2');
+                    $btn.find('span:not(.dashicons)').text('View installed plugins');
+                }
+            });
+        },
+
+        /**
+         * Dismiss plugin suggestion
+         */
+        dismissPluginSuggestion: function(e) {
+            e.preventDefault();
+
+            const $btn = $(e.currentTarget);
+            const pluginSlug = $btn.data('plugin');
+            const $item = $btn.closest('.creator-suggested-item');
+
+            $.ajax({
+                url: creatorSetup.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'creator_dismiss_plugin_suggestion',
+                    nonce: creatorSetup.nonce,
+                    plugin: pluginSlug
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $item.fadeOut(200, function() {
+                            $(this).remove();
+                            // If no more suggested plugins, hide the whole section
+                            if ($('.creator-suggested-item').length === 0) {
+                                $('.creator-suggested-plugins').fadeOut(200);
+                            }
+                        });
+                    }
+                }
+            });
         },
 
         /**
@@ -124,7 +266,7 @@
 
             const $btn = $(e.currentTarget);
             const pluginSlug = $btn.data('plugin');
-            const $item = $btn.closest('.creator-plugin-item');
+            const $item = $btn.closest('.creator-suggested-item, .creator-plugin-item');
 
             // Show loading
             $btn.prop('disabled', true);
@@ -140,14 +282,21 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        $btn.remove();
-                        $item.find('.creator-plugin-actions').html(
-                            '<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> Installed</span>'
-                        );
-                        $item.addClass('active');
-                        $item.find('.creator-plugin-status .dashicons')
-                            .removeClass('status-inactive status-warning')
-                            .addClass('status-ok');
+                        // Update UI for suggested plugins section
+                        if ($item.hasClass('creator-suggested-item')) {
+                            $btn.replaceWith('<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> Installed</span>');
+                            $item.find('.status-not-installed').replaceWith('<span class="status-installed">Installed</span>');
+                        } else {
+                            // Legacy plugin item handling
+                            $btn.remove();
+                            $item.find('.creator-plugin-actions').html(
+                                '<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> Installed</span>'
+                            );
+                            $item.addClass('active');
+                            $item.find('.creator-plugin-status .dashicons')
+                                .removeClass('status-inactive status-warning')
+                                .addClass('status-ok');
+                        }
                     } else {
                         $btn.html('Install');
                         $btn.prop('disabled', false);
@@ -170,7 +319,7 @@
 
             const $btn = $(e.currentTarget);
             const pluginSlug = $btn.data('plugin');
-            const $item = $btn.closest('.creator-plugin-item');
+            const $item = $btn.closest('.creator-suggested-item, .creator-plugin-item');
 
             // Show loading
             $btn.prop('disabled', true);
@@ -186,13 +335,19 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        $btn.parent().html(
-                            '<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> Active</span>'
-                        );
-                        $item.addClass('active');
-                        $item.find('.creator-plugin-status .dashicons')
-                            .removeClass('status-inactive status-warning')
-                            .addClass('status-ok');
+                        // Update UI for suggested plugins section
+                        if ($item.hasClass('creator-suggested-item')) {
+                            $btn.replaceWith('<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> Active</span>');
+                        } else {
+                            // Legacy plugin item handling
+                            $btn.parent().html(
+                                '<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> Active</span>'
+                            );
+                            $item.addClass('active');
+                            $item.find('.creator-plugin-status .dashicons')
+                                .removeClass('status-inactive status-warning')
+                                .addClass('status-ok');
+                        }
                     } else {
                         $btn.html('Activate');
                         $btn.prop('disabled', false);

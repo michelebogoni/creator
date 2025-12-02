@@ -30,28 +30,39 @@ class SetupWizard {
     /**
      * Wizard steps
      *
+     * Step 1: Safety Warning (must accept responsibility)
+     * Step 2: System Overview (info + optional plugin suggestions)
+     * Step 3: Backup Configuration
+     * Step 4: License Activation
+     * Step 5: Profile Selection
+     * Step 6: Finish
+     *
      * @var array
      */
     private array $steps = [
-        'dependencies' => [
-            'name'  => 'Plugin Dependencies',
+        'safety' => [
+            'name'  => 'Safety Notice',
             'order' => 1,
+        ],
+        'overview' => [
+            'name'  => 'System Overview',
+            'order' => 2,
         ],
         'backup' => [
             'name'  => 'Configure Backup',
-            'order' => 2,
+            'order' => 3,
         ],
         'license' => [
             'name'  => 'License Activation',
-            'order' => 3,
+            'order' => 4,
         ],
         'profile' => [
             'name'  => 'Your Profile',
-            'order' => 4,
+            'order' => 5,
         ],
         'finish' => [
             'name'  => 'Ready to Go',
-            'order' => 5,
+            'order' => 6,
         ],
     ];
 
@@ -69,6 +80,8 @@ class SetupWizard {
         add_action( 'wp_ajax_creator_skip_setup', [ $this, 'ajax_skip_setup' ] );
         add_action( 'wp_ajax_creator_wizard_validate_license', [ $this, 'ajax_validate_license' ] );
         add_action( 'wp_ajax_creator_save_user_profile', [ $this, 'ajax_save_user_profile' ] );
+        add_action( 'wp_ajax_creator_accept_safety', [ $this, 'ajax_accept_safety' ] );
+        add_action( 'wp_ajax_creator_dismiss_plugin_suggestion', [ $this, 'ajax_dismiss_plugin_suggestion' ] );
     }
 
     /**
@@ -126,10 +139,10 @@ class SetupWizard {
      * @return void
      */
     public function render(): void {
-        $current_step = isset( $_GET['step'] ) ? sanitize_key( $_GET['step'] ) : 'dependencies';
+        $current_step = isset( $_GET['step'] ) ? sanitize_key( $_GET['step'] ) : 'safety';
 
         if ( ! isset( $this->steps[ $current_step ] ) ) {
-            $current_step = 'dependencies';
+            $current_step = 'safety';
         }
 
         $data = [
@@ -149,8 +162,11 @@ class SetupWizard {
      */
     private function get_step_data( string $step ): array {
         switch ( $step ) {
-            case 'dependencies':
-                return $this->get_dependencies_data();
+            case 'safety':
+                return $this->get_safety_data();
+
+            case 'overview':
+                return $this->get_overview_data();
 
             case 'backup':
                 return $this->get_backup_data();
@@ -170,16 +186,128 @@ class SetupWizard {
     }
 
     /**
-     * Get dependencies step data
+     * Get safety step data
      *
      * @return array
      */
-    private function get_dependencies_data(): array {
+    private function get_safety_data(): array {
         return [
-            'required' => $this->plugin_detector->get_required_plugins(),
-            'optional' => $this->plugin_detector->get_optional_plugins(),
-            'requirements_met' => $this->plugin_detector->check_requirements()['met'],
+            'already_accepted' => (bool) get_option( 'creator_user_accepted_responsibility', false ),
+            'accepted_at'      => get_option( 'creator_user_accepted_responsibility_at', null ),
         ];
+    }
+
+    /**
+     * Get system overview step data
+     *
+     * @return array
+     */
+    private function get_overview_data(): array {
+        global $wp_version, $wpdb;
+
+        // Get all active plugins
+        if ( ! function_exists( 'get_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        $all_plugins    = get_plugins();
+        $active_plugins = get_option( 'active_plugins', [] );
+        $plugins_list   = [];
+
+        foreach ( $active_plugins as $plugin_path ) {
+            if ( isset( $all_plugins[ $plugin_path ] ) ) {
+                $plugin = $all_plugins[ $plugin_path ];
+                $plugins_list[] = [
+                    'name'    => $plugin['Name'],
+                    'version' => $plugin['Version'],
+                    'slug'    => dirname( $plugin_path ),
+                ];
+            }
+        }
+
+        // Get CPTs
+        $cpts = get_post_types( [ 'public' => true, '_builtin' => false ], 'objects' );
+        $cpt_count = count( $cpts );
+
+        // Get taxonomies
+        $taxonomies = get_taxonomies( [ 'public' => true, '_builtin' => false ], 'objects' );
+        $tax_count = count( $taxonomies );
+
+        // Get users
+        $users = count_users();
+
+        // Get theme info
+        $theme = wp_get_theme();
+
+        // Get database size
+        $db_size = $this->get_database_size();
+
+        // Get suggested plugins (not installed/active)
+        $suggested = $this->plugin_detector->get_suggested_plugins();
+        $dismissed = get_option( 'creator_dismissed_plugin_suggestions', [] );
+
+        // Filter out dismissed suggestions
+        foreach ( $dismissed as $slug ) {
+            unset( $suggested[ $slug ] );
+        }
+
+        return [
+            'system' => [
+                'wordpress_version' => $wp_version,
+                'php_version'       => PHP_VERSION,
+                'mysql_version'     => $wpdb->db_version(),
+                'db_size'           => $db_size,
+            ],
+            'plugins' => [
+                'count' => count( $active_plugins ),
+                'list'  => $plugins_list,
+            ],
+            'theme' => [
+                'name'        => $theme->get( 'Name' ),
+                'version'     => $theme->get( 'Version' ),
+                'is_child'    => $theme->parent() !== false,
+                'parent_name' => $theme->parent() ? $theme->parent()->get( 'Name' ) : null,
+            ],
+            'content' => [
+                'cpt_count'      => $cpt_count,
+                'taxonomy_count' => $tax_count,
+                'users_total'    => $users['total_users'],
+                'users_by_role'  => $users['avail_roles'],
+            ],
+            'suggested_plugins' => $suggested,
+            'integrations'      => $this->plugin_detector->get_all_integrations(),
+            'features'          => $this->plugin_detector->get_available_features(),
+        ];
+    }
+
+    /**
+     * Get database size in MB
+     *
+     * @return string
+     */
+    private function get_database_size(): string {
+        global $wpdb;
+
+        $db_name = DB_NAME;
+        $result = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT SUM(data_length + index_length) / 1024 / 1024
+                 FROM information_schema.tables
+                 WHERE table_schema = %s",
+                $db_name
+            )
+        );
+
+        return $result ? number_format( (float) $result, 1 ) . ' MB' : 'Unknown';
+    }
+
+    /**
+     * Get dependencies step data (kept for backward compatibility)
+     *
+     * @return array
+     * @deprecated Use get_overview_data() instead
+     */
+    private function get_dependencies_data(): array {
+        return $this->get_overview_data();
     }
 
     /**
@@ -622,5 +750,86 @@ class SetupWizard {
         } else {
             wp_send_json_error( [ 'message' => __( 'Failed to save profile', 'creator-core' ) ] );
         }
+    }
+
+    /**
+     * AJAX: Accept safety responsibility
+     *
+     * User must explicitly accept responsibility before using Creator.
+     * This is logged with timestamp for audit purposes.
+     *
+     * @return void
+     */
+    public function ajax_accept_safety(): void {
+        check_ajax_referer( 'creator_setup_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied', 'creator-core' ) ] );
+        }
+
+        $accepted = isset( $_POST['accepted'] ) && $_POST['accepted'] === 'true';
+
+        if ( ! $accepted ) {
+            wp_send_json_error( [
+                'message' => __( 'You must accept the responsibility notice to use Creator', 'creator-core' ),
+            ]);
+        }
+
+        // Save acceptance with timestamp and user info
+        $user_id = get_current_user_id();
+        $user = get_userdata( $user_id );
+
+        update_option( 'creator_user_accepted_responsibility', true );
+        update_option( 'creator_user_accepted_responsibility_at', current_time( 'mysql' ) );
+        update_option( 'creator_user_accepted_responsibility_by', [
+            'user_id'  => $user_id,
+            'username' => $user ? $user->user_login : 'unknown',
+            'ip'       => sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ),
+        ]);
+
+        // Log to audit trail if available
+        do_action( 'creator_audit_log', 'safety_accepted', [
+            'user_id'  => $user_id,
+            'accepted' => true,
+        ]);
+
+        wp_send_json_success( [
+            'message'  => __( 'Responsibility accepted', 'creator-core' ),
+            'next_url' => $this->get_next_step_url( 'safety' ),
+        ]);
+    }
+
+    /**
+     * AJAX: Dismiss plugin suggestion
+     *
+     * User can dismiss suggested plugins permanently.
+     *
+     * @return void
+     */
+    public function ajax_dismiss_plugin_suggestion(): void {
+        check_ajax_referer( 'creator_setup_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied', 'creator-core' ) ] );
+        }
+
+        $plugin_slug = isset( $_POST['plugin'] ) ? sanitize_key( $_POST['plugin'] ) : '';
+
+        if ( empty( $plugin_slug ) ) {
+            wp_send_json_error( [ 'message' => __( 'Plugin slug required', 'creator-core' ) ] );
+        }
+
+        // Get current dismissed list
+        $dismissed = get_option( 'creator_dismissed_plugin_suggestions', [] );
+
+        // Add to dismissed list if not already there
+        if ( ! in_array( $plugin_slug, $dismissed, true ) ) {
+            $dismissed[] = $plugin_slug;
+            update_option( 'creator_dismissed_plugin_suggestions', $dismissed );
+        }
+
+        wp_send_json_success( [
+            'message' => __( 'Plugin suggestion dismissed', 'creator-core' ),
+        ]);
     }
 }

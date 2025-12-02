@@ -101,6 +101,7 @@ class CreatorContext {
 			'meta'              => $this->generate_meta(),
 			'user_profile'      => $this->generate_user_profile(),
 			'system_info'       => $this->generate_system_info(),
+			'system_analysis'   => $this->generate_system_analysis(),
 			'plugins'           => $this->generate_plugins_info(),
 			'custom_post_types' => $this->generate_cpt_info(),
 			'taxonomies'        => $this->generate_taxonomies_info(),
@@ -303,6 +304,82 @@ class CreatorContext {
 			'db_charset'        => $wpdb->charset,
 			'memory_limit'      => WP_MEMORY_LIMIT,
 			'debug_mode'        => defined( 'WP_DEBUG' ) && WP_DEBUG,
+		];
+	}
+
+	/**
+	 * Generate system analysis section
+	 *
+	 * Includes installed plugins, missing suggested plugins, and available vanilla solutions.
+	 * This helps AI understand what tools are available and what can be done without plugins.
+	 *
+	 * @return array
+	 */
+	private function generate_system_analysis(): array {
+		global $wp_version, $wpdb;
+
+		// Get installed plugins
+		if ( ! function_exists( 'get_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		$all_plugins    = get_plugins();
+		$active_plugins = get_option( 'active_plugins', [] );
+		$installed      = [];
+
+		foreach ( $active_plugins as $plugin_path ) {
+			if ( isset( $all_plugins[ $plugin_path ] ) ) {
+				$installed[] = [
+					'slug'    => dirname( $plugin_path ),
+					'version' => $all_plugins[ $plugin_path ]['Version'],
+					'status'  => 'active',
+				];
+			}
+		}
+
+		// Get missing suggested plugins
+		$missing_suggested = [];
+		$suggested_plugins = [
+			'acf_pro'   => [ 'slug' => 'advanced-custom-fields-pro', 'reason' => 'Professional custom fields with repeaters and flexible content' ],
+			'rank_math' => [ 'slug' => 'seo-by-rank-math', 'reason' => 'SEO management and optimization' ],
+			'wpcode'    => [ 'slug' => 'insert-headers-and-footers', 'reason' => 'Safe code snippet management with easy rollback' ],
+			'elementor' => [ 'slug' => 'elementor', 'reason' => 'Visual page builder for easier content creation' ],
+		];
+
+		$integrations = $this->plugin_detector->get_all_integrations();
+		foreach ( $suggested_plugins as $key => $info ) {
+			if ( empty( $integrations[ $key ]['active'] ) ) {
+				$missing_suggested[] = [
+					'slug'   => $info['slug'],
+					'reason' => $info['reason'],
+				];
+			}
+		}
+
+		// Available vanilla WordPress solutions (always available)
+		$vanilla_solutions = [
+			'custom_post_types',
+			'custom_taxonomy',
+			'meta_fields',
+			'gutenberg_blocks',
+			'wordpress_hooks',
+			'database_queries',
+			'rest_api',
+			'transients',
+			'wp_cron',
+			'shortcodes',
+			'widgets',
+			'user_roles',
+			'capabilities',
+		];
+
+		return [
+			'wordpress'                 => $wp_version,
+			'php'                       => PHP_VERSION,
+			'mysql'                     => $wpdb->db_version(),
+			'installed_plugins'         => $installed,
+			'missing_suggested_plugins' => $missing_suggested,
+			'available_vanilla_solutions' => $vanilla_solutions,
 		];
 	}
 
