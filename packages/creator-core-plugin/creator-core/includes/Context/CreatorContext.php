@@ -152,8 +152,8 @@ class CreatorContext {
 	/**
 	 * Get context as formatted string for AI prompt injection
 	 *
-	 * Optimized version: includes only essential info and avoids duplicating
-	 * system prompts that are already in the user profile section.
+	 * ULTRA-COMPACT version: only essential data to stay under 10k chars.
+	 * Detailed info (plugin docs, ACF fields, etc.) can be loaded on-demand.
 	 *
 	 * @return string
 	 */
@@ -164,66 +164,31 @@ class CreatorContext {
 			return '';
 		}
 
-		$prompt = "# CREATOR CONTEXT DOCUMENT\n\n";
+		$level = $context['user_profile']['level'] ?? 'intermediate';
+		$si    = $context['system_info'] ?? [];
 
-		// Universal Rules (core behavior)
-		$sp = $context['system_prompts'] ?? [];
-		if ( ! empty( $sp['universal'] ) ) {
-			$prompt .= $sp['universal'] . "\n\n";
-		}
+		// Build ultra-compact context (~500-1000 chars max)
+		$prompt = "# SITE CONTEXT\n";
+		$prompt .= sprintf( "User: %s | WP %s | Theme: %s\n", strtoupper( $level ), $si['wordpress_version'] ?? '?', $si['theme_name'] ?? '?' );
 
-		// User Profile with level-specific rules
-		$prompt .= "## USER PROFILE\n";
-		$prompt .= sprintf( "Competence Level: %s\n", strtoupper( $context['user_profile']['level'] ?? 'intermediate' ) );
-		$prompt .= $context['user_profile']['profile_system_prompt'] ?? '';
-		$prompt .= "\n\n";
-
-		// System Info (compact)
-		$si = $context['system_info'] ?? [];
-		$prompt .= "## ENVIRONMENT\n";
-		$prompt .= sprintf( "WP %s | PHP %s | Theme: %s\n", $si['wordpress_version'] ?? '?', $si['php_version'] ?? '?', $si['theme_name'] ?? '?' );
-		$prompt .= sprintf( "Site: %s\n\n", $si['site_url'] ?? '' );
-
-		// Active Plugins (compact - only names and key functions)
+		// Plugins: only slugs
 		$plugins = $context['plugins'] ?? [];
 		if ( ! empty( $plugins ) ) {
-			$plugin_names = array_map( fn( $p ) => $p['name'] ?? '', $plugins );
-			$prompt .= "## ACTIVE PLUGINS\n";
-			$prompt .= implode( ', ', array_filter( $plugin_names ) ) . "\n\n";
+			$slugs = array_map( fn( $p ) => $p['slug'] ?? '', $plugins );
+			$prompt .= 'Plugins: ' . implode( ', ', array_filter( $slugs ) ) . "\n";
 		}
 
-		// Custom Post Types (only if present)
-		if ( ! empty( $context['custom_post_types'] ) ) {
-			$prompt .= "## CUSTOM POST TYPES\n";
-			foreach ( $context['custom_post_types'] as $cpt ) {
-				$prompt .= sprintf( "- %s (%s)\n", $cpt['label'] ?? '', $cpt['name'] ?? '' );
-			}
-			$prompt .= "\n";
+		// CPT: only slugs
+		$cpts = $context['custom_post_types'] ?? [];
+		if ( ! empty( $cpts ) ) {
+			$cpt_slugs = array_map( fn( $c ) => $c['name'] ?? '', $cpts );
+			$prompt .= 'CPT: ' . implode( ', ', array_filter( $cpt_slugs ) ) . "\n";
 		}
 
-		// Taxonomies (only if present)
-		if ( ! empty( $context['taxonomies'] ) ) {
-			$prompt .= "## CUSTOM TAXONOMIES\n";
-			foreach ( $context['taxonomies'] as $tax ) {
-				$prompt .= sprintf( "- %s (%s)\n", $tax['label'] ?? '', $tax['name'] ?? '' );
-			}
-			$prompt .= "\n";
-		}
-
-		// ACF Fields (compact - only group names and field count)
-		if ( ! empty( $context['acf_fields'] ) ) {
-			$prompt .= "## ACF FIELD GROUPS\n";
-			foreach ( $context['acf_fields'] as $group ) {
-				$prompt .= sprintf( "- %s (%d fields)\n", $group['title'] ?? '', count( $group['fields'] ?? [] ) );
-			}
-			$prompt .= "\n";
-		}
-
-		// Forbidden Functions (compact)
-		$forbidden = $context['forbidden'] ?? [];
-		if ( ! empty( $forbidden ) ) {
-			$prompt .= "## FORBIDDEN (NEVER USE)\n";
-			$prompt .= implode( ', ', array_slice( $forbidden, 0, 10 ) ) . "\n\n";
+		// ACF: only group count
+		$acf = $context['acf_fields'] ?? [];
+		if ( ! empty( $acf ) ) {
+			$prompt .= sprintf( "ACF: %d groups\n", count( $acf ) );
 		}
 
 		return $prompt;
@@ -342,7 +307,7 @@ class CreatorContext {
 	}
 
 	/**
-	 * Generate plugins information with documentation
+	 * Generate plugins information (compact: only slug, version, docs_url)
 	 *
 	 * @return array
 	 */
@@ -360,23 +325,17 @@ class CreatorContext {
 				continue;
 			}
 
-			$plugin = $all_plugins[ $plugin_path ];
-			$slug   = dirname( $plugin_path );
+			$plugin  = $all_plugins[ $plugin_path ];
+			$slug    = dirname( $plugin_path );
 			$version = $plugin['Version'];
 
-			// Get documentation from repository
+			// Get only docs_url from repository (lazy-load rest on demand)
 			$docs = $this->docs_repository->get_plugin_docs( $slug, $version );
 
 			$result[] = [
-				'name'           => $plugin['Name'],
-				'slug'           => $slug,
-				'version'        => $version,
-				'author'         => $plugin['Author'],
-				'plugin_uri'     => $plugin['PluginURI'],
-				'docs_url'       => $docs['docs_url'] ?? null,
-				'main_functions' => $docs['main_functions'] ?? [],
-				'api_reference'  => $docs['api_reference'] ?? null,
-				'version_notes'  => $docs['version_notes'] ?? [],
+				'slug'     => $slug,
+				'version'  => $version,
+				'docs_url' => $docs['docs_url'] ?? null,
 			];
 		}
 
@@ -384,26 +343,18 @@ class CreatorContext {
 	}
 
 	/**
-	 * Generate custom post types information
+	 * Generate custom post types information (compact: only name, label)
 	 *
 	 * @return array
 	 */
 	private function generate_cpt_info(): array {
-		$cpts = get_post_types( [ 'public' => true, '_builtin' => false ], 'objects' );
+		$cpts   = get_post_types( [ 'public' => true, '_builtin' => false ], 'objects' );
 		$result = [];
 
 		foreach ( $cpts as $cpt ) {
 			$result[] = [
-				'name'          => $cpt->name,
-				'label'         => $cpt->label,
-				'description'   => $cpt->description,
-				'public'        => $cpt->public,
-				'hierarchical'  => $cpt->hierarchical,
-				'has_archive'   => $cpt->has_archive,
-				'supports'      => get_all_post_type_supports( $cpt->name ),
-				'taxonomies'    => get_object_taxonomies( $cpt->name ),
-				'rewrite'       => $cpt->rewrite,
-				'menu_icon'     => $cpt->menu_icon,
+				'name'  => $cpt->name,
+				'label' => $cpt->label,
 			];
 		}
 
@@ -411,22 +362,18 @@ class CreatorContext {
 	}
 
 	/**
-	 * Generate taxonomies information
+	 * Generate taxonomies information (compact: only name, label)
 	 *
 	 * @return array
 	 */
 	private function generate_taxonomies_info(): array {
 		$taxonomies = get_taxonomies( [ 'public' => true, '_builtin' => false ], 'objects' );
-		$result = [];
+		$result     = [];
 
 		foreach ( $taxonomies as $tax ) {
 			$result[] = [
-				'name'         => $tax->name,
-				'label'        => $tax->label,
-				'description'  => $tax->description,
-				'hierarchical' => $tax->hierarchical,
-				'object_types' => $tax->object_type,
-				'rewrite'      => $tax->rewrite,
+				'name'  => $tax->name,
+				'label' => $tax->label,
 			];
 		}
 
@@ -434,7 +381,7 @@ class CreatorContext {
 	}
 
 	/**
-	 * Generate ACF field groups information
+	 * Generate ACF field groups information (compact: only title, field_count)
 	 *
 	 * @return array|null
 	 */
@@ -448,27 +395,10 @@ class CreatorContext {
 
 		foreach ( $groups as $group ) {
 			$fields = acf_get_fields( $group['key'] );
-			$field_data = [];
-
-			if ( $fields ) {
-				foreach ( $fields as $field ) {
-					$field_data[] = [
-						'key'          => $field['key'],
-						'name'         => $field['name'],
-						'label'        => $field['label'],
-						'type'         => $field['type'],
-						'required'     => $field['required'] ?? false,
-						'instructions' => $field['instructions'] ?? '',
-					];
-				}
-			}
 
 			$result[] = [
-				'key'      => $group['key'],
-				'title'    => $group['title'],
-				'location' => $this->simplify_acf_location( $group['location'] ?? [] ),
-				'active'   => $group['active'] ?? true,
-				'fields'   => $field_data,
+				'title'       => $group['title'],
+				'field_count' => is_array( $fields ) ? count( $fields ) : 0,
 			];
 		}
 
@@ -615,41 +545,15 @@ class CreatorContext {
 	}
 
 	/**
-	 * Get forbidden functions list
+	 * Get forbidden functions list (compact: only critical 3)
 	 *
 	 * @return array
 	 */
 	private function get_forbidden_functions(): array {
 		return [
-			// System execution
+			'eval()',
 			'exec()',
 			'shell_exec()',
-			'system()',
-			'passthru()',
-			'popen()',
-			'proc_open()',
-			'pcntl_exec()',
-			// Dangerous eval
-			'eval()',
-			'assert()',
-			'create_function()',
-			'preg_replace() with /e modifier',
-			// File system dangerous
-			'unlink() on system files',
-			'rmdir() on system dirs',
-			'file_put_contents() on system files',
-			// Database dangerous
-			'DROP TABLE',
-			'DROP DATABASE',
-			'TRUNCATE TABLE',
-			'DELETE without WHERE',
-			// WordPress dangerous
-			'wp_delete_user() without confirmation',
-			'wp_remote_get() to untrusted URLs',
-			'unserialize() on user input',
-			// Output dangerous
-			'header() without exit',
-			'die() without proper cleanup',
 		];
 	}
 

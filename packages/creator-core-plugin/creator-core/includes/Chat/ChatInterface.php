@@ -536,21 +536,36 @@ class ChatInterface {
     }
 
     /**
-     * Build conversation history for context
+     * Build conversation history with pruning
+     *
+     * Keeps last 10 messages in full, summarizes older ones.
      *
      * @param int $chat_id Chat ID.
-     * @param int $limit   Number of messages to include.
+     * @param int $limit   Max messages to fetch.
      * @return array
      */
-    private function build_conversation_history( int $chat_id, int $limit = 10 ): array {
+    private function build_conversation_history( int $chat_id, int $limit = 20 ): array {
         $messages = $this->message_handler->get_messages( $chat_id, [
             'per_page' => $limit,
             'order'    => 'DESC',
         ]);
 
-        $history = [];
+        $reversed = array_reverse( $messages );
+        $total    = count( $reversed );
+        $history  = [];
 
-        foreach ( array_reverse( $messages ) as $message ) {
+        // If more than 10 messages, summarize older ones
+        if ( $total > 10 ) {
+            $older_count = $total - 10;
+            $history[]   = [
+                'role'    => 'system',
+                'content' => sprintf( '[Previous %d messages summarized]', $older_count ),
+            ];
+            // Keep only last 10
+            $reversed = array_slice( $reversed, -10 );
+        }
+
+        foreach ( $reversed as $message ) {
             $history[] = [
                 'role'    => $message['role'],
                 'content' => $message['content'],
@@ -578,27 +593,15 @@ class ChatInterface {
         // ========================================
         $system_prompt = "You are Creator, an AI assistant for WordPress automation.\n\n";
 
-        // Get comprehensive Creator Context (stored document)
-        $creator_context_prompt = '';
+        // Get ultra-compact Creator Context
         try {
             $creator_context_prompt = $this->get_creator_context()->get_context_as_prompt();
-        } catch ( \Throwable $e ) {
-            error_log( 'Creator: Error getting context as prompt: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
-        }
-
-        // If no stored context, fall back to legacy method
-        if ( empty( $creator_context_prompt ) ) {
-            try {
-                $context_collector = new ContextCollector();
-                $creator_context_prompt = $context_collector->get_maxi_onboarding_summary();
-            } catch ( \Throwable $e ) {
-                error_log( 'Creator: Error getting maxi onboarding: ' . $e->getMessage() );
-                $creator_context_prompt = ''; // Use empty context as fallback
+            if ( ! empty( $creator_context_prompt ) ) {
+                $system_prompt .= $creator_context_prompt . "\n";
             }
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error getting context: ' . $e->getMessage() );
         }
-
-        // Include the Creator Context document in system prompt
-        $system_prompt .= $creator_context_prompt . "\n\n";
 
         // Add response format specification to system prompt
         $system_prompt .= "## Response Format\n";

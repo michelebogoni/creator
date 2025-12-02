@@ -213,9 +213,9 @@ export function isValidTaskType(taskType: string): taskType is TaskType {
 
 /**
  * Maximum prompt length in characters
- * Modern LLMs support 128k+ tokens, so 50k chars is reasonable for complex prompts
+ * Safety ceiling - actual prompts should be much smaller due to compression
  */
-export const MAX_PROMPT_LENGTH = 50000;
+export const MAX_PROMPT_LENGTH = 100000;
 
 /**
  * Minimum quota threshold for warnings
