@@ -103,6 +103,26 @@ export { getPluginDocsStatsApi } from "./api/plugin-docs/pluginDocs";
  */
 export { getPluginDocsAllVersionsApi } from "./api/plugin-docs/pluginDocs";
 
+/**
+ * POST /api/plugin-docs/research
+ *
+ * Researches plugin documentation using AI when not found in cache.
+ * Uses Gemini/Claude to find official docs and main functions.
+ *
+ * @see {@link module:api/plugin-docs/pluginDocs}
+ */
+export { researchPluginDocsApi } from "./api/plugin-docs/pluginDocs";
+
+/**
+ * POST /api/plugin-docs/sync
+ *
+ * Returns plugin docs for syncing to WordPress local cache.
+ * Used by Creator plugin to maintain a local fallback.
+ *
+ * @see {@link module:api/plugin-docs/pluginDocs}
+ */
+export { syncPluginDocsApi } from "./api/plugin-docs/pluginDocs";
+
 // ==================== FIRESTORE TRIGGERS (Milestone 5) ====================
 
 /**
