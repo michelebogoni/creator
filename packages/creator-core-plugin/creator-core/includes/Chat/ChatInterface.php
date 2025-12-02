@@ -63,30 +63,30 @@ class ChatInterface {
     /**
      * Creator context instance
      *
-     * @var CreatorContext
+     * @var CreatorContext|null
      */
-    private CreatorContext $creator_context;
+    private ?CreatorContext $creator_context = null;
 
     /**
      * Phase detector instance
      *
-     * @var PhaseDetector
+     * @var PhaseDetector|null
      */
-    private PhaseDetector $phase_detector;
+    private ?PhaseDetector $phase_detector = null;
 
     /**
      * Code executor instance
      *
-     * @var CodeExecutor
+     * @var CodeExecutor|null
      */
-    private CodeExecutor $code_executor;
+    private ?CodeExecutor $code_executor = null;
 
     /**
      * Execution verifier instance
      *
-     * @var ExecutionVerifier
+     * @var ExecutionVerifier|null
      */
-    private ExecutionVerifier $execution_verifier;
+    private ?ExecutionVerifier $execution_verifier = null;
 
     /**
      * Constructor
@@ -107,10 +107,65 @@ class ChatInterface {
         $this->snapshot_manager   = $snapshot_manager;
         $this->logger             = $logger;
         $this->message_handler    = new MessageHandler( $logger );
-        $this->creator_context    = new CreatorContext();
-        $this->phase_detector     = new PhaseDetector();
-        $this->code_executor      = new CodeExecutor();
-        $this->execution_verifier = new ExecutionVerifier( $logger );
+
+        // Initialize context system components (may fail gracefully)
+        try {
+            $this->creator_context    = new CreatorContext();
+            $this->phase_detector     = new PhaseDetector();
+            $this->code_executor      = new CodeExecutor();
+            $this->execution_verifier = new ExecutionVerifier( $logger );
+        } catch ( \Throwable $e ) {
+            // Log error but don't fail - components can be initialized lazily when needed
+            error_log( 'Creator: Failed to initialize context components: ' . $e->getMessage() );
+        }
+    }
+
+    /**
+     * Get Creator context (with lazy initialization)
+     *
+     * @return CreatorContext
+     */
+    private function get_creator_context(): CreatorContext {
+        if ( $this->creator_context === null ) {
+            $this->creator_context = new CreatorContext();
+        }
+        return $this->creator_context;
+    }
+
+    /**
+     * Get phase detector (with lazy initialization)
+     *
+     * @return PhaseDetector
+     */
+    private function get_phase_detector(): PhaseDetector {
+        if ( $this->phase_detector === null ) {
+            $this->phase_detector = new PhaseDetector();
+        }
+        return $this->phase_detector;
+    }
+
+    /**
+     * Get code executor (with lazy initialization)
+     *
+     * @return CodeExecutor
+     */
+    private function get_code_executor(): CodeExecutor {
+        if ( $this->code_executor === null ) {
+            $this->code_executor = new CodeExecutor();
+        }
+        return $this->code_executor;
+    }
+
+    /**
+     * Get execution verifier (with lazy initialization)
+     *
+     * @return ExecutionVerifier
+     */
+    private function get_execution_verifier(): ExecutionVerifier {
+        if ( $this->execution_verifier === null ) {
+            $this->execution_verifier = new ExecutionVerifier( $this->logger );
+        }
+        return $this->execution_verifier;
     }
 
     /**
@@ -465,7 +520,7 @@ class ChatInterface {
      */
     private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [] ): string {
         // Get comprehensive Creator Context (stored document)
-        $creator_context_prompt = $this->creator_context->get_context_as_prompt();
+        $creator_context_prompt = $this->get_creator_context()->get_context_as_prompt();
 
         // If no stored context, fall back to legacy method
         if ( empty( $creator_context_prompt ) ) {
@@ -475,7 +530,7 @@ class ChatInterface {
 
         // Detect user input type and determine expected phase
         $prev_phase = $this->get_last_phase( $history );
-        $input_classification = $this->phase_detector->classify_user_input( $user_message, $prev_phase );
+        $input_classification = $this->get_phase_detector()->classify_user_input( $user_message, $prev_phase );
 
         $prompt = "You are Creator, an AI assistant for WordPress automation.\n\n";
 
@@ -647,7 +702,7 @@ class ChatInterface {
 
             // Detect phase if not explicit
             if ( empty( $parsed['phase'] ) ) {
-                $phase_detection = $this->phase_detector->detect_phase( $json );
+                $phase_detection = $this->get_phase_detector()->detect_phase( $json );
                 $parsed['phase'] = $phase_detection['phase'];
             }
 
@@ -698,7 +753,7 @@ class ChatInterface {
         }
 
         // Execute the code
-        $result = $this->code_executor->execute( $code_data );
+        $result = $this->get_code_executor()->execute( $code_data );
 
         // Log execution
         $this->logger->log(
@@ -755,7 +810,7 @@ class ChatInterface {
         ];
 
         // Run verification
-        return $this->execution_verifier->verify( $action_type, $expected, $context );
+        return $this->get_execution_verifier()->verify( $action_type, $expected, $context );
     }
 
     /**

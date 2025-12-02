@@ -422,22 +422,37 @@ class Settings {
      * @return array
      */
     private function get_context_status(): array {
-        $context   = new CreatorContext();
-        $refresher = new ContextRefresher();
+        try {
+            $context   = new CreatorContext();
+            $refresher = new ContextRefresher();
 
-        $stored = $context->get_stored_context();
+            $stored = $context->get_stored_context();
 
-        return [
-            'has_context'     => $stored !== null,
-            'generated_at'    => $context->get_generated_at(),
-            'is_valid'        => $context->is_context_valid(),
-            'is_stale'        => $context->is_context_stale(),
-            'pending_refresh' => $refresher->get_status()['pending_refresh'] ?? false,
-            'plugins_count'   => count( $stored['plugins'] ?? [] ),
-            'cpts_count'      => count( $stored['custom_post_types'] ?? [] ),
-            'acf_groups'      => count( $stored['acf_fields'] ?? [] ),
-            'sitemap_count'   => count( $stored['sitemap'] ?? [] ),
-        ];
+            return [
+                'has_context'     => $stored !== null,
+                'generated_at'    => $context->get_generated_at(),
+                'is_valid'        => $context->is_context_valid(),
+                'is_stale'        => $context->is_context_stale(),
+                'pending_refresh' => $refresher->get_status()['pending_refresh'] ?? false,
+                'plugins_count'   => count( $stored['plugins'] ?? [] ),
+                'cpts_count'      => count( $stored['custom_post_types'] ?? [] ),
+                'acf_groups'      => count( $stored['acf_fields'] ?? [] ),
+                'sitemap_count'   => count( $stored['sitemap'] ?? [] ),
+            ];
+        } catch ( \Exception $e ) {
+            // Return safe defaults if context loading fails
+            return [
+                'has_context'     => false,
+                'generated_at'    => null,
+                'is_valid'        => false,
+                'is_stale'        => true,
+                'pending_refresh' => false,
+                'plugins_count'   => 0,
+                'cpts_count'      => 0,
+                'acf_groups'      => 0,
+                'sitemap_count'   => 0,
+            ];
+        }
     }
 
     /**
