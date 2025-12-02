@@ -152,8 +152,8 @@ class CreatorContext {
 	/**
 	 * Get context as formatted string for AI prompt injection
 	 *
-	 * Optimized version: includes only essential info and avoids duplicating
-	 * system prompts that are already in the user profile section.
+	 * ULTRA-COMPACT version: only essential data to stay under 10k chars.
+	 * Detailed info (plugin docs, ACF fields, etc.) can be loaded on-demand.
 	 *
 	 * @return string
 	 */
@@ -164,66 +164,31 @@ class CreatorContext {
 			return '';
 		}
 
-		$prompt = "# CREATOR CONTEXT DOCUMENT\n\n";
+		$level = $context['user_profile']['level'] ?? 'intermediate';
+		$si    = $context['system_info'] ?? [];
 
-		// Universal Rules (core behavior)
-		$sp = $context['system_prompts'] ?? [];
-		if ( ! empty( $sp['universal'] ) ) {
-			$prompt .= $sp['universal'] . "\n\n";
-		}
+		// Build ultra-compact context (~500-1000 chars max)
+		$prompt = "# SITE CONTEXT\n";
+		$prompt .= sprintf( "User: %s | WP %s | Theme: %s\n", strtoupper( $level ), $si['wordpress_version'] ?? '?', $si['theme_name'] ?? '?' );
 
-		// User Profile with level-specific rules
-		$prompt .= "## USER PROFILE\n";
-		$prompt .= sprintf( "Competence Level: %s\n", strtoupper( $context['user_profile']['level'] ?? 'intermediate' ) );
-		$prompt .= $context['user_profile']['profile_system_prompt'] ?? '';
-		$prompt .= "\n\n";
-
-		// System Info (compact)
-		$si = $context['system_info'] ?? [];
-		$prompt .= "## ENVIRONMENT\n";
-		$prompt .= sprintf( "WP %s | PHP %s | Theme: %s\n", $si['wordpress_version'] ?? '?', $si['php_version'] ?? '?', $si['theme_name'] ?? '?' );
-		$prompt .= sprintf( "Site: %s\n\n", $si['site_url'] ?? '' );
-
-		// Active Plugins (compact - only names and key functions)
+		// Plugins: only slugs
 		$plugins = $context['plugins'] ?? [];
 		if ( ! empty( $plugins ) ) {
-			$plugin_names = array_map( fn( $p ) => $p['name'] ?? '', $plugins );
-			$prompt .= "## ACTIVE PLUGINS\n";
-			$prompt .= implode( ', ', array_filter( $plugin_names ) ) . "\n\n";
+			$slugs = array_map( fn( $p ) => $p['slug'] ?? '', $plugins );
+			$prompt .= 'Plugins: ' . implode( ', ', array_filter( $slugs ) ) . "\n";
 		}
 
-		// Custom Post Types (only if present)
-		if ( ! empty( $context['custom_post_types'] ) ) {
-			$prompt .= "## CUSTOM POST TYPES\n";
-			foreach ( $context['custom_post_types'] as $cpt ) {
-				$prompt .= sprintf( "- %s (%s)\n", $cpt['label'] ?? '', $cpt['name'] ?? '' );
-			}
-			$prompt .= "\n";
+		// CPT: only slugs
+		$cpts = $context['custom_post_types'] ?? [];
+		if ( ! empty( $cpts ) ) {
+			$cpt_slugs = array_map( fn( $c ) => $c['name'] ?? '', $cpts );
+			$prompt .= 'CPT: ' . implode( ', ', array_filter( $cpt_slugs ) ) . "\n";
 		}
 
-		// Taxonomies (only if present)
-		if ( ! empty( $context['taxonomies'] ) ) {
-			$prompt .= "## CUSTOM TAXONOMIES\n";
-			foreach ( $context['taxonomies'] as $tax ) {
-				$prompt .= sprintf( "- %s (%s)\n", $tax['label'] ?? '', $tax['name'] ?? '' );
-			}
-			$prompt .= "\n";
-		}
-
-		// ACF Fields (compact - only group names and field count)
-		if ( ! empty( $context['acf_fields'] ) ) {
-			$prompt .= "## ACF FIELD GROUPS\n";
-			foreach ( $context['acf_fields'] as $group ) {
-				$prompt .= sprintf( "- %s (%d fields)\n", $group['title'] ?? '', count( $group['fields'] ?? [] ) );
-			}
-			$prompt .= "\n";
-		}
-
-		// Forbidden Functions (compact)
-		$forbidden = $context['forbidden'] ?? [];
-		if ( ! empty( $forbidden ) ) {
-			$prompt .= "## FORBIDDEN (NEVER USE)\n";
-			$prompt .= implode( ', ', array_slice( $forbidden, 0, 10 ) ) . "\n\n";
+		// ACF: only group count
+		$acf = $context['acf_fields'] ?? [];
+		if ( ! empty( $acf ) ) {
+			$prompt .= sprintf( "ACF: %d groups\n", count( $acf ) );
 		}
 
 		return $prompt;

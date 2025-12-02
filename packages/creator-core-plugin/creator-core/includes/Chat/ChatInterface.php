@@ -578,27 +578,15 @@ class ChatInterface {
         // ========================================
         $system_prompt = "You are Creator, an AI assistant for WordPress automation.\n\n";
 
-        // Get comprehensive Creator Context (stored document)
-        $creator_context_prompt = '';
+        // Get ultra-compact Creator Context
         try {
             $creator_context_prompt = $this->get_creator_context()->get_context_as_prompt();
-        } catch ( \Throwable $e ) {
-            error_log( 'Creator: Error getting context as prompt: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
-        }
-
-        // If no stored context, fall back to legacy method
-        if ( empty( $creator_context_prompt ) ) {
-            try {
-                $context_collector = new ContextCollector();
-                $creator_context_prompt = $context_collector->get_maxi_onboarding_summary();
-            } catch ( \Throwable $e ) {
-                error_log( 'Creator: Error getting maxi onboarding: ' . $e->getMessage() );
-                $creator_context_prompt = ''; // Use empty context as fallback
+            if ( ! empty( $creator_context_prompt ) ) {
+                $system_prompt .= $creator_context_prompt . "\n";
             }
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error getting context: ' . $e->getMessage() );
         }
-
-        // Include the Creator Context document in system prompt
-        $system_prompt .= $creator_context_prompt . "\n\n";
 
         // Add response format specification to system prompt
         $system_prompt .= "## Response Format\n";
