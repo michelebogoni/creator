@@ -429,9 +429,9 @@ class ChatInterface {
             $pending_actions = [];
         }
 
-        // Prepare prompt with context (include pending actions info)
+        // Prepare prompts - system_prompt for static context, prompt for conversation
         try {
-            $prompt = $this->prepare_prompt( $content, $context, $history, $pending_actions );
+            $prompts = $this->prepare_prompt( $content, $context, $history, $pending_actions );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error preparing prompt: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
             return [
@@ -443,15 +443,16 @@ class ChatInterface {
         // Get the chat's AI model (locked per chat)
         $ai_model = $chat['ai_model'] ?? UserProfile::get_default_model();
 
-        // Send to AI
+        // Send to AI with system_prompt separated from main prompt
         try {
-            $ai_response = $this->proxy_client->send_to_ai( $prompt, 'TEXT_GEN', [
+            $ai_response = $this->proxy_client->send_to_ai( $prompts['prompt'], 'TEXT_GEN', [
                 'chat_id'         => $chat_id,
                 'message_id'      => $user_message_id,
                 'user_message'    => $content, // Original user message for mock mode intent detection
                 'pending_actions' => $pending_actions, // Pending actions for confirmation handling
                 'conversation'    => $history, // Conversation history for context extraction
                 'model'           => $ai_model, // AI model (gemini or claude)
+                'system_prompt'   => $prompts['system_prompt'], // Static context (Creator rules, site info)
             ]);
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error sending to AI: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
@@ -560,17 +561,23 @@ class ChatInterface {
     }
 
     /**
-     * Prepare prompt with context
+     * Prepare prompts with context
      *
      * Uses the new CreatorContext system for comprehensive context injection.
+     * Returns both system_prompt (static context) and prompt (conversation).
      *
      * @param string $user_message    User's message.
      * @param array  $context         WordPress context (legacy, kept for compatibility).
      * @param array  $history         Conversation history.
      * @param array  $pending_actions Pending actions from previous messages.
-     * @return string
+     * @return array Array with 'system_prompt' and 'prompt' keys.
      */
-    private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [] ): string {
+    private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [] ): array {
+        // ========================================
+        // SYSTEM PROMPT: Static context (rules, site info)
+        // ========================================
+        $system_prompt = "You are Creator, an AI assistant for WordPress automation.\n\n";
+
         // Get comprehensive Creator Context (stored document)
         $creator_context_prompt = '';
         try {
@@ -590,6 +597,23 @@ class ChatInterface {
             }
         }
 
+        // Include the Creator Context document in system prompt
+        $system_prompt .= $creator_context_prompt . "\n\n";
+
+        // Add response format specification to system prompt
+        $system_prompt .= "## Response Format\n";
+        $system_prompt .= "ALWAYS respond with valid JSON:\n";
+        $system_prompt .= '{"phase": "discovery|proposal|execution", "intent": "action_type", "confidence": 0.0-1.0, ';
+        $system_prompt .= '"message": "Your message in user language", "questions": [], "plan": null, "code": null, "actions": []}';
+        $system_prompt .= "\n\nPhase meanings: discovery=need more info, proposal=present plan, execution=generate code.\n";
+        $system_prompt .= "Action status: pending=needs confirmation, ready=execute immediately.\n";
+        $system_prompt .= "Always respond in the same language the user is using.";
+
+        // ========================================
+        // PROMPT: Dynamic content (conversation, user message)
+        // ========================================
+        $prompt = '';
+
         // Detect user input type and determine expected phase
         $prev_phase = $this->get_last_phase( $history );
         $input_classification = [ 'type' => 'new_request', 'next_phase' => 'discovery' ]; // Default
@@ -598,11 +622,6 @@ class ChatInterface {
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error classifying input: ' . $e->getMessage() );
         }
-
-        $prompt = "You are Creator, an AI assistant for WordPress automation.\n\n";
-
-        // Include the full Creator Context document
-        $prompt .= $creator_context_prompt . "\n\n";
 
         // Include conversation history
         if ( ! empty( $history ) ) {
@@ -615,64 +634,24 @@ class ChatInterface {
 
         // Include pending actions info
         if ( ! empty( $pending_actions ) ) {
-            $prompt .= "## Pending Actions (waiting for user confirmation)\n";
+            $prompt .= "## Pending Actions\n";
             foreach ( $pending_actions as $action ) {
                 $prompt .= sprintf( "- %s: %s\n", $action['type'], wp_json_encode( $action['params'] ?? [] ) );
             }
-            $prompt .= "\n";
-            $prompt .= "IMPORTANT: If the user is confirming these actions (saying 'yes', 'ok', 'proceed', 'si', 'procedi', etc.), ";
-            $prompt .= "set action status to 'ready' and include executable code. ";
-            $prompt .= "If they are rejecting (saying 'no', 'cancel', 'annulla', etc.), cancel the actions.\n\n";
+            $prompt .= "If user confirms, set action status to 'ready'. If rejects, cancel actions.\n\n";
         }
 
         // User input context
-        $prompt .= "## User Input Analysis\n";
-        $prompt .= sprintf( "- Input type: %s\n", $input_classification['type'] );
-        $prompt .= sprintf( "- Expected next phase: %s\n", $input_classification['next_phase'] );
-        $prompt .= sprintf( "- Previous phase: %s\n\n", $prev_phase ?: 'none' );
+        $prompt .= "## Context\n";
+        $prompt .= sprintf( "Input: %s | Next phase: %s | Prev phase: %s\n\n", $input_classification['type'], $input_classification['next_phase'], $prev_phase ?: 'none' );
 
         $prompt .= "## User Request\n";
-        $prompt .= $user_message . "\n\n";
+        $prompt .= $user_message;
 
-        $prompt .= "## Response Format\n";
-        $prompt .= "ALWAYS respond with valid JSON in this format:\n";
-        $prompt .= "```json\n";
-        $prompt .= "{\n";
-        $prompt .= '  "phase": "discovery|proposal|execution",' . "\n";
-        $prompt .= '  "intent": "action_type or conversation",' . "\n";
-        $prompt .= '  "confidence": 0.0-1.0,' . "\n";
-        $prompt .= '  "message": "Your message to the user in their language",' . "\n";
-        $prompt .= '  "questions": ["question1", "question2"] // only in discovery phase,' . "\n";
-        $prompt .= '  "plan": { // only in proposal phase' . "\n";
-        $prompt .= '    "summary": "What will be done",' . "\n";
-        $prompt .= '    "steps": ["step1", "step2"],' . "\n";
-        $prompt .= '    "estimated_credits": 10,' . "\n";
-        $prompt .= '    "risks": ["risk1"],' . "\n";
-        $prompt .= '    "rollback_possible": true' . "\n";
-        $prompt .= '  },' . "\n";
-        $prompt .= '  "code": { // only in execution phase' . "\n";
-        $prompt .= '    "type": "wpcode_snippet|direct_execution",' . "\n";
-        $prompt .= '    "title": "Descriptive title",' . "\n";
-        $prompt .= '    "description": "What this code does",' . "\n";
-        $prompt .= '    "language": "php",' . "\n";
-        $prompt .= '    "content": "<?php // your code here",' . "\n";
-        $prompt .= '    "location": "everywhere|frontend|admin",' . "\n";
-        $prompt .= '    "auto_execute": false // true only after user confirmation' . "\n";
-        $prompt .= '  },' . "\n";
-        $prompt .= '  "actions": [{"type": "action_name", "params": {...}, "status": "pending|ready"}]' . "\n";
-        $prompt .= "}\n";
-        $prompt .= "```\n\n";
-        $prompt .= "Phase meanings:\n";
-        $prompt .= "- 'discovery': You need more information. Ask clarifying questions.\n";
-        $prompt .= "- 'proposal': You have enough info. Propose a plan and ask for confirmation.\n";
-        $prompt .= "- 'execution': User confirmed. Generate and execute code.\n\n";
-        $prompt .= "Action status meanings:\n";
-        $prompt .= "- 'pending': Action needs user confirmation before execution\n";
-        $prompt .= "- 'ready': User has confirmed, action should be executed immediately\n\n";
-        $prompt .= "For conversations without actions, use actions: [] (empty array).\n";
-        $prompt .= "Always respond in the same language the user is using.";
-
-        return $prompt;
+        return [
+            'system_prompt' => $system_prompt,
+            'prompt'        => $prompt,
+        ];
     }
 
     /**

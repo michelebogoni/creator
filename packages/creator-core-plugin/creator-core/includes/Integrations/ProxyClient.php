@@ -91,7 +91,7 @@ class ProxyClient {
 	 *
 	 * @param string $prompt    The prompt to send.
 	 * @param string $task_type Task type (TEXT_GEN, CODE_GEN, ANALYSIS, etc).
-	 * @param array  $options   Additional options.
+	 * @param array  $options   Additional options (model, chat_id, system_prompt, etc).
 	 * @return array
 	 */
 	public function send_to_ai( string $prompt, string $task_type = 'TEXT_GEN', array $options = [] ): array {
@@ -123,9 +123,14 @@ class ProxyClient {
 			$request_body['chat_id'] = (string) $options['chat_id'];
 		}
 
+		// Add system_prompt if provided (for static context like Creator rules)
+		if ( ! empty( $options['system_prompt'] ) ) {
+			$request_body['system_prompt'] = $options['system_prompt'];
+		}
+
 		// Remove model-related keys from options before adding to request
 		$clean_options = $options;
-		unset( $clean_options['model'], $clean_options['chat_id'] );
+		unset( $clean_options['model'], $clean_options['chat_id'], $clean_options['system_prompt'] );
 		$request_body['options'] = $clean_options;
 
 		$response = $this->make_request( 'POST', '/api/ai/route-request', $request_body, [
