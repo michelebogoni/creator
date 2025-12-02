@@ -346,8 +346,8 @@ class Loader {
                 CREATOR_CORE_VERSION,
                 true
             );
-            $current_step = isset( $_GET['step'] ) ? sanitize_key( $_GET['step'] ) : 'dependencies';
-            $step_map     = [ 'dependencies' => 1, 'backup' => 2, 'license' => 3, 'finish' => 4 ];
+            $current_step = isset( $_GET['step'] ) ? sanitize_key( $_GET['step'] ) : 'safety';
+            $step_map     = [ 'safety' => 1, 'overview' => 2, 'backup' => 3, 'license' => 4, 'profile' => 5, 'finish' => 6 ];
             wp_localize_script( 'creator-setup-wizard', 'creatorSetup', [
                 'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
                 'nonce'        => wp_create_nonce( 'creator_setup_nonce' ),

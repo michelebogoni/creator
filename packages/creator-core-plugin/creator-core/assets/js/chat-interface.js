@@ -14,12 +14,14 @@
         chatId: null,
         isTyping: false,
         messageQueue: [],
+        attachedFiles: [], // Store attached files as base64
 
         /**
          * Initialize chat interface
          */
         init: function() {
             this.chatId = creatorChat.chatId || null;
+            this.attachedFiles = [];
             this.bindEvents();
             this.initTextarea();
             this.scrollToBottom();
@@ -56,6 +58,11 @@
 
             // Model toggle in chat header
             $('input[name="chat_model"]').on('change', this.handleModelToggle.bind(this));
+
+            // File attachment
+            $('#creator-attach-btn').on('click', this.handleAttachClick.bind(this));
+            $('#creator-file-input').on('change', this.handleFileSelect.bind(this));
+            $(document).on('click', '.creator-attachment-remove', this.handleAttachmentRemove.bind(this));
         },
 
         /**
@@ -120,12 +127,17 @@
             const $input = $('#creator-message-input');
             const message = $input.val().trim();
 
-            if (!message || this.isTyping) {
+            // Allow sending with only files (no message) or with message
+            if ((!message && this.attachedFiles.length === 0) || this.isTyping) {
                 return;
             }
 
-            this.sendMessage(message);
+            // Send message with files
+            this.sendMessage(message, this.attachedFiles.slice());
+
+            // Clear input and attachments
             $input.val('').trigger('input');
+            this.clearAttachments();
         },
 
         /**
@@ -134,8 +146,10 @@
         handleInput: function(e) {
             const $btn = $('.creator-send-btn');
             const hasValue = $(e.target).val().trim().length > 0;
+            const hasFiles = this.attachedFiles && this.attachedFiles.length > 0;
 
-            $btn.prop('disabled', !hasValue || this.isTyping);
+            // Enable send if there's text OR files
+            $btn.prop('disabled', (!hasValue && !hasFiles) || this.isTyping);
         },
 
         /**
@@ -161,22 +175,37 @@
         /**
          * Send message to API
          */
-        sendMessage: function(message) {
+        sendMessage: function(message, files = []) {
             const self = this;
 
-            // Add user message to UI immediately
-            this.addMessage({
+            // Build message with attachment info for display
+            const messageData = {
                 role: 'user',
-                content: message,
+                content: message || '',
                 sender_name: creatorChat.userName,
                 timestamp: new Date().toISOString()
-            });
+            };
+
+            // Add attachment info for display
+            if (files && files.length > 0) {
+                messageData.attachments = files.map(f => ({
+                    name: f.name,
+                    type: f.type,
+                    size: f.size
+                }));
+            }
+
+            // Add user message to UI immediately
+            this.addMessage(messageData);
 
             // Hide welcome message if present
             $('.creator-welcome-message').fadeOut();
 
             // Show typing indicator
             this.showTypingIndicator();
+
+            // Store files for sending
+            this.pendingFiles = files;
 
             // If no chat exists, create one first
             if (!this.chatId) {
@@ -242,6 +271,17 @@
         sendMessageToChat: function(chatId, message) {
             const self = this;
 
+            // Build request data
+            const requestData = {
+                content: message || ''
+            };
+
+            // Include files if present
+            if (this.pendingFiles && this.pendingFiles.length > 0) {
+                requestData.files = this.pendingFiles;
+                this.pendingFiles = []; // Clear after including
+            }
+
             $.ajax({
                 url: creatorChat.restUrl + 'chats/' + chatId + '/messages',
                 type: 'POST',
@@ -249,9 +289,7 @@
                 headers: {
                     'X-WP-Nonce': creatorChat.restNonce
                 },
-                data: JSON.stringify({
-                    content: message
-                }),
+                data: JSON.stringify(requestData),
                 success: function(response) {
                     self.hideTypingIndicator();
 
@@ -930,6 +968,164 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        },
+
+        // ==========================================
+        // File Attachment Methods
+        // ==========================================
+
+        /**
+         * Handle attachment button click
+         */
+        handleAttachClick: function(e) {
+            e.preventDefault();
+            $('#creator-file-input').click();
+        },
+
+        /**
+         * Handle file selection
+         */
+        handleFileSelect: function(e) {
+            const files = e.target.files;
+            const self = this;
+            const maxFiles = creatorChat.maxFilesPerMessage || 3;
+            const maxSize = creatorChat.maxFileSize || 10 * 1024 * 1024;
+
+            if (!files || files.length === 0) return;
+
+            // Check total files limit
+            if (this.attachedFiles.length + files.length > maxFiles) {
+                alert(creatorChat.i18n?.maxFilesError || 'Maximum ' + maxFiles + ' files allowed.');
+                e.target.value = '';
+                return;
+            }
+
+            // Process each file
+            Array.from(files).forEach(function(file) {
+                // Check file size
+                if (file.size > maxSize) {
+                    alert((creatorChat.i18n?.fileTooLarge || 'File too large:') + ' ' + file.name);
+                    return;
+                }
+
+                // Read file as base64
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    self.attachedFiles.push({
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        base64: event.target.result
+                    });
+                    self.updateAttachmentPreview();
+                    self.updateSendButton();
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // Clear the input for next selection
+            e.target.value = '';
+        },
+
+        /**
+         * Handle attachment remove
+         */
+        handleAttachmentRemove: function(e) {
+            e.preventDefault();
+            const index = $(e.currentTarget).data('index');
+            this.attachedFiles.splice(index, 1);
+            this.updateAttachmentPreview();
+            this.updateSendButton();
+        },
+
+        /**
+         * Update attachment preview area
+         */
+        updateAttachmentPreview: function() {
+            const $preview = $('#creator-attachment-preview');
+            const $list = $preview.find('.creator-attachment-list');
+            const $info = $('.creator-attachment-info');
+
+            if (this.attachedFiles.length === 0) {
+                $preview.hide();
+                $info.hide();
+                $list.empty();
+                return;
+            }
+
+            $preview.show();
+            $info.show();
+
+            let html = '';
+            this.attachedFiles.forEach(function(file, index) {
+                const icon = this.getFileIcon(file.type);
+                const size = this.formatFileSize(file.size);
+
+                html += '<div class="creator-attachment-item" data-index="' + index + '">';
+                html += '<span class="creator-attachment-icon">' + icon + '</span>';
+                html += '<span class="creator-attachment-name">' + this.escapeHtml(file.name) + '</span>';
+                html += '<span class="creator-attachment-size">' + size + '</span>';
+                html += '<button type="button" class="creator-attachment-remove" data-index="' + index + '">';
+                html += '<span class="dashicons dashicons-no-alt"></span>';
+                html += '</button>';
+                html += '</div>';
+            }.bind(this));
+
+            $list.html(html);
+        },
+
+        /**
+         * Update send button state
+         */
+        updateSendButton: function() {
+            const $btn = $('.creator-send-btn');
+            const hasValue = $('#creator-message-input').val().trim().length > 0;
+            const hasFiles = this.attachedFiles.length > 0;
+
+            $btn.prop('disabled', (!hasValue && !hasFiles) || this.isTyping);
+        },
+
+        /**
+         * Clear all attachments
+         */
+        clearAttachments: function() {
+            this.attachedFiles = [];
+            this.pendingFiles = [];
+            $('#creator-file-input').val('');
+            this.updateAttachmentPreview();
+        },
+
+        /**
+         * Get file icon based on type
+         */
+        getFileIcon: function(mimeType) {
+            if (mimeType.startsWith('image/')) {
+                return '<span class="dashicons dashicons-format-image"></span>';
+            } else if (mimeType === 'application/pdf') {
+                return '<span class="dashicons dashicons-media-document"></span>';
+            } else if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
+                return '<span class="dashicons dashicons-media-spreadsheet"></span>';
+            } else if (mimeType.includes('word') || mimeType.includes('document')) {
+                return '<span class="dashicons dashicons-media-document"></span>';
+            } else if (mimeType.includes('javascript') || mimeType.includes('json') ||
+                       mimeType.includes('php') || mimeType.includes('html') ||
+                       mimeType.includes('css') || mimeType.includes('sql')) {
+                return '<span class="dashicons dashicons-editor-code"></span>';
+            } else if (mimeType === 'text/plain') {
+                return '<span class="dashicons dashicons-text"></span>';
+            }
+            return '<span class="dashicons dashicons-media-default"></span>';
+        },
+
+        /**
+         * Format file size for display
+         */
+        formatFileSize: function(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
     };
 

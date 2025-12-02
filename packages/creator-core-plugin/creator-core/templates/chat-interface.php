@@ -170,7 +170,24 @@ $is_new_chat = empty( $chat_id );
                 <?php wp_nonce_field( 'creator_chat_nonce', 'creator_nonce' ); ?>
                 <input type="hidden" name="chat_id" id="creator-chat-id" value="<?php echo esc_attr( $chat_id ?? '' ); ?>">
 
+                <!-- File Attachment Preview -->
+                <div id="creator-attachment-preview" class="creator-attachment-preview" style="display: none;">
+                    <div class="creator-attachment-list"></div>
+                </div>
+
                 <div class="creator-input-wrapper">
+                    <!-- Attachment Button -->
+                    <button type="button" class="creator-attach-btn" id="creator-attach-btn" title="<?php esc_attr_e( 'Attach files', 'creator-core' ); ?>">
+                        <span class="dashicons dashicons-paperclip"></span>
+                    </button>
+                    <input
+                        type="file"
+                        id="creator-file-input"
+                        multiple
+                        accept="image/*,.pdf,.docx,.xlsx,.txt,.php,.json,.html,.css,.js,.sql"
+                        style="display: none;"
+                    />
+
                     <textarea
                         id="creator-message-input"
                         name="message"
@@ -188,6 +205,17 @@ $is_new_chat = empty( $chat_id );
                 </div>
 
                 <div class="creator-input-info">
+                    <span class="creator-attachment-info" style="display: none;">
+                        <span class="dashicons dashicons-info-outline"></span>
+                        <?php
+                        printf(
+                            /* translators: 1: max files, 2: max size in MB */
+                            esc_html__( 'Max %1$d files, %2$d MB each', 'creator-core' ),
+                            \CreatorCore\Chat\ChatInterface::get_max_files_per_message(),
+                            \CreatorCore\Chat\ChatInterface::get_max_file_size() / ( 1024 * 1024 )
+                        );
+                        ?>
+                    </span>
                     <span class="creator-typing-indicator" style="display: none;">
                         <span class="dot"></span>
                         <span class="dot"></span>

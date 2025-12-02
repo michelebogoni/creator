@@ -17,8 +17,6 @@ $plugin_detector = new \CreatorCore\Integrations\PluginDetector();
             <span class="dashicons dashicons-yes-alt status-ok"></span>
         <?php elseif ( $plugin['installed'] && ! $plugin['active'] ) : ?>
             <span class="dashicons dashicons-warning status-warning"></span>
-        <?php elseif ( $plugin['required'] ) : ?>
-            <span class="dashicons dashicons-dismiss status-error"></span>
         <?php else : ?>
             <span class="dashicons dashicons-marker status-inactive"></span>
         <?php endif; ?>
@@ -30,10 +28,9 @@ $plugin_detector = new \CreatorCore\Integrations\PluginDetector();
             <span class="creator-plugin-version">v<?php echo esc_html( $plugin['version'] ); ?></span>
         <?php endif; ?>
 
-        <?php if ( $plugin['required'] ) : ?>
-            <span class="creator-plugin-badge required"><?php esc_html_e( 'Required', 'creator-core' ); ?></span>
-        <?php else : ?>
-            <span class="creator-plugin-badge optional"><?php esc_html_e( 'Recommended', 'creator-core' ); ?></span>
+        <span class="creator-plugin-badge optional"><?php esc_html_e( 'Suggested', 'creator-core' ); ?></span>
+        <?php if ( ! empty( $plugin['benefit'] ) ) : ?>
+            <span class="creator-plugin-benefit"><?php echo esc_html( $plugin['benefit'] ); ?></span>
         <?php endif; ?>
     </div>
 
@@ -49,11 +46,9 @@ $plugin_detector = new \CreatorCore\Integrations\PluginDetector();
                 <?php esc_html_e( 'Activate', 'creator-core' ); ?>
             </button>
         <?php elseif ( ! $plugin['installed'] ) : ?>
-            <?php if ( ! $plugin['required'] ) : ?>
-                <button type="button" class="creator-btn creator-btn-sm creator-btn-link creator-skip-plugin">
-                    <?php esc_html_e( 'Skip', 'creator-core' ); ?>
-                </button>
-            <?php endif; ?>
+            <button type="button" class="creator-btn creator-btn-sm creator-btn-link creator-skip-plugin">
+                <?php esc_html_e( 'Skip', 'creator-core' ); ?>
+            </button>
             <a href="<?php echo esc_url( $plugin_detector->get_install_url( $key ) ); ?>"
                class="creator-btn creator-btn-sm creator-btn-primary"
                target="_blank">

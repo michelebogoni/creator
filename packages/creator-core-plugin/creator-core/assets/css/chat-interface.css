@@ -772,3 +772,236 @@
         padding: 6px 10px;
     }
 }
+
+/* ==========================================================================
+   File Attachments
+   ========================================================================== */
+
+/* Attachment Button */
+.creator-attach-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--creator-gray-500);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.creator-attach-btn:hover {
+    background: var(--creator-gray-100);
+    color: var(--creator-primary);
+}
+
+.creator-attach-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--creator-primary-light);
+}
+
+.creator-attach-btn .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+/* Attachment Preview Container */
+.creator-attachment-preview {
+    padding: 12px 16px;
+    background: var(--creator-gray-50);
+    border-bottom: 1px solid var(--creator-gray-200);
+    border-radius: 12px 12px 0 0;
+}
+
+.creator-attachment-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Individual Attachment Item */
+.creator-attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--creator-white);
+    border: 1px solid var(--creator-gray-200);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--creator-gray-700);
+    max-width: 200px;
+}
+
+.creator-attachment-item:hover {
+    border-color: var(--creator-gray-300);
+}
+
+.creator-attachment-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--creator-gray-100);
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.creator-attachment-icon .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--creator-gray-600);
+}
+
+/* Icon colors by file type */
+.creator-attachment-icon.icon-image {
+    background: #e3f2fd;
+}
+
+.creator-attachment-icon.icon-image .dashicons {
+    color: #1976d2;
+}
+
+.creator-attachment-icon.icon-pdf {
+    background: #ffebee;
+}
+
+.creator-attachment-icon.icon-pdf .dashicons {
+    color: #d32f2f;
+}
+
+.creator-attachment-icon.icon-code {
+    background: #e8f5e9;
+}
+
+.creator-attachment-icon.icon-code .dashicons {
+    color: #388e3c;
+}
+
+.creator-attachment-icon.icon-document {
+    background: #fff3e0;
+}
+
+.creator-attachment-icon.icon-document .dashicons {
+    color: #f57c00;
+}
+
+.creator-attachment-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.creator-attachment-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.creator-attachment-size {
+    font-size: 11px;
+    color: var(--creator-gray-500);
+}
+
+/* Remove Attachment Button */
+.creator-attachment-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--creator-gray-400);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.creator-attachment-remove:hover {
+    background: var(--creator-gray-200);
+    color: var(--creator-error);
+}
+
+.creator-attachment-remove .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+/* Attachment Info Text (max files notice) */
+.creator-input-info .creator-attachment-info {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--creator-gray-500);
+}
+
+.creator-input-info .creator-attachment-info .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+/* Message Attachments Display */
+.creator-message-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--creator-gray-200);
+}
+
+.creator-message-attachment {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--creator-gray-50);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--creator-gray-600);
+}
+
+.creator-message-attachment .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+/* Image attachment thumbnail in messages */
+.creator-message-attachment-image {
+    max-width: 200px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.creator-message-attachment-image:hover {
+    transform: scale(1.02);
+}
+
+/* Responsive adjustments for attachments */
+@media (max-width: 600px) {
+    .creator-attachment-item {
+        max-width: 150px;
+    }
+
+    .creator-attachment-preview {
+        padding: 8px 12px;
+    }
+}

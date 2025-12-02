@@ -55,6 +55,20 @@ class AuditLogger {
      */
     public function __construct() {
         $this->log_level = get_option( 'creator_log_level', self::LEVEL_INFO );
+
+        // Register hook listener for audit logging from other components
+        add_action( 'creator_audit_log', [ $this, 'handle_audit_hook' ], 10, 2 );
+    }
+
+    /**
+     * Handle audit log hook from other components
+     *
+     * @param string $action Action identifier.
+     * @param array  $details Additional details.
+     * @return void
+     */
+    public function handle_audit_hook( string $action, array $details = [] ): void {
+        $this->log( $action, self::STATUS_SUCCESS, $details );
     }
 
     /**
