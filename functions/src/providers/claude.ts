@@ -14,6 +14,7 @@ import {
   AIResponse,
   GenerateOptions,
   AIProviderError,
+  FileAttachment,
   calculateCost,
   DEFAULT_GENERATE_OPTIONS,
   DEFAULT_RETRY_CONFIG,
@@ -114,18 +115,22 @@ export class ClaudeProvider implements IAIProvider {
       temperature,
       max_tokens: maxTokens,
       prompt_length: prompt.length,
+      files_count: options?.files?.length || 0,
     });
 
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
       try {
+        // Build message content with text and optional file attachments
+        const messageContent = this.buildMessageContent(prompt, options?.files);
+
         const response = await this.client.messages.create({
           model,
           max_tokens: maxTokens,
           temperature,
           system: options?.system_prompt,
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content: messageContent }],
         });
 
         const latencyMs = Date.now() - startTime;
@@ -224,6 +229,70 @@ export class ClaudeProvider implements IAIProvider {
       error: lastError?.message || "Unknown error",
       error_code: "UNKNOWN_ERROR",
     };
+  }
+
+  /**
+   * Builds message content array for multimodal requests
+   *
+   * @param {string} prompt - Text prompt
+   * @param {FileAttachment[]} files - Optional file attachments
+   * @returns {string | Array} Content for message - string if no files, array if multimodal
+   * @private
+   */
+  private buildMessageContent(
+    prompt: string,
+    files?: FileAttachment[]
+  ): string | Anthropic.MessageCreateParams["messages"][0]["content"] {
+    // If no files, return simple string
+    if (!files || files.length === 0) {
+      return prompt;
+    }
+
+    // Build content blocks array for multimodal
+    const contentBlocks: Anthropic.MessageCreateParams["messages"][0]["content"] = [];
+
+    // Add file blocks first (Claude processes them in order)
+    for (const file of files) {
+      // Only process supported image types for Claude
+      const supportedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+      if (!supportedTypes.includes(file.type)) {
+        this.logger.warn("Unsupported file type for Claude, skipping", {
+          file_name: file.name,
+          file_type: file.type,
+        });
+        continue;
+      }
+
+      // Remove data URI prefix if present (e.g., "data:image/png;base64,")
+      let base64Data = file.base64;
+      if (base64Data.includes(",")) {
+        base64Data = base64Data.split(",")[1];
+      }
+
+      contentBlocks.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: file.type as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+          data: base64Data,
+        },
+      });
+
+      this.logger.debug("Added file to Claude request", {
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+      });
+    }
+
+    // Add text prompt last
+    contentBlocks.push({
+      type: "text",
+      text: prompt,
+    });
+
+    return contentBlocks;
   }
 
   /**

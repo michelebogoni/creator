@@ -7,7 +7,7 @@
  * AI generation requests with automatic provider fallback.
  */
 
-import { ProviderName } from "./AIProvider";
+import { ProviderName, FileAttachment } from "./AIProvider";
 
 /**
  * Supported task types for AI routing
@@ -71,6 +71,21 @@ export interface RouteRequest {
    * Chat session ID for model locking
    */
   chat_id?: string;
+
+  /**
+   * File attachments for multimodal requests
+   * Supports images (JPEG, PNG, GIF, WebP), PDFs, and documents
+   */
+  files?: FileAttachment[];
+
+  /**
+   * Additional options passed from WordPress
+   * May contain files under options.files for backwards compatibility
+   */
+  options?: {
+    files?: FileAttachment[];
+    [key: string]: unknown;
+  };
 }
 
 /**

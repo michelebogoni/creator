@@ -51,6 +51,16 @@ export function isValidModel(model: string): model is AIModel {
 }
 
 /**
+ * File attachment for multimodal requests
+ */
+export interface FileAttachment {
+  name: string;
+  type: string;
+  size: number;
+  base64: string;
+}
+
+/**
  * Model request interface
  */
 export interface ModelRequest {
@@ -74,6 +84,9 @@ export interface ModelRequest {
 
   /** Max tokens */
   max_tokens?: number;
+
+  /** File attachments for multimodal */
+  files?: FileAttachment[];
 }
 
 /**
