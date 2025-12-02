@@ -13,6 +13,33 @@
 export type ProviderName = "openai" | "gemini" | "claude";
 
 /**
+ * File attachment for multimodal requests
+ *
+ * @interface FileAttachment
+ */
+export interface FileAttachment {
+  /**
+   * File name
+   */
+  name: string;
+
+  /**
+   * MIME type (e.g., "image/png", "application/pdf")
+   */
+  type: string;
+
+  /**
+   * File size in bytes
+   */
+  size: number;
+
+  /**
+   * Base64 encoded file data (may include data URI prefix)
+   */
+  base64: string;
+}
+
+/**
  * Options for AI generation requests
  *
  * @interface GenerateOptions
@@ -42,6 +69,12 @@ export interface GenerateOptions {
    * Sets the behavior and context for the model
    */
   system_prompt?: string;
+
+  /**
+   * File attachments for multimodal requests
+   * Supports images (JPEG, PNG, GIF, WebP), PDFs, and documents
+   */
+  files?: FileAttachment[];
 }
 
 /**
@@ -351,7 +384,7 @@ export function calculateCost(
 /**
  * Default generation options
  */
-export const DEFAULT_GENERATE_OPTIONS: Required<Omit<GenerateOptions, "system_prompt" | "model">> = {
+export const DEFAULT_GENERATE_OPTIONS: Required<Omit<GenerateOptions, "system_prompt" | "model" | "files">> = {
   temperature: 0.7,
   max_tokens: 4096,
 };

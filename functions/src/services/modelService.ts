@@ -259,6 +259,7 @@ export class ModelService {
           temperature: request.temperature ?? 0.7,
           max_tokens: request.max_tokens ?? 8000,
           system_prompt: systemPrompt,
+          files: request.files,
         });
       } else {
         const provider = new ClaudeProvider(this.keys.claude, modelId);
@@ -266,6 +267,7 @@ export class ModelService {
           temperature: request.temperature ?? 0.7,
           max_tokens: request.max_tokens ?? 8000,
           system_prompt: systemPrompt,
+          files: request.files,
         });
       }
 

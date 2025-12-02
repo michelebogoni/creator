@@ -19,6 +19,7 @@ import {
   AIResponse,
   GenerateOptions,
   AIProviderError,
+  FileAttachment,
   calculateCost,
   DEFAULT_GENERATE_OPTIONS,
   DEFAULT_RETRY_CONFIG,
@@ -164,6 +165,7 @@ export class GeminiProvider implements IAIProvider {
       temperature,
       max_tokens: maxTokens,
       prompt_length: prompt.length,
+      files_count: options?.files?.length || 0,
     });
 
     let lastError: Error | null = null;
@@ -176,7 +178,9 @@ export class GeminiProvider implements IAIProvider {
           options?.system_prompt
         );
 
-        const result = await model.generateContent(prompt);
+        // Build content parts - text first, then files
+        const contentParts = this.buildContentParts(prompt, options?.files);
+        const result = await model.generateContent(contentParts);
         const response = result.response;
         const content = response.text();
 
@@ -268,6 +272,67 @@ export class GeminiProvider implements IAIProvider {
       error: lastError?.message || "Unknown error",
       error_code: "UNKNOWN_ERROR",
     };
+  }
+
+  /**
+   * Builds content parts array for multimodal requests
+   *
+   * @param {string} prompt - Text prompt
+   * @param {FileAttachment[]} files - Optional file attachments
+   * @returns {Array} Content parts for generateContent
+   * @private
+   */
+  private buildContentParts(
+    prompt: string,
+    files?: FileAttachment[]
+  ): Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> {
+    // Start with text part
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+      { text: prompt },
+    ];
+
+    // Add file parts if present
+    if (files && files.length > 0) {
+      for (const file of files) {
+        // Only process supported image types for Gemini
+        const supportedTypes = [
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+          "application/pdf",
+        ];
+
+        if (!supportedTypes.includes(file.type)) {
+          this.logger.warn("Unsupported file type for Gemini, skipping", {
+            file_name: file.name,
+            file_type: file.type,
+          });
+          continue;
+        }
+
+        // Remove data URI prefix if present (e.g., "data:image/png;base64,")
+        let base64Data = file.base64;
+        if (base64Data.includes(",")) {
+          base64Data = base64Data.split(",")[1];
+        }
+
+        parts.push({
+          inlineData: {
+            mimeType: file.type,
+            data: base64Data,
+          },
+        });
+
+        this.logger.debug("Added file to Gemini request", {
+          file_name: file.name,
+          file_type: file.type,
+          file_size: file.size,
+        });
+      }
+    }
+
+    return parts;
   }
 
   /**

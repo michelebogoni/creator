@@ -252,6 +252,9 @@ export const routeRequest = onRequest(
         logger
       );
 
+      // Extract files from body.files or body.options.files (backwards compatibility)
+      const files = body.files || body.options?.files;
+
       const result = await modelService.generate({
         model: selectedModel,
         prompt: sanitizedPrompt,
@@ -260,6 +263,7 @@ export const routeRequest = onRequest(
         chat_id: body.chat_id,
         temperature: body.temperature,
         max_tokens: body.max_tokens,
+        files: files,
       });
 
       // 6. Handle result
