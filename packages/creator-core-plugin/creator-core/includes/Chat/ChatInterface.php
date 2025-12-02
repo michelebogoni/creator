@@ -617,11 +617,14 @@ class ChatInterface {
             $display_message .= "\n\n" . $this->format_loaded_context( $parsed_response['context_data'] );
         }
 
+        // Ensure message_type is always a string
+        $message_type = ! empty( $parsed_response['has_actions'] ) ? 'action' : 'text';
+
         $assistant_message_id = $this->message_handler->save_message(
             $chat_id,
             $display_message,
             'assistant',
-            $parsed_response['has_actions'] ? 'action' : 'text',
+            $message_type,
             $message_metadata
         );
 
