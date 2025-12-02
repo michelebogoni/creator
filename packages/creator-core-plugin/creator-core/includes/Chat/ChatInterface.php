@@ -15,6 +15,7 @@ use CreatorCore\Backup\SnapshotManager;
 use CreatorCore\Audit\AuditLogger;
 use CreatorCore\User\UserProfile;
 use CreatorCore\Context\CreatorContext;
+use CreatorCore\Context\ContextLoader;
 use CreatorCore\Executor\CodeExecutor;
 use CreatorCore\Executor\ExecutionVerifier;
 
@@ -87,6 +88,13 @@ class ChatInterface {
      * @var ExecutionVerifier|null
      */
     private ?ExecutionVerifier $execution_verifier = null;
+
+    /**
+     * Context loader instance
+     *
+     * @var ContextLoader|null
+     */
+    private ?ContextLoader $context_loader = null;
 
     /**
      * Constructor
@@ -166,6 +174,18 @@ class ChatInterface {
             $this->execution_verifier = new ExecutionVerifier( $this->logger );
         }
         return $this->execution_verifier;
+    }
+
+    /**
+     * Get context loader (with lazy initialization)
+     *
+     * @return ContextLoader
+     */
+    private function get_context_loader(): ContextLoader {
+        if ( $this->context_loader === null ) {
+            $this->context_loader = new ContextLoader();
+        }
+        return $this->context_loader;
     }
 
     /**
@@ -603,6 +623,14 @@ class ChatInterface {
             error_log( 'Creator: Error getting context: ' . $e->getMessage() );
         }
 
+        // Add lazy-load capabilities info
+        $system_prompt .= "## On-Demand Details\n";
+        $system_prompt .= "Need plugin/ACF/CPT details? Use context_request action:\n";
+        $system_prompt .= '{"type": "get_plugin_details", "params": {"slug": "plugin-slug"}}' . "\n";
+        $system_prompt .= '{"type": "get_acf_details", "params": {"group": "Group Title"}}' . "\n";
+        $system_prompt .= '{"type": "get_cpt_details", "params": {"post_type": "cpt_slug"}}' . "\n";
+        $system_prompt .= '{"type": "get_wp_functions", "params": {"category": "wordpress|woocommerce|acf|elementor|database"}}' . "\n\n";
+
         // Add response format specification to system prompt
         $system_prompt .= "## Response Format\n";
         $system_prompt .= "ALWAYS respond with valid JSON:\n";
@@ -755,6 +783,11 @@ class ChatInterface {
                 $parsed['phase'] = $phase_detection['phase'];
             }
 
+            // Handle context request actions (lazy-load)
+            if ( ! empty( $parsed['actions'] ) ) {
+                $parsed['context_data'] = $this->handle_context_requests( $parsed['actions'] );
+            }
+
             // Handle code execution if in execution phase
             if ( $parsed['phase'] === PhaseDetector::PHASE_EXECUTION && ! empty( $parsed['code'] ) ) {
                 $execution_result = $this->handle_code_execution( $parsed['code'] );
@@ -860,6 +893,42 @@ class ChatInterface {
 
         // Run verification
         return $this->get_execution_verifier()->verify( $action_type, $expected, $context );
+    }
+
+    /**
+     * Handle context request actions (lazy-load)
+     *
+     * @param array $actions Actions from AI response.
+     * @return array Context data loaded on-demand.
+     */
+    private function handle_context_requests( array $actions ): array {
+        $context_data = [];
+        $context_types = [
+            'get_plugin_details',
+            'get_acf_details',
+            'get_cpt_details',
+            'get_taxonomy_details',
+            'get_wp_functions',
+        ];
+
+        foreach ( $actions as $action ) {
+            $type = $action['type'] ?? '';
+
+            if ( in_array( $type, $context_types, true ) ) {
+                try {
+                    $result = $this->get_context_loader()->handle_context_request( $action );
+                    $context_data[ $type ] = $result;
+                } catch ( \Throwable $e ) {
+                    error_log( 'Creator: Context request error: ' . $e->getMessage() );
+                    $context_data[ $type ] = [
+                        'success' => false,
+                        'error'   => $e->getMessage(),
+                    ];
+                }
+            }
+        }
+
+        return $context_data;
     }
 
     /**
