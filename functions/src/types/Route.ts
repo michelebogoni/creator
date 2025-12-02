@@ -213,8 +213,9 @@ export function isValidTaskType(taskType: string): taskType is TaskType {
 
 /**
  * Maximum prompt length in characters
+ * Safety ceiling - actual prompts should be much smaller due to compression
  */
-export const MAX_PROMPT_LENGTH = 10000;
+export const MAX_PROMPT_LENGTH = 100000;
 
 /**
  * Minimum quota threshold for warnings
