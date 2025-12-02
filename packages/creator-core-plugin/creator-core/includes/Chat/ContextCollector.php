@@ -600,8 +600,23 @@ class ContextCollector {
             return false;
         }
 
-        $document = \Elementor\Plugin::$instance->documents->get( $post_id );
-        return $document && $document->is_built_with_elementor();
+        // Check if Elementor instance is initialized
+        if ( ! isset( \Elementor\Plugin::$instance ) || ! \Elementor\Plugin::$instance ) {
+            return false;
+        }
+
+        // Check if documents manager is available
+        if ( ! isset( \Elementor\Plugin::$instance->documents ) || ! \Elementor\Plugin::$instance->documents ) {
+            return false;
+        }
+
+        try {
+            $document = \Elementor\Plugin::$instance->documents->get( $post_id );
+            return $document && $document->is_built_with_elementor();
+        } catch ( \Throwable $e ) {
+            // If Elementor throws an error, assume not built with Elementor
+            return false;
+        }
     }
 
     /**

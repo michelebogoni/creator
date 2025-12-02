@@ -384,7 +384,15 @@ class ChatInterface {
         }
 
         // Save user message
-        $user_message_id = $this->message_handler->save_message( $chat_id, $content, 'user' );
+        try {
+            $user_message_id = $this->message_handler->save_message( $chat_id, $content, 'user' );
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error saving user message: ' . $e->getMessage() );
+            return [
+                'success' => false,
+                'error'   => 'Error saving message: ' . $e->getMessage(),
+            ];
+        }
 
         if ( ! $user_message_id ) {
             return [
@@ -394,30 +402,65 @@ class ChatInterface {
         }
 
         // Build context
-        $context_collector = new ContextCollector();
-        $context          = $context_collector->get_wordpress_context();
+        try {
+            $context_collector = new ContextCollector();
+            $context           = $context_collector->get_wordpress_context();
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error collecting context: ' . $e->getMessage() );
+            return [
+                'success' => false,
+                'error'   => 'Error collecting context: ' . $e->getMessage(),
+            ];
+        }
 
         // Build conversation history
-        $history = $this->build_conversation_history( $chat_id );
+        try {
+            $history = $this->build_conversation_history( $chat_id );
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error building history: ' . $e->getMessage() );
+            $history = [];
+        }
 
         // Extract pending actions from previous messages
-        $pending_actions = $this->extract_pending_actions( $chat_id );
+        try {
+            $pending_actions = $this->extract_pending_actions( $chat_id );
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error extracting pending actions: ' . $e->getMessage() );
+            $pending_actions = [];
+        }
 
         // Prepare prompt with context (include pending actions info)
-        $prompt = $this->prepare_prompt( $content, $context, $history, $pending_actions );
+        try {
+            $prompt = $this->prepare_prompt( $content, $context, $history, $pending_actions );
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error preparing prompt: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
+            return [
+                'success' => false,
+                'error'   => 'Error preparing prompt: ' . $e->getMessage(),
+            ];
+        }
 
         // Get the chat's AI model (locked per chat)
         $ai_model = $chat['ai_model'] ?? UserProfile::get_default_model();
 
         // Send to AI
-        $ai_response = $this->proxy_client->send_to_ai( $prompt, 'TEXT_GEN', [
-            'chat_id'         => $chat_id,
-            'message_id'      => $user_message_id,
-            'user_message'    => $content, // Original user message for mock mode intent detection
-            'pending_actions' => $pending_actions, // Pending actions for confirmation handling
-            'conversation'    => $history, // Conversation history for context extraction
-            'model'           => $ai_model, // AI model (gemini or claude)
-        ]);
+        try {
+            $ai_response = $this->proxy_client->send_to_ai( $prompt, 'TEXT_GEN', [
+                'chat_id'         => $chat_id,
+                'message_id'      => $user_message_id,
+                'user_message'    => $content, // Original user message for mock mode intent detection
+                'pending_actions' => $pending_actions, // Pending actions for confirmation handling
+                'conversation'    => $history, // Conversation history for context extraction
+                'model'           => $ai_model, // AI model (gemini or claude)
+            ]);
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error sending to AI: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
+            return [
+                'success'         => false,
+                'user_message_id' => $user_message_id,
+                'error'           => 'Error sending to AI: ' . $e->getMessage(),
+            ];
+        }
 
         if ( ! $ai_response['success'] ) {
             // Save error as assistant message
@@ -439,7 +482,16 @@ class ChatInterface {
         // Parse AI response
         // Firebase returns 'content' key, not 'response'
         $ai_content = $ai_response['content'] ?? $ai_response['response'] ?? '';
-        $parsed_response = $this->parse_ai_response( $ai_content );
+        try {
+            $parsed_response = $this->parse_ai_response( $ai_content );
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error parsing AI response: ' . $e->getMessage() );
+            $parsed_response = [
+                'message'     => $ai_content,
+                'actions'     => [],
+                'has_actions' => false,
+            ];
+        }
 
         // Save assistant message
         // Map Firebase response keys to expected format
@@ -520,17 +572,32 @@ class ChatInterface {
      */
     private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [] ): string {
         // Get comprehensive Creator Context (stored document)
-        $creator_context_prompt = $this->get_creator_context()->get_context_as_prompt();
+        $creator_context_prompt = '';
+        try {
+            $creator_context_prompt = $this->get_creator_context()->get_context_as_prompt();
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error getting context as prompt: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
+        }
 
         // If no stored context, fall back to legacy method
         if ( empty( $creator_context_prompt ) ) {
-            $context_collector = new ContextCollector();
-            $creator_context_prompt = $context_collector->get_maxi_onboarding_summary();
+            try {
+                $context_collector = new ContextCollector();
+                $creator_context_prompt = $context_collector->get_maxi_onboarding_summary();
+            } catch ( \Throwable $e ) {
+                error_log( 'Creator: Error getting maxi onboarding: ' . $e->getMessage() );
+                $creator_context_prompt = ''; // Use empty context as fallback
+            }
         }
 
         // Detect user input type and determine expected phase
         $prev_phase = $this->get_last_phase( $history );
-        $input_classification = $this->get_phase_detector()->classify_user_input( $user_message, $prev_phase );
+        $input_classification = [ 'type' => 'new_request', 'next_phase' => 'discovery' ]; // Default
+        try {
+            $input_classification = $this->get_phase_detector()->classify_user_input( $user_message, $prev_phase );
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error classifying input: ' . $e->getMessage() );
+        }
 
         $prompt = "You are Creator, an AI assistant for WordPress automation.\n\n";
 
