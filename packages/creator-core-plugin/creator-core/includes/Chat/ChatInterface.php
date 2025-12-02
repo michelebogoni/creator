@@ -14,6 +14,9 @@ use CreatorCore\Permission\CapabilityChecker;
 use CreatorCore\Backup\SnapshotManager;
 use CreatorCore\Audit\AuditLogger;
 use CreatorCore\User\UserProfile;
+use CreatorCore\Context\CreatorContext;
+use CreatorCore\Executor\CodeExecutor;
+use CreatorCore\Executor\ExecutionVerifier;
 
 /**
  * Class ChatInterface
@@ -58,6 +61,34 @@ class ChatInterface {
     private MessageHandler $message_handler;
 
     /**
+     * Creator context instance
+     *
+     * @var CreatorContext
+     */
+    private CreatorContext $creator_context;
+
+    /**
+     * Phase detector instance
+     *
+     * @var PhaseDetector
+     */
+    private PhaseDetector $phase_detector;
+
+    /**
+     * Code executor instance
+     *
+     * @var CodeExecutor
+     */
+    private CodeExecutor $code_executor;
+
+    /**
+     * Execution verifier instance
+     *
+     * @var ExecutionVerifier
+     */
+    private ExecutionVerifier $execution_verifier;
+
+    /**
      * Constructor
      *
      * @param ProxyClient       $proxy_client       Proxy client instance.
@@ -76,6 +107,10 @@ class ChatInterface {
         $this->snapshot_manager   = $snapshot_manager;
         $this->logger             = $logger;
         $this->message_handler    = new MessageHandler( $logger );
+        $this->creator_context    = new CreatorContext();
+        $this->phase_detector     = new PhaseDetector();
+        $this->code_executor      = new CodeExecutor();
+        $this->execution_verifier = new ExecutionVerifier( $logger );
     }
 
     /**
@@ -420,36 +455,34 @@ class ChatInterface {
     /**
      * Prepare prompt with context
      *
+     * Uses the new CreatorContext system for comprehensive context injection.
+     *
      * @param string $user_message    User's message.
-     * @param array  $context         WordPress context.
+     * @param array  $context         WordPress context (legacy, kept for compatibility).
      * @param array  $history         Conversation history.
      * @param array  $pending_actions Pending actions from previous messages.
      * @return string
      */
     private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [] ): string {
-        $context_collector = new ContextCollector();
-        $context_summary   = $context_collector->get_context_summary();
+        // Get comprehensive Creator Context (stored document)
+        $creator_context_prompt = $this->creator_context->get_context_as_prompt();
 
-        // Get user profile AI instructions (level-specific behavior)
-        $user_level      = UserProfile::get_level();
-        $ai_instructions = UserProfile::get_ai_instructions( $user_level );
+        // If no stored context, fall back to legacy method
+        if ( empty( $creator_context_prompt ) ) {
+            $context_collector = new ContextCollector();
+            $creator_context_prompt = $context_collector->get_maxi_onboarding_summary();
+        }
 
-        // Get maxi-onboarding summary for comprehensive site context
-        $maxi_onboarding = $context_collector->get_maxi_onboarding_summary();
+        // Detect user input type and determine expected phase
+        $prev_phase = $this->get_last_phase( $history );
+        $input_classification = $this->phase_detector->classify_user_input( $user_message, $prev_phase );
 
-        $prompt = "You are Creator, an AI assistant for WordPress development.\n\n";
+        $prompt = "You are Creator, an AI assistant for WordPress automation.\n\n";
 
-        // Include AI behavior instructions based on user level
-        $prompt .= "## Your Behavior Guidelines\n";
-        $prompt .= $ai_instructions . "\n\n";
+        // Include the full Creator Context document
+        $prompt .= $creator_context_prompt . "\n\n";
 
-        // Include maxi-onboarding (comprehensive site context)
-        $prompt .= "## Site Overview (Maxi-Onboarding)\n";
-        $prompt .= $maxi_onboarding . "\n\n";
-
-        $prompt .= "## Current WordPress Environment\n";
-        $prompt .= $context_summary . "\n\n";
-
+        // Include conversation history
         if ( ! empty( $history ) ) {
             $prompt .= "## Conversation History\n";
             foreach ( $history as $msg ) {
@@ -466,20 +499,51 @@ class ChatInterface {
             }
             $prompt .= "\n";
             $prompt .= "IMPORTANT: If the user is confirming these actions (saying 'yes', 'ok', 'proceed', 'si', 'procedi', etc.), ";
-            $prompt .= "you should execute them. If they are rejecting (saying 'no', 'cancel', 'annulla', etc.), cancel the actions.\n\n";
+            $prompt .= "set action status to 'ready' and include executable code. ";
+            $prompt .= "If they are rejecting (saying 'no', 'cancel', 'annulla', etc.), cancel the actions.\n\n";
         }
+
+        // User input context
+        $prompt .= "## User Input Analysis\n";
+        $prompt .= sprintf( "- Input type: %s\n", $input_classification['type'] );
+        $prompt .= sprintf( "- Expected next phase: %s\n", $input_classification['next_phase'] );
+        $prompt .= sprintf( "- Previous phase: %s\n\n", $prev_phase ?: 'none' );
 
         $prompt .= "## User Request\n";
         $prompt .= $user_message . "\n\n";
 
         $prompt .= "## Response Format\n";
         $prompt .= "ALWAYS respond with valid JSON in this format:\n";
+        $prompt .= "```json\n";
         $prompt .= "{\n";
+        $prompt .= '  "phase": "discovery|proposal|execution",' . "\n";
         $prompt .= '  "intent": "action_type or conversation",' . "\n";
         $prompt .= '  "confidence": 0.0-1.0,' . "\n";
-        $prompt .= '  "actions": [{"type": "action_name", "params": {...}, "status": "pending|ready"}],' . "\n";
-        $prompt .= '  "message": "Your message to the user in their language"' . "\n";
-        $prompt .= "}\n\n";
+        $prompt .= '  "message": "Your message to the user in their language",' . "\n";
+        $prompt .= '  "questions": ["question1", "question2"] // only in discovery phase,' . "\n";
+        $prompt .= '  "plan": { // only in proposal phase' . "\n";
+        $prompt .= '    "summary": "What will be done",' . "\n";
+        $prompt .= '    "steps": ["step1", "step2"],' . "\n";
+        $prompt .= '    "estimated_credits": 10,' . "\n";
+        $prompt .= '    "risks": ["risk1"],' . "\n";
+        $prompt .= '    "rollback_possible": true' . "\n";
+        $prompt .= '  },' . "\n";
+        $prompt .= '  "code": { // only in execution phase' . "\n";
+        $prompt .= '    "type": "wpcode_snippet|direct_execution",' . "\n";
+        $prompt .= '    "title": "Descriptive title",' . "\n";
+        $prompt .= '    "description": "What this code does",' . "\n";
+        $prompt .= '    "language": "php",' . "\n";
+        $prompt .= '    "content": "<?php // your code here",' . "\n";
+        $prompt .= '    "location": "everywhere|frontend|admin",' . "\n";
+        $prompt .= '    "auto_execute": false // true only after user confirmation' . "\n";
+        $prompt .= '  },' . "\n";
+        $prompt .= '  "actions": [{"type": "action_name", "params": {...}, "status": "pending|ready"}]' . "\n";
+        $prompt .= "}\n";
+        $prompt .= "```\n\n";
+        $prompt .= "Phase meanings:\n";
+        $prompt .= "- 'discovery': You need more information. Ask clarifying questions.\n";
+        $prompt .= "- 'proposal': You have enough info. Propose a plan and ask for confirmation.\n";
+        $prompt .= "- 'execution': User confirmed. Generate and execute code.\n\n";
         $prompt .= "Action status meanings:\n";
         $prompt .= "- 'pending': Action needs user confirmation before execution\n";
         $prompt .= "- 'ready': User has confirmed, action should be executed immediately\n\n";
@@ -487,6 +551,26 @@ class ChatInterface {
         $prompt .= "Always respond in the same language the user is using.";
 
         return $prompt;
+    }
+
+    /**
+     * Get the last phase from conversation history
+     *
+     * @param array $history Conversation history.
+     * @return string|null
+     */
+    private function get_last_phase( array $history ): ?string {
+        // Look for the last assistant message and try to detect its phase
+        for ( $i = count( $history ) - 1; $i >= 0; $i-- ) {
+            if ( $history[ $i ]['role'] === 'assistant' ) {
+                $content = $history[ $i ]['content'];
+                // Try to extract phase from JSON response
+                if ( preg_match( '/"phase"\s*:\s*"(discovery|proposal|execution)"/', $content, $matches ) ) {
+                    return $matches[1];
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -549,13 +633,36 @@ class ChatInterface {
         $json = json_decode( $cleaned_response, true );
 
         if ( json_last_error() === JSON_ERROR_NONE && is_array( $json ) ) {
-            return [
+            $parsed = [
                 'message'     => $json['message'] ?? $response,
                 'actions'     => $json['actions'] ?? [],
                 'intent'      => $json['intent'] ?? null,
                 'confidence'  => $json['confidence'] ?? 0,
                 'has_actions' => ! empty( $json['actions'] ),
+                'phase'       => $json['phase'] ?? null,
+                'questions'   => $json['questions'] ?? [],
+                'plan'        => $json['plan'] ?? null,
+                'code'        => $json['code'] ?? null,
             ];
+
+            // Detect phase if not explicit
+            if ( empty( $parsed['phase'] ) ) {
+                $phase_detection = $this->phase_detector->detect_phase( $json );
+                $parsed['phase'] = $phase_detection['phase'];
+            }
+
+            // Handle code execution if in execution phase
+            if ( $parsed['phase'] === PhaseDetector::PHASE_EXECUTION && ! empty( $parsed['code'] ) ) {
+                $execution_result = $this->handle_code_execution( $parsed['code'] );
+                $parsed['execution'] = $execution_result;
+
+                // If execution was successful, run verification
+                if ( $execution_result['success'] ) {
+                    $parsed['verification'] = $this->handle_verification( $parsed );
+                }
+            }
+
+            return $parsed;
         }
 
         // Plain text response
@@ -565,7 +672,90 @@ class ChatInterface {
             'intent'      => 'conversation',
             'confidence'  => 1.0,
             'has_actions' => false,
+            'phase'       => PhaseDetector::PHASE_DISCOVERY,
+            'questions'   => [],
+            'plan'        => null,
+            'code'        => null,
         ];
+    }
+
+    /**
+     * Handle code execution from AI response
+     *
+     * @param array $code_data Code data from AI response.
+     * @return array Execution result.
+     */
+    private function handle_code_execution( array $code_data ): array {
+        // Only execute if auto_execute is true (user confirmed)
+        $auto_execute = $code_data['auto_execute'] ?? false;
+
+        if ( ! $auto_execute ) {
+            return [
+                'success'  => false,
+                'status'   => 'pending_confirmation',
+                'message'  => 'Code requires user confirmation before execution',
+            ];
+        }
+
+        // Execute the code
+        $result = $this->code_executor->execute( $code_data );
+
+        // Log execution
+        $this->logger->log(
+            'code_execution',
+            $result['success'] ? 'success' : 'failure',
+            [
+                'code_type'  => $code_data['type'] ?? 'unknown',
+                'title'      => $code_data['title'] ?? 'Untitled',
+                'result'     => $result['status'],
+                'snippet_id' => $result['snippet_id'] ?? null,
+            ]
+        );
+
+        return $result;
+    }
+
+    /**
+     * Handle verification after code execution
+     *
+     * @param array $parsed_response Parsed AI response.
+     * @return array Verification result.
+     */
+    private function handle_verification( array $parsed_response ): array {
+        // Determine action type from intent or actions
+        $action_type = $parsed_response['intent'] ?? 'generic';
+
+        // Try to get action type from actions array
+        if ( ! empty( $parsed_response['actions'] ) ) {
+            $first_action = $parsed_response['actions'][0];
+            $action_type = $first_action['type'] ?? $action_type;
+        }
+
+        // Build expected parameters from response
+        $expected = [];
+
+        // Extract expected values from plan or actions
+        if ( ! empty( $parsed_response['plan'] ) ) {
+            $expected = $parsed_response['plan'];
+        }
+
+        if ( ! empty( $parsed_response['actions'] ) ) {
+            foreach ( $parsed_response['actions'] as $action ) {
+                if ( isset( $action['params'] ) ) {
+                    $expected = array_merge( $expected, $action['params'] );
+                }
+            }
+        }
+
+        // Add execution context
+        $context = [
+            'success'    => $parsed_response['execution']['success'] ?? false,
+            'snippet_id' => $parsed_response['execution']['snippet_id'] ?? null,
+            'result_id'  => $parsed_response['execution']['data'] ?? null,
+        ];
+
+        // Run verification
+        return $this->execution_verifier->verify( $action_type, $expected, $context );
     }
 
     /**

@@ -25,6 +25,7 @@ $settings_page = new \CreatorCore\Admin\Settings(
             <nav class="creator-tabs-nav">
                 <a href="#api" class="creator-tab active" data-tab="api"><?php esc_html_e( 'API Configuration', 'creator-core' ); ?></a>
                 <a href="#profile" class="creator-tab" data-tab="profile"><?php esc_html_e( 'Your Profile', 'creator-core' ); ?></a>
+                <a href="#context" class="creator-tab" data-tab="context"><?php esc_html_e( 'AI Context', 'creator-core' ); ?></a>
                 <a href="#backup" class="creator-tab" data-tab="backup"><?php esc_html_e( 'Backup Settings', 'creator-core' ); ?></a>
                 <a href="#integrations" class="creator-tab" data-tab="integrations"><?php esc_html_e( 'Integrations', 'creator-core' ); ?></a>
                 <a href="#permissions" class="creator-tab" data-tab="permissions"><?php esc_html_e( 'Permissions', 'creator-core' ); ?></a>
@@ -172,6 +173,104 @@ $settings_page = new \CreatorCore\Admin\Settings(
                         <?php esc_html_e( 'Update Profile', 'creator-core' ); ?>
                     </button>
                     <span id="profile-status"></span>
+                </div>
+            </div>
+
+            <!-- AI Context -->
+            <div id="context" class="creator-tab-content">
+                <h2><?php esc_html_e( 'AI Context', 'creator-core' ); ?></h2>
+                <p><?php esc_html_e( 'Creator generates a context document that helps the AI understand your WordPress site, installed plugins, custom post types, and more.', 'creator-core' ); ?></p>
+
+                <?php $context_status = $data['context_status']; ?>
+
+                <div class="creator-context-status-card">
+                    <div class="creator-context-header">
+                        <h3>
+                            <?php if ( $context_status['has_context'] ) : ?>
+                                <span class="dashicons dashicons-yes-alt" style="color: #46b450;"></span>
+                                <?php esc_html_e( 'Context Generated', 'creator-core' ); ?>
+                            <?php else : ?>
+                                <span class="dashicons dashicons-warning" style="color: #dc3232;"></span>
+                                <?php esc_html_e( 'No Context', 'creator-core' ); ?>
+                            <?php endif; ?>
+                        </h3>
+                        <?php if ( $context_status['is_stale'] ) : ?>
+                            <span class="creator-status-badge warning">
+                                <?php esc_html_e( 'Needs Refresh', 'creator-core' ); ?>
+                            </span>
+                        <?php elseif ( $context_status['has_context'] ) : ?>
+                            <span class="creator-status-badge success">
+                                <?php esc_html_e( 'Up to Date', 'creator-core' ); ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ( $context_status['has_context'] ) : ?>
+                        <table class="form-table creator-context-stats">
+                            <tr>
+                                <th scope="row"><?php esc_html_e( 'Generated At', 'creator-core' ); ?></th>
+                                <td>
+                                    <?php
+                                    if ( $context_status['generated_at'] ) {
+                                        echo esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $context_status['generated_at'] ) ) );
+                                    } else {
+                                        esc_html_e( 'Unknown', 'creator-core' );
+                                    }
+                                    ?>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><?php esc_html_e( 'Detected Plugins', 'creator-core' ); ?></th>
+                                <td><strong><?php echo esc_html( $context_status['plugins_count'] ); ?></strong></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><?php esc_html_e( 'Custom Post Types', 'creator-core' ); ?></th>
+                                <td><strong><?php echo esc_html( $context_status['cpts_count'] ); ?></strong></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><?php esc_html_e( 'ACF Field Groups', 'creator-core' ); ?></th>
+                                <td><strong><?php echo esc_html( $context_status['acf_groups'] ); ?></strong></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><?php esc_html_e( 'Sitemap Entries', 'creator-core' ); ?></th>
+                                <td><strong><?php echo esc_html( $context_status['sitemap_count'] ); ?></strong></td>
+                            </tr>
+                        </table>
+                    <?php else : ?>
+                        <p class="creator-context-empty">
+                            <?php esc_html_e( 'No context has been generated yet. Click the button below to generate it now.', 'creator-core' ); ?>
+                        </p>
+                    <?php endif; ?>
+
+                    <div class="creator-context-actions">
+                        <button type="button" id="refresh-context-btn" class="button button-primary">
+                            <span class="dashicons dashicons-update"></span>
+                            <?php
+                            if ( $context_status['has_context'] ) {
+                                esc_html_e( 'Refresh Context', 'creator-core' );
+                            } else {
+                                esc_html_e( 'Generate Context', 'creator-core' );
+                            }
+                            ?>
+                        </button>
+                        <span id="context-status"></span>
+                    </div>
+                </div>
+
+                <div class="creator-context-info">
+                    <h3><?php esc_html_e( 'What\'s included in the context?', 'creator-core' ); ?></h3>
+                    <ul>
+                        <li><span class="dashicons dashicons-admin-plugins"></span> <?php esc_html_e( 'Active plugins with documentation and capabilities', 'creator-core' ); ?></li>
+                        <li><span class="dashicons dashicons-admin-post"></span> <?php esc_html_e( 'Custom post types and their configurations', 'creator-core' ); ?></li>
+                        <li><span class="dashicons dashicons-category"></span> <?php esc_html_e( 'Taxonomies (categories, tags, custom)', 'creator-core' ); ?></li>
+                        <li><span class="dashicons dashicons-forms"></span> <?php esc_html_e( 'ACF field groups and field definitions', 'creator-core' ); ?></li>
+                        <li><span class="dashicons dashicons-admin-site"></span> <?php esc_html_e( 'Site structure and page hierarchy', 'creator-core' ); ?></li>
+                        <li><span class="dashicons dashicons-admin-settings"></span> <?php esc_html_e( 'System information (WP version, PHP version)', 'creator-core' ); ?></li>
+                    </ul>
+
+                    <p class="description">
+                        <?php esc_html_e( 'The context is automatically refreshed when you activate/deactivate plugins, change themes, or update your user profile.', 'creator-core' ); ?>
+                    </p>
                 </div>
             </div>
 

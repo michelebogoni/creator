@@ -65,6 +65,44 @@ export { getTaskStatus } from "./api/tasks/getStatus";
  */
 export { getAnalytics } from "./api/analytics/getAnalytics";
 
+// ==================== PLUGIN DOCS REPOSITORY ====================
+
+/**
+ * GET /api/plugin-docs/:plugin_slug/:version
+ *
+ * Retrieves plugin documentation from the centralized cache.
+ *
+ * @see {@link module:api/plugin-docs/pluginDocs}
+ */
+export { getPluginDocsApi } from "./api/plugin-docs/pluginDocs";
+
+/**
+ * POST /api/plugin-docs
+ *
+ * Saves plugin documentation to the centralized cache.
+ *
+ * @see {@link module:api/plugin-docs/pluginDocs}
+ */
+export { savePluginDocsApi } from "./api/plugin-docs/pluginDocs";
+
+/**
+ * GET /api/plugin-docs/stats
+ *
+ * Returns statistics about the plugin docs repository.
+ *
+ * @see {@link module:api/plugin-docs/pluginDocs}
+ */
+export { getPluginDocsStatsApi } from "./api/plugin-docs/pluginDocs";
+
+/**
+ * GET /api/plugin-docs/all/:plugin_slug
+ *
+ * Returns all cached versions for a specific plugin.
+ *
+ * @see {@link module:api/plugin-docs/pluginDocs}
+ */
+export { getPluginDocsAllVersionsApi } from "./api/plugin-docs/pluginDocs";
+
 // ==================== FIRESTORE TRIGGERS (Milestone 5) ====================
 
 /**

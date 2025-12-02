@@ -14,6 +14,8 @@ use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\Permission\RoleMapper;
 use CreatorCore\Backup\SnapshotManager;
 use CreatorCore\User\UserProfile;
+use CreatorCore\Context\CreatorContext;
+use CreatorCore\Context\ContextRefresher;
 
 /**
  * Class Settings
@@ -44,6 +46,7 @@ class Settings {
     private array $settings_groups = [
         'api'          => 'API Configuration',
         'profile'      => 'Your Profile',
+        'context'      => 'AI Context',
         'backup'       => 'Backup Settings',
         'integrations' => 'Integrations',
         'permissions'  => 'User Permissions',
@@ -65,6 +68,7 @@ class Settings {
         add_action( 'wp_ajax_creator_clear_cache', [ $this, 'ajax_clear_cache' ] );
         add_action( 'wp_ajax_creator_cleanup_backups', [ $this, 'ajax_cleanup_backups' ] );
         add_action( 'wp_ajax_creator_save_profile', [ $this, 'ajax_save_profile' ] );
+        add_action( 'wp_ajax_creator_refresh_context', [ $this, 'ajax_refresh_context' ] );
     }
 
     /**
@@ -79,16 +83,17 @@ class Settings {
         }
 
         $data = [
-            'settings'     => $this->get_all_settings(),
-            'integrations' => $this->plugin_detector->get_all_integrations(),
-            'roles'        => $this->get_roles_settings(),
-            'backup_stats' => $this->get_backup_stats(),
-            'connection'   => $this->proxy_client->check_connection(),
-            'user_profile' => [
+            'settings'       => $this->get_all_settings(),
+            'integrations'   => $this->plugin_detector->get_all_integrations(),
+            'roles'          => $this->get_roles_settings(),
+            'backup_stats'   => $this->get_backup_stats(),
+            'connection'     => $this->proxy_client->check_connection(),
+            'user_profile'   => [
                 'current_level' => UserProfile::get_level(),
                 'levels'        => UserProfile::get_levels_info(),
                 'is_set'        => UserProfile::is_level_set(),
             ],
+            'context_status' => $this->get_context_status(),
         ];
 
         include CREATOR_CORE_PATH . 'templates/settings.php';
@@ -408,6 +413,72 @@ class Settings {
             wp_send_json_success( $response );
         } else {
             wp_send_json_error( [ 'message' => __( 'Failed to save profile', 'creator-core' ) ] );
+        }
+    }
+
+    /**
+     * Get context status for settings page
+     *
+     * @return array
+     */
+    private function get_context_status(): array {
+        $context   = new CreatorContext();
+        $refresher = new ContextRefresher();
+
+        $stored = $context->get_stored_context();
+
+        return [
+            'has_context'     => $stored !== null,
+            'generated_at'    => $context->get_generated_at(),
+            'is_valid'        => $context->is_context_valid(),
+            'is_stale'        => $context->is_context_stale(),
+            'pending_refresh' => $refresher->get_status()['pending_refresh'] ?? false,
+            'plugins_count'   => count( $stored['plugins'] ?? [] ),
+            'cpts_count'      => count( $stored['custom_post_types'] ?? [] ),
+            'acf_groups'      => count( $stored['acf_fields'] ?? [] ),
+            'sitemap_count'   => count( $stored['sitemap'] ?? [] ),
+        ];
+    }
+
+    /**
+     * AJAX: Refresh Creator Context
+     *
+     * @return void
+     */
+    public function ajax_refresh_context(): void {
+        check_ajax_referer( 'creator_settings_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => __( 'Permission denied', 'creator-core' ) ] );
+        }
+
+        $start_time = microtime( true );
+
+        try {
+            $context = new CreatorContext();
+            $result  = $context->refresh();
+
+            $duration = round( ( microtime( true ) - $start_time ) * 1000 );
+
+            wp_send_json_success( [
+                'message'     => __( 'Creator Context refreshed successfully', 'creator-core' ),
+                'duration_ms' => $duration,
+                'timestamp'   => $context->get_generated_at(),
+                'stats'       => [
+                    'plugins'  => count( $result['plugins'] ?? [] ),
+                    'cpts'     => count( $result['custom_post_types'] ?? [] ),
+                    'acf'      => count( $result['acf_fields'] ?? [] ),
+                    'sitemap'  => count( $result['sitemap'] ?? [] ),
+                ],
+            ] );
+        } catch ( \Exception $e ) {
+            wp_send_json_error( [
+                'message' => sprintf(
+                    /* translators: %s: Error message */
+                    __( 'Failed to refresh context: %s', 'creator-core' ),
+                    $e->getMessage()
+                ),
+            ] );
         }
     }
 }

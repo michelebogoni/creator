@@ -53,6 +53,9 @@
 
             // Model selection
             $('input[name="creator_default_model"]').on('change', this.handleModelSelection.bind(this));
+
+            // Context refresh
+            $('#refresh-context-btn').on('click', this.refreshContext.bind(this));
         },
 
         /**
@@ -444,6 +447,75 @@
                 error: function() {
                     $status.text('Failed to save profile. Please try again.').addClass('error').removeClass('success');
                     $btn.prop('disabled', false);
+                }
+            });
+        },
+
+        /**
+         * Refresh Creator Context
+         */
+        refreshContext: function(e) {
+            e.preventDefault();
+
+            const $btn = $(e.currentTarget);
+            const $status = $('#context-status');
+            const $icon = $btn.find('.dashicons');
+
+            // Show loading
+            $btn.prop('disabled', true);
+            $icon.addClass('creator-spin');
+            $status.html('<span class="creator-pulse">Generating context...</span>');
+
+            $.ajax({
+                url: creatorSettings.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'creator_refresh_context',
+                    nonce: creatorSettings.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        const stats = response.data.stats;
+                        $status.html(
+                            '<span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> ' +
+                            response.data.message + ' (' + response.data.duration_ms + 'ms)' +
+                            '</span>'
+                        );
+
+                        // Update stats in the UI
+                        $('.creator-context-stats tr:nth-child(2) td strong').text(stats.plugins);
+                        $('.creator-context-stats tr:nth-child(3) td strong').text(stats.cpts);
+                        $('.creator-context-stats tr:nth-child(4) td strong').text(stats.acf);
+                        $('.creator-context-stats tr:nth-child(5) td strong').text(stats.sitemap);
+
+                        // Update generated at timestamp
+                        if (response.data.timestamp) {
+                            const date = new Date(response.data.timestamp);
+                            $('.creator-context-stats tr:nth-child(1) td').text(date.toLocaleString());
+                        }
+
+                        // Update header to show "Up to Date"
+                        $('.creator-context-header .creator-status-badge')
+                            .removeClass('warning')
+                            .addClass('success')
+                            .text('Up to Date');
+
+                        // Change button text if it was "Generate Context"
+                        $btn.find('span:not(.dashicons)').text('Refresh Context');
+                    } else {
+                        $status.html(
+                            '<span class="creator-status-error"><span class="dashicons dashicons-no"></span> ' +
+                            (response.data?.message || 'Failed to refresh context') +
+                            '</span>'
+                        );
+                    }
+                    $btn.prop('disabled', false);
+                    $icon.removeClass('creator-spin');
+                },
+                error: function() {
+                    $status.html('<span class="creator-status-error"><span class="dashicons dashicons-no"></span> Failed to refresh context. Please try again.</span>');
+                    $btn.prop('disabled', false);
+                    $icon.removeClass('creator-spin');
                 }
             });
         }
