@@ -449,9 +449,17 @@ class ChatInterface {
             $pending_actions = [];
         }
 
+        // Extract loaded context from previous turn (lazy-load)
+        try {
+            $loaded_context = $this->extract_loaded_context( $chat_id );
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Error extracting loaded context: ' . $e->getMessage() );
+            $loaded_context = [];
+        }
+
         // Prepare prompts - system_prompt for static context, prompt for conversation
         try {
-            $prompts = $this->prepare_prompt( $content, $context, $history, $pending_actions );
+            $prompts = $this->prepare_prompt( $content, $context, $history, $pending_actions, $loaded_context );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error preparing prompt: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
             return [
@@ -522,17 +530,27 @@ class ChatInterface {
             'latency_ms'  => $ai_response['latency_ms'] ?? 0,
         ];
 
+        // Include context_data in metadata for next turn
+        $message_metadata = [
+            'actions'      => $parsed_response['actions'],
+            'usage'        => $usage_data,
+            'provider'     => $ai_response['provider'] ?? 'unknown',
+            'model'        => $ai_response['model'] ?? 'unknown',
+            'context_data' => $parsed_response['context_data'] ?? [],
+        ];
+
+        // If context was loaded, append summary to message
+        $display_message = $parsed_response['message'];
+        if ( ! empty( $parsed_response['context_data'] ) ) {
+            $display_message .= "\n\n" . $this->format_loaded_context( $parsed_response['context_data'] );
+        }
+
         $assistant_message_id = $this->message_handler->save_message(
             $chat_id,
-            $parsed_response['message'],
+            $display_message,
             'assistant',
             $parsed_response['has_actions'] ? 'action' : 'text',
-            [
-                'actions'   => $parsed_response['actions'],
-                'usage'     => $usage_data,
-                'provider'  => $ai_response['provider'] ?? 'unknown',
-                'model'     => $ai_response['model'] ?? 'unknown',
-            ]
+            $message_metadata
         );
 
         // Update chat timestamp
@@ -605,9 +623,10 @@ class ChatInterface {
      * @param array  $context         WordPress context (legacy, kept for compatibility).
      * @param array  $history         Conversation history.
      * @param array  $pending_actions Pending actions from previous messages.
+     * @param array  $loaded_context  Context loaded from previous turn via lazy-load.
      * @return array Array with 'system_prompt' and 'prompt' keys.
      */
-    private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [] ): array {
+    private function prepare_prompt( string $user_message, array $context, array $history, array $pending_actions = [], array $loaded_context = [] ): array {
         // ========================================
         // SYSTEM PROMPT: Static context (rules, site info)
         // ========================================
@@ -670,6 +689,19 @@ class ChatInterface {
                 $prompt .= sprintf( "- %s: %s\n", $action['type'], wp_json_encode( $action['params'] ?? [] ) );
             }
             $prompt .= "If user confirms, set action status to 'ready'. If rejects, cancel actions.\n\n";
+        }
+
+        // Include loaded context from previous turn (lazy-load data)
+        if ( ! empty( $loaded_context ) ) {
+            $prompt .= "## Loaded Details (from your previous request)\n";
+            foreach ( $loaded_context as $type => $result ) {
+                if ( empty( $result['success'] ) ) {
+                    $prompt .= sprintf( "### %s: ERROR - %s\n", $type, $result['error'] ?? 'Unknown error' );
+                    continue;
+                }
+                $prompt .= sprintf( "### %s\n```json\n%s\n```\n", $type, wp_json_encode( $result['data'] ?? [], JSON_PRETTY_PRINT ) );
+            }
+            $prompt .= "\nUse this data to proceed with the user's request.\n\n";
         }
 
         // User input context
@@ -929,6 +961,95 @@ class ChatInterface {
         }
 
         return $context_data;
+    }
+
+    /**
+     * Format loaded context for display in message
+     *
+     * @param array $context_data Loaded context data.
+     * @return string Formatted summary.
+     */
+    private function format_loaded_context( array $context_data ): string {
+        $parts = [ '📋 **Dettagli caricati:**' ];
+
+        foreach ( $context_data as $type => $result ) {
+            if ( empty( $result['success'] ) ) {
+                $parts[] = sprintf( '- %s: ❌ %s', $type, $result['error'] ?? 'Errore' );
+                continue;
+            }
+
+            $data = $result['data'] ?? [];
+            switch ( $type ) {
+                case 'get_plugin_details':
+                    $parts[] = sprintf(
+                        '- Plugin **%s** v%s: %d funzioni',
+                        $data['name'] ?? $data['slug'] ?? '?',
+                        $data['version'] ?? '?',
+                        count( $data['main_functions'] ?? [] )
+                    );
+                    break;
+
+                case 'get_acf_details':
+                    $parts[] = sprintf(
+                        '- ACF **%s**: %d campi',
+                        $data['title'] ?? '?',
+                        count( $data['fields'] ?? [] )
+                    );
+                    break;
+
+                case 'get_cpt_details':
+                    $parts[] = sprintf(
+                        '- CPT **%s**: supports %s',
+                        $data['label'] ?? $data['name'] ?? '?',
+                        implode( ', ', array_keys( $data['supports'] ?? [] ) )
+                    );
+                    break;
+
+                case 'get_wp_functions':
+                    $parts[] = sprintf(
+                        '- Funzioni **%s**: %d disponibili',
+                        $data['category'] ?? '?',
+                        count( $data['functions'] ?? [] )
+                    );
+                    break;
+
+                default:
+                    $parts[] = sprintf( '- %s: ✅ Caricato', $type );
+            }
+        }
+
+        return implode( "\n", $parts );
+    }
+
+    /**
+     * Extract loaded context from previous messages
+     *
+     * @param int $chat_id Chat ID.
+     * @return array Loaded context data from previous turn.
+     */
+    private function extract_loaded_context( int $chat_id ): array {
+        $messages = $this->message_handler->get_messages( $chat_id, [
+            'per_page' => 3,
+            'order'    => 'DESC',
+        ]);
+
+        foreach ( $messages as $message ) {
+            if ( $message['role'] !== 'assistant' ) {
+                continue;
+            }
+
+            $metadata = $message['metadata'] ?? [];
+            if ( is_string( $metadata ) ) {
+                $metadata = json_decode( $metadata, true ) ?? [];
+            }
+
+            $context_data = $metadata['context_data'] ?? [];
+            if ( ! empty( $context_data ) ) {
+                return $context_data;
+            }
+        }
+
+        return [];
     }
 
     /**
