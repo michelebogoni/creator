@@ -19,6 +19,7 @@ use CreatorCore\Audit\AuditLogger;
 use CreatorCore\Integrations\ProxyClient;
 use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\API\REST_API;
+use CreatorCore\Context\ContextRefresher;
 
 /**
  * Class Loader
@@ -98,6 +99,13 @@ class Loader {
     private REST_API $rest_api;
 
     /**
+     * Context refresher instance
+     *
+     * @var ContextRefresher
+     */
+    private ContextRefresher $context_refresher;
+
+    /**
      * Run the loader
      *
      * @return void
@@ -139,6 +147,9 @@ class Loader {
             $this->capability_checker,
             $this->audit_logger
         );
+
+        // Context auto-refresh
+        $this->context_refresher = new ContextRefresher();
     }
 
     /**
@@ -164,6 +175,9 @@ class Loader {
 
         // Add custom capabilities on init
         add_action( 'init', [ $this->capability_checker, 'register_capabilities' ] );
+
+        // Register context auto-refresh hooks
+        $this->context_refresher->register_hooks();
     }
 
     /**

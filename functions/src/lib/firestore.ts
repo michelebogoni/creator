@@ -34,6 +34,7 @@ export const COLLECTIONS = {
   RATE_LIMIT_COUNTERS: "rate_limit_counters",
   JOB_QUEUE: "job_queue",
   COST_TRACKING: "cost_tracking",
+  PLUGIN_DOCS_CACHE: "plugin_docs_cache",
 } as const;
 
 // ==================== LICENSE OPERATIONS ====================
@@ -907,4 +908,209 @@ export async function checkPendingJobsLimit(
     allowed: pendingCount < maxPending,
     pendingCount,
   };
+}
+
+// ==================== PLUGIN DOCS CACHE OPERATIONS ====================
+
+import {
+  PluginDocsEntry,
+  CreatePluginDocsData,
+  PluginDocsStats,
+} from "../types/PluginDocs";
+
+/**
+ * Gets the document ID for a plugin docs entry
+ *
+ * @param {string} pluginSlug - Plugin slug
+ * @param {string} pluginVersion - Plugin version
+ * @returns {string} Document ID
+ */
+export function getPluginDocsDocId(
+  pluginSlug: string,
+  pluginVersion: string
+): string {
+  return `${pluginSlug}:${pluginVersion}`;
+}
+
+/**
+ * Gets plugin documentation from cache
+ *
+ * @param {string} pluginSlug - Plugin slug
+ * @param {string} pluginVersion - Plugin version
+ * @returns {Promise<PluginDocsEntry | null>} Plugin docs or null
+ *
+ * @example
+ * ```typescript
+ * const docs = await getPluginDocs("advanced-custom-fields", "6.2.5");
+ * if (docs) {
+ *   console.log(docs.main_functions);
+ * }
+ * ```
+ */
+export async function getPluginDocs(
+  pluginSlug: string,
+  pluginVersion: string
+): Promise<PluginDocsEntry | null> {
+  const docId = getPluginDocsDocId(pluginSlug, pluginVersion);
+  const docRef = db.collection(COLLECTIONS.PLUGIN_DOCS_CACHE).doc(docId);
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    return null;
+  }
+
+  return doc.data() as PluginDocsEntry;
+}
+
+/**
+ * Saves plugin documentation to cache
+ *
+ * @param {CreatePluginDocsData} data - Plugin docs data
+ * @returns {Promise<PluginDocsEntry>} Created entry
+ *
+ * @example
+ * ```typescript
+ * const entry = await savePluginDocs({
+ *   plugin_slug: "advanced-custom-fields",
+ *   plugin_version: "6.2.5",
+ *   docs_url: "https://www.advancedcustomfields.com/resources/",
+ *   main_functions: ["get_field()", "update_field()"],
+ *   source: "ai_research"
+ * });
+ * ```
+ */
+export async function savePluginDocs(
+  data: CreatePluginDocsData
+): Promise<PluginDocsEntry> {
+  const docId = getPluginDocsDocId(data.plugin_slug, data.plugin_version);
+  const docRef = db.collection(COLLECTIONS.PLUGIN_DOCS_CACHE).doc(docId);
+
+  const entry: PluginDocsEntry = {
+    plugin_slug: data.plugin_slug,
+    plugin_version: data.plugin_version,
+    docs_url: data.docs_url,
+    main_functions: data.main_functions,
+    api_reference: data.api_reference,
+    version_notes: data.version_notes,
+    cached_at: Timestamp.now(),
+    cached_by: data.cached_by,
+    cache_hits: 0,
+    source: data.source || "ai_research",
+  };
+
+  await docRef.set(entry);
+
+  return entry;
+}
+
+/**
+ * Increments cache hits for a plugin docs entry
+ *
+ * @param {string} pluginSlug - Plugin slug
+ * @param {string} pluginVersion - Plugin version
+ * @returns {Promise<void>}
+ */
+export async function incrementPluginDocsCacheHits(
+  pluginSlug: string,
+  pluginVersion: string
+): Promise<void> {
+  const docId = getPluginDocsDocId(pluginSlug, pluginVersion);
+  const docRef = db.collection(COLLECTIONS.PLUGIN_DOCS_CACHE).doc(docId);
+
+  await docRef.update({
+    cache_hits: FieldValue.increment(1),
+  });
+}
+
+/**
+ * Gets all cached plugin docs for a specific plugin (all versions)
+ *
+ * @param {string} pluginSlug - Plugin slug
+ * @returns {Promise<PluginDocsEntry[]>} Array of plugin docs entries
+ */
+export async function getPluginDocsAllVersions(
+  pluginSlug: string
+): Promise<PluginDocsEntry[]> {
+  const snapshot = await db
+    .collection(COLLECTIONS.PLUGIN_DOCS_CACHE)
+    .where("plugin_slug", "==", pluginSlug)
+    .orderBy("cached_at", "desc")
+    .get();
+
+  return snapshot.docs.map((doc) => doc.data() as PluginDocsEntry);
+}
+
+/**
+ * Gets plugin docs repository statistics
+ *
+ * @returns {Promise<PluginDocsStats>} Repository statistics
+ */
+export async function getPluginDocsStats(): Promise<PluginDocsStats> {
+  const snapshot = await db.collection(COLLECTIONS.PLUGIN_DOCS_CACHE).get();
+
+  const pluginCounts: Record<
+    string,
+    { requests: number; versions: Set<string> }
+  > = {};
+  let totalHits = 0;
+  let aiResearchCount = 0;
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data() as PluginDocsEntry;
+    totalHits += data.cache_hits || 0;
+
+    if (data.source === "ai_research") {
+      aiResearchCount++;
+    }
+
+    if (!pluginCounts[data.plugin_slug]) {
+      pluginCounts[data.plugin_slug] = { requests: 0, versions: new Set() };
+    }
+    pluginCounts[data.plugin_slug].requests += data.cache_hits || 0;
+    pluginCounts[data.plugin_slug].versions.add(data.plugin_version);
+  }
+
+  const mostRequested = Object.entries(pluginCounts)
+    .map(([slug, data]) => ({
+      plugin_slug: slug,
+      request_count: data.requests,
+      versions_cached: data.versions.size,
+    }))
+    .sort((a, b) => b.request_count - a.request_count)
+    .slice(0, 10);
+
+  const totalRequests = snapshot.size + totalHits;
+  const cacheHitRate = totalRequests > 0 ? (totalHits / totalRequests) * 100 : 0;
+
+  return {
+    total_entries: snapshot.size,
+    total_cache_hits: totalHits,
+    cache_hit_rate: Math.round(cacheHitRate * 100) / 100,
+    ai_research_count: aiResearchCount,
+    most_requested: mostRequested,
+    last_updated: Timestamp.now(),
+  };
+}
+
+/**
+ * Deletes a plugin docs cache entry
+ *
+ * @param {string} pluginSlug - Plugin slug
+ * @param {string} pluginVersion - Plugin version
+ * @returns {Promise<boolean>} True if deleted
+ */
+export async function deletePluginDocs(
+  pluginSlug: string,
+  pluginVersion: string
+): Promise<boolean> {
+  const docId = getPluginDocsDocId(pluginSlug, pluginVersion);
+  const docRef = db.collection(COLLECTIONS.PLUGIN_DOCS_CACHE).doc(docId);
+
+  const doc = await docRef.get();
+  if (!doc.exists) {
+    return false;
+  }
+
+  await docRef.delete();
+  return true;
 }

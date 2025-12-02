@@ -28,6 +28,7 @@ class Activator {
         self::set_default_options();
         self::schedule_cleanup_cron();
         self::set_activation_redirect();
+        self::generate_initial_context();
 
         // Clear any cached data
         wp_cache_flush();
@@ -38,6 +39,25 @@ class Activator {
             $logger->log( 'plugin_activated', 'success', [
                 'version' => CREATOR_CORE_VERSION,
             ]);
+        }
+    }
+
+    /**
+     * Generate initial Creator Context document
+     *
+     * Creates the comprehensive context document on plugin activation.
+     *
+     * @return void
+     */
+    private static function generate_initial_context(): void {
+        if ( class_exists( '\CreatorCore\Context\CreatorContext' ) ) {
+            try {
+                $context = new \CreatorCore\Context\CreatorContext();
+                $context->generate( true );
+            } catch ( \Exception $e ) {
+                // Log error but don't fail activation
+                error_log( 'Creator: Failed to generate initial context: ' . $e->getMessage() );
+            }
         }
     }
 
