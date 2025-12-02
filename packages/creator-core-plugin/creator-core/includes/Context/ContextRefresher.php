@@ -29,16 +29,16 @@ class ContextRefresher {
 	/**
 	 * Creator context instance
 	 *
-	 * @var CreatorContext
+	 * @var CreatorContext|null
 	 */
-	private CreatorContext $context;
+	private ?CreatorContext $context = null;
 
 	/**
 	 * Audit logger instance
 	 *
-	 * @var AuditLogger
+	 * @var AuditLogger|null
 	 */
-	private AuditLogger $logger;
+	private ?AuditLogger $logger = null;
 
 	/**
 	 * Constructor
@@ -47,8 +47,36 @@ class ContextRefresher {
 	 * @param AuditLogger|null    $logger  Audit logger instance.
 	 */
 	public function __construct( ?CreatorContext $context = null, ?AuditLogger $logger = null ) {
-		$this->context = $context ?? new CreatorContext();
-		$this->logger  = $logger ?? new AuditLogger();
+		try {
+			$this->context = $context ?? new CreatorContext();
+			$this->logger  = $logger ?? new AuditLogger();
+		} catch ( \Throwable $e ) {
+			error_log( 'Creator: Failed to initialize ContextRefresher: ' . $e->getMessage() );
+		}
+	}
+
+	/**
+	 * Get context instance (with lazy initialization)
+	 *
+	 * @return CreatorContext
+	 */
+	private function get_context(): CreatorContext {
+		if ( $this->context === null ) {
+			$this->context = new CreatorContext();
+		}
+		return $this->context;
+	}
+
+	/**
+	 * Get logger instance (with lazy initialization)
+	 *
+	 * @return AuditLogger
+	 */
+	private function get_logger(): AuditLogger {
+		if ( $this->logger === null ) {
+			$this->logger = new AuditLogger();
+		}
+		return $this->logger;
 	}
 
 	/**
@@ -276,11 +304,11 @@ class ContextRefresher {
 
 		try {
 			// Generate new context
-			$context = $this->context->refresh();
+			$context = $this->get_context()->refresh();
 
 			$duration = round( ( microtime( true ) - $start_time ) * 1000 );
 
-			$this->logger->success( 'context_refreshed', [
+			$this->get_logger()->log( 'context_refreshed', 'success', [
 				'reason'      => $reason,
 				'details'     => $details,
 				'duration_ms' => $duration,
@@ -336,13 +364,14 @@ class ContextRefresher {
 	 * @return array
 	 */
 	public function get_status(): array {
-		$stored_context = $this->context->get_stored_context();
+		$context        = $this->get_context();
+		$stored_context = $context->get_stored_context();
 
 		return [
-			'has_context'   => $stored_context !== null,
-			'generated_at'  => $this->context->get_generated_at(),
-			'is_valid'      => $this->context->is_context_valid(),
-			'is_stale'      => $this->context->is_context_stale(),
+			'has_context'     => $stored_context !== null,
+			'generated_at'    => $context->get_generated_at(),
+			'is_valid'        => $context->is_context_valid(),
+			'is_stale'        => $context->is_context_stale(),
 			'pending_refresh' => get_transient( 'creator_context_refresh_pending' ) !== false,
 		];
 	}

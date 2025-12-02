@@ -181,7 +181,15 @@ $settings_page = new \CreatorCore\Admin\Settings(
                 <h2><?php esc_html_e( 'AI Context', 'creator-core' ); ?></h2>
                 <p><?php esc_html_e( 'Creator generates a context document that helps the AI understand your WordPress site, installed plugins, custom post types, and more.', 'creator-core' ); ?></p>
 
-                <?php $context_status = $data['context_status']; ?>
+                <?php $context_status = isset( $data['context_status'] ) ? $data['context_status'] : [
+                    'has_context'   => false,
+                    'generated_at'  => null,
+                    'is_stale'      => false,
+                    'plugins_count' => 0,
+                    'cpts_count'    => 0,
+                    'acf_groups'    => 0,
+                    'sitemap_count' => 0,
+                ]; ?>
 
                 <div class="creator-context-status-card">
                     <div class="creator-context-header">
