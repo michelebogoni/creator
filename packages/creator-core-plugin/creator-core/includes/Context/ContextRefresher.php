@@ -308,7 +308,7 @@ class ContextRefresher {
 
 			$duration = round( ( microtime( true ) - $start_time ) * 1000 );
 
-			$this->get_logger()->log( 'context_refreshed', 'success', [
+			$this->get_logger()->success( 'context_refreshed', [
 				'reason'      => $reason,
 				'details'     => $details,
 				'duration_ms' => $duration,
@@ -321,7 +321,7 @@ class ContextRefresher {
 				'timestamp'   => current_time( 'c' ),
 			];
 		} catch ( \Exception $e ) {
-			$this->logger->failure( 'context_refresh_failed', [
+			$this->get_logger()->failure( 'context_refresh_failed', [
 				'reason' => $reason,
 				'error'  => $e->getMessage(),
 			] );

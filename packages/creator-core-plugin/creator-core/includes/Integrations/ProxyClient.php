@@ -276,6 +276,48 @@ class ProxyClient {
 	}
 
 	/**
+	 * Send a generic request to the proxy API
+	 *
+	 * This method is used for plugin docs repository and other API calls
+	 * that don't require the AI routing logic.
+	 *
+	 * @param string $method   HTTP method (GET, POST, PUT, DELETE).
+	 * @param string $endpoint API endpoint (e.g., '/api/plugin-docs/research').
+	 * @param array  $body     Request body data.
+	 * @return array Response with 'success' key and data or error.
+	 */
+	public function send_request( string $method, string $endpoint, array $body = [] ): array {
+		$site_token = get_option( 'creator_site_token' );
+
+		if ( empty( $site_token ) ) {
+			return [
+				'success' => false,
+				'error'   => __( 'Site not authenticated. Please validate your license.', 'creator-core' ),
+			];
+		}
+
+		$headers = [
+			'Authorization' => 'Bearer ' . $site_token,
+		];
+
+		$response = $this->make_request( $method, $endpoint, $body, $headers );
+
+		if ( is_wp_error( $response ) ) {
+			return [
+				'success' => false,
+				'error'   => $response->get_error_message(),
+			];
+		}
+
+		// Ensure response has success key
+		if ( ! isset( $response['success'] ) ) {
+			$response['success'] = true;
+		}
+
+		return $response;
+	}
+
+	/**
 	 * Make HTTP request to proxy
 	 *
 	 * @param string $method   HTTP method.
