@@ -205,95 +205,51 @@ class PluginDocsRepository {
 	}
 
 	/**
-	 * Research plugin documentation using AI
+	 * Research plugin documentation using Firebase Cloud Function
+	 *
+	 * Calls the /api/plugin-docs/research endpoint which uses AI to find
+	 * official documentation for the plugin. Results are cached in Firestore.
 	 *
 	 * @param string $plugin_slug    Plugin slug.
 	 * @param string $plugin_version Plugin version.
+	 * @param string $plugin_name    Optional plugin name.
+	 * @param string $plugin_uri     Optional plugin URI.
 	 * @return array|null
 	 */
-	private function research_plugin_docs( string $plugin_slug, string $plugin_version ): ?array {
+	private function research_plugin_docs( string $plugin_slug, string $plugin_version, string $plugin_name = '', string $plugin_uri = '' ): ?array {
 		$proxy = $this->get_proxy_client();
 
 		if ( ! $proxy ) {
 			return null;
 		}
 
-		// Prepare research prompt
-		$prompt = sprintf(
-			'Research official documentation for WordPress plugin "%s" version %s. ' .
-			'Return JSON with these fields: ' .
-			'docs_url (official documentation URL), ' .
-			'main_functions (array of main PHP functions the plugin provides), ' .
-			'api_reference (API documentation URL if available), ' .
-			'version_notes (array of notable features in this version). ' .
-			'Search: WordPress.org, GitHub, official plugin website. ' .
-			'Return ONLY valid JSON, no other text.',
-			$plugin_slug,
-			$plugin_version
-		);
-
 		try {
-			$response = $proxy->send_to_ai( $prompt, 'ANALYSIS', [
-				'model'       => 'gemini', // Use Gemini for research tasks
-				'max_tokens'  => 1024,
-				'temperature' => 0.3, // Low temperature for factual response
+			// Call the Firebase research endpoint
+			$response = $proxy->send_request( 'POST', '/api/plugin-docs/research', [
+				'plugin_slug'    => $plugin_slug,
+				'plugin_version' => $plugin_version,
+				'plugin_name'    => $plugin_name,
+				'plugin_uri'     => $plugin_uri,
 			]);
 
-			if ( $response['success'] && ! empty( $response['content'] ) ) {
-				$parsed = $this->parse_research_response( $response['content'] );
-				if ( $parsed ) {
-					$parsed['researched_at'] = current_time( 'c' );
-					$parsed['source']        = 'ai_research';
-					return $parsed;
-				}
+			if ( $response['success'] && ! empty( $response['data'] ) ) {
+				$data = $response['data'];
+
+				return [
+					'docs_url'       => sanitize_url( $data['docs_url'] ?? '' ),
+					'functions_url'  => sanitize_url( $data['functions_url'] ?? '' ),
+					'main_functions' => array_map( 'sanitize_text_field', $data['main_functions'] ?? [] ),
+					'api_reference'  => sanitize_url( $data['api_reference'] ?? '' ),
+					'version_notes'  => array_map( 'sanitize_text_field', $data['version_notes'] ?? [] ),
+					'source'         => $response['source'] ?? 'ai_research',
+					'researched_at'  => current_time( 'c' ),
+				];
 			}
 		} catch ( \Exception $e ) {
 			error_log( 'Creator: Plugin docs research failed: ' . $e->getMessage() );
 		}
 
 		return null;
-	}
-
-	/**
-	 * Parse AI research response
-	 *
-	 * @param string $response AI response content.
-	 * @return array|null
-	 */
-	private function parse_research_response( string $response ): ?array {
-		// Try to extract JSON from response
-		$response = trim( $response );
-
-		// Remove markdown code blocks if present
-		if ( preg_match( '/```(?:json)?\s*([\s\S]*?)\s*```/', $response, $matches ) ) {
-			$response = trim( $matches[1] );
-		}
-
-		$data = json_decode( $response, true );
-
-		if ( json_last_error() !== JSON_ERROR_NONE || ! is_array( $data ) ) {
-			return null;
-		}
-
-		// Validate required fields
-		$required = [ 'docs_url', 'main_functions' ];
-		foreach ( $required as $field ) {
-			if ( ! isset( $data[ $field ] ) ) {
-				return null;
-			}
-		}
-
-		// Normalize main_functions to array
-		if ( is_string( $data['main_functions'] ) ) {
-			$data['main_functions'] = array_map( 'trim', explode( ',', $data['main_functions'] ) );
-		}
-
-		return [
-			'docs_url'       => sanitize_url( $data['docs_url'] ?? '' ),
-			'main_functions' => array_map( 'sanitize_text_field', $data['main_functions'] ?? [] ),
-			'api_reference'  => sanitize_url( $data['api_reference'] ?? '' ),
-			'version_notes'  => array_map( 'sanitize_text_field', $data['version_notes'] ?? [] ),
-		];
 	}
 
 	/**
@@ -470,5 +426,172 @@ class PluginDocsRepository {
 		}
 
 		return $fetched;
+	}
+
+	/**
+	 * Sync plugin docs from Firestore to local cache
+	 *
+	 * Pulls latest plugin documentation from the centralized Firestore
+	 * repository and saves it to the local wp_options cache as fallback.
+	 *
+	 * @param array $plugin_slugs Optional array of plugin slugs to sync.
+	 * @param int   $limit        Maximum number of entries to sync.
+	 * @return array Sync result with count and list of synced plugins.
+	 */
+	public function sync_from_firestore( array $plugin_slugs = [], int $limit = 100 ): array {
+		$proxy = $this->get_proxy_client();
+
+		if ( ! $proxy ) {
+			return [
+				'success'      => false,
+				'error'        => 'Proxy client not available',
+				'synced_count' => 0,
+				'plugins'      => [],
+			];
+		}
+
+		try {
+			// Get last sync timestamp
+			$last_sync = get_option( 'creator_plugin_docs_last_sync', '' );
+
+			// Call the Firebase sync endpoint
+			$response = $proxy->send_request( 'POST', '/api/plugin-docs/sync', [
+				'plugin_slugs'    => $plugin_slugs,
+				'since_timestamp' => $last_sync,
+				'limit'           => $limit,
+			]);
+
+			if ( ! $response['success'] || empty( $response['data'] ) ) {
+				return [
+					'success'      => false,
+					'error'        => $response['error'] ?? 'Sync request failed',
+					'synced_count' => 0,
+					'plugins'      => [],
+				];
+			}
+
+			$plugins = $response['data']['plugins'] ?? [];
+			$synced  = [];
+
+			foreach ( $plugins as $plugin ) {
+				if ( empty( $plugin['plugin_slug'] ) || empty( $plugin['plugin_version'] ) ) {
+					continue;
+				}
+
+				// Save to local cache
+				$this->save_to_local_cache(
+					$plugin['plugin_slug'],
+					$plugin['plugin_version'],
+					[
+						'docs_url'       => $plugin['docs_url'] ?? '',
+						'main_functions' => $plugin['main_functions'] ?? [],
+						'api_reference'  => $plugin['api_reference'] ?? '',
+						'version_notes'  => $plugin['version_notes'] ?? [],
+						'source'         => 'firestore_sync',
+					]
+				);
+
+				$synced[] = [
+					'slug'    => $plugin['plugin_slug'],
+					'version' => $plugin['plugin_version'],
+				];
+			}
+
+			// Update last sync timestamp
+			update_option( 'creator_plugin_docs_last_sync', current_time( 'c' ), false );
+
+			return [
+				'success'      => true,
+				'synced_count' => count( $synced ),
+				'plugins'      => $synced,
+			];
+		} catch ( \Exception $e ) {
+			error_log( 'Creator: Firestore sync failed: ' . $e->getMessage() );
+
+			return [
+				'success'      => false,
+				'error'        => $e->getMessage(),
+				'synced_count' => 0,
+				'plugins'      => [],
+			];
+		}
+	}
+
+	/**
+	 * Get plugin documentation with additional plugin info
+	 *
+	 * Enhanced version that includes plugin name and URI for better AI research.
+	 *
+	 * @param string $plugin_slug    Plugin slug.
+	 * @param string $plugin_version Plugin version.
+	 * @param string $plugin_name    Plugin name.
+	 * @param string $plugin_uri     Plugin URI.
+	 * @return array Documentation data or empty array.
+	 */
+	public function get_plugin_docs_with_info( string $plugin_slug, string $plugin_version, string $plugin_name = '', string $plugin_uri = '' ): array {
+		// Normalize inputs
+		$plugin_slug    = sanitize_title( $plugin_slug );
+		$plugin_version = sanitize_text_field( $plugin_version );
+
+		// Try local cache first
+		$cached = $this->get_from_local_cache( $plugin_slug, $plugin_version );
+		if ( $cached ) {
+			$this->increment_cache_hits( $plugin_slug, $plugin_version );
+			return $cached;
+		}
+
+		// Try Firestore
+		$firestore_data = $this->get_from_firestore( $plugin_slug, $plugin_version );
+		if ( $firestore_data ) {
+			$this->save_to_local_cache( $plugin_slug, $plugin_version, $firestore_data );
+			return $firestore_data;
+		}
+
+		// Cache miss - trigger AI research with additional info
+		$researched = $this->research_plugin_docs( $plugin_slug, $plugin_version, $plugin_name, $plugin_uri );
+		if ( $researched ) {
+			$this->save_to_local_cache( $plugin_slug, $plugin_version, $researched );
+			return $researched;
+		}
+
+		// Return basic info if research fails
+		return $this->get_basic_plugin_info( $plugin_slug, $plugin_version );
+	}
+
+	/**
+	 * Get Firestore stats from the centralized repository
+	 *
+	 * @return array Stats including total entries, cache hit rate, etc.
+	 */
+	public function get_firestore_stats(): array {
+		$proxy = $this->get_proxy_client();
+
+		if ( ! $proxy ) {
+			return [
+				'success' => false,
+				'error'   => 'Proxy client not available',
+			];
+		}
+
+		try {
+			$response = $proxy->send_request( 'GET', '/api/plugin-docs/stats' );
+
+			if ( $response['success'] && ! empty( $response['data'] ) ) {
+				return [
+					'success' => true,
+					'data'    => $response['data'],
+				];
+			}
+
+			return [
+				'success' => false,
+				'error'   => $response['error'] ?? 'Stats request failed',
+			];
+		} catch ( \Exception $e ) {
+			return [
+				'success' => false,
+				'error'   => $e->getMessage(),
+			];
+		}
 	}
 }

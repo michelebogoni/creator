@@ -6,6 +6,32 @@
 import { Timestamp } from "firebase-admin/firestore";
 
 /**
+ * Research metadata for AI-researched plugin docs
+ */
+export interface ResearchMetadata {
+  /** When the research was performed */
+  researched_at: Timestamp;
+
+  /** AI provider used for research */
+  ai_provider: "gemini" | "claude";
+
+  /** Model ID used */
+  model_id: string;
+
+  /** Primary source URL for research */
+  research_source?: string;
+
+  /** Whether the docs have been verified */
+  verified: boolean;
+
+  /** Tokens used for research */
+  tokens_used?: number;
+
+  /** Cost in USD for research */
+  cost_usd?: number;
+}
+
+/**
  * Plugin documentation cache entry
  */
 export interface PluginDocsEntry {
@@ -17,6 +43,9 @@ export interface PluginDocsEntry {
 
   /** Official documentation URL */
   docs_url: string;
+
+  /** Functions documentation URL */
+  functions_url?: string;
 
   /** Main functions provided by the plugin */
   main_functions: string[];
@@ -41,6 +70,9 @@ export interface PluginDocsEntry {
 
   /** Last verification timestamp */
   last_verified?: Timestamp;
+
+  /** Research metadata for AI-researched docs */
+  research_meta?: ResearchMetadata;
 }
 
 /**
@@ -115,5 +147,62 @@ export interface PluginDocsResponse {
   data?: PluginDocsEntry | null;
   cached: boolean;
   source?: string;
+  error?: string;
+}
+
+/**
+ * Request body for researching plugin docs
+ */
+export interface ResearchPluginDocsRequest {
+  plugin_slug: string;
+  plugin_version: string;
+  plugin_name?: string;
+  plugin_uri?: string;
+}
+
+/**
+ * Response from AI research
+ */
+export interface ResearchPluginDocsResponse {
+  success: boolean;
+  data?: {
+    docs_url: string;
+    functions_url?: string;
+    main_functions: string[];
+    api_reference?: string;
+    version_notes?: string[];
+  };
+  research_meta?: {
+    ai_provider: "gemini" | "claude";
+    model_id: string;
+    tokens_used: number;
+    cost_usd: number;
+  };
+  error?: string;
+}
+
+/**
+ * Request body for syncing plugin docs to WordPress
+ */
+export interface SyncPluginDocsRequest {
+  plugin_slugs?: string[];
+  since_timestamp?: string;
+  limit?: number;
+}
+
+/**
+ * Response for sync operation
+ */
+export interface SyncPluginDocsResponse {
+  success: boolean;
+  data?: {
+    synced_count: number;
+    plugins: Array<{
+      plugin_slug: string;
+      plugin_version: string;
+      docs_url: string;
+      main_functions: string[];
+    }>;
+  };
   error?: string;
 }
