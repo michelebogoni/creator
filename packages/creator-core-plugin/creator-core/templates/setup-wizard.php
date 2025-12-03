@@ -46,71 +46,41 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
     <div class="creator-setup-content">
         <?php
         switch ( $data['current_step'] ) :
-            case 'safety':
+            case 'welcome':
+                $features = $data['step_data']['features'] ?? [];
                 ?>
-                <div class="creator-setup-section creator-safety-section">
-                    <h2><?php esc_html_e( 'Creator - Important Safety & Responsibility Notice', 'creator-core' ); ?></h2>
-
-                    <div class="creator-safety-warning">
-                        <div class="creator-warning-header">
-                            <span class="dashicons dashicons-warning"></span>
-                            <strong><?php esc_html_e( 'CRITICAL: Creator System Authority & Responsibilities', 'creator-core' ); ?></strong>
-                        </div>
-
-                        <p><?php esc_html_e( 'Creator has the SAME authority as you within your WordPress site. It can perform ANY action you can perform, including:', 'creator-core' ); ?></p>
-
-                        <div class="creator-capabilities-box">
-                            <h4><?php esc_html_e( 'WHAT CREATOR CAN DO:', 'creator-core' ); ?></h4>
-                            <ul class="creator-can-do">
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Modify the WordPress database directly', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Create, edit, and delete pages and posts', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Create and manage custom post types (CPTs)', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Create and manage custom taxonomies', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Create and execute custom code/scripts', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Modify plugin behavior and settings', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Modify WordPress configuration files', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Install and activate plugins', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Create and manage user roles/capabilities', 'creator-core' ); ?></li>
-                                <li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'And much more...', 'creator-core' ); ?></li>
-                            </ul>
-                        </div>
-
-                        <div class="creator-responsibility-box">
-                            <h4><?php esc_html_e( 'RESPONSIBILITY NOTICE:', 'creator-core' ); ?></h4>
-                            <p><?php esc_html_e( 'While Creator is designed to be intelligent and careful, mistakes can happen. YOU are responsible for:', 'creator-core' ); ?></p>
-                            <ol>
-                                <li><?php esc_html_e( 'Making DAILY BACKUPS of your entire WordPress site (database + files)', 'creator-core' ); ?></li>
-                                <li><?php esc_html_e( 'Testing Creator actions on a staging environment FIRST (recommended for production sites)', 'creator-core' ); ?></li>
-                                <li><?php esc_html_e( 'Monitoring Creator\'s actions and their outcomes', 'creator-core' ); ?></li>
-                                <li><?php esc_html_e( 'Having rollback procedures in place', 'creator-core' ); ?></li>
-                                <li><?php esc_html_e( 'Understanding that Creator modifications are PERMANENT unless you restore from backup', 'creator-core' ); ?></li>
-                            </ol>
-                        </div>
-
-                        <div class="creator-acceptance-box">
-                            <h4><?php esc_html_e( 'ACCEPTANCE REQUIRED:', 'creator-core' ); ?></h4>
-                            <p><?php esc_html_e( 'By clicking "I understand and accept" below, you confirm that:', 'creator-core' ); ?></p>
-                            <ul>
-                                <li><?php esc_html_e( 'You have read and understood the above', 'creator-core' ); ?></li>
-                                <li><?php esc_html_e( 'You accept full responsibility for Creator\'s actions', 'creator-core' ); ?></li>
-                                <li><?php esc_html_e( 'You have or will implement daily backups', 'creator-core' ); ?></li>
-                                <li><?php esc_html_e( 'You understand that data loss is possible if you don\'t backup', 'creator-core' ); ?></li>
-                            </ul>
-                        </div>
+                <div class="creator-setup-section creator-welcome-section">
+                    <div class="creator-welcome-header">
+                        <h2><?php esc_html_e( 'Welcome to Creator', 'creator-core' ); ?></h2>
+                        <p class="creator-welcome-subtitle"><?php esc_html_e( 'Your AI WordPress Assistant', 'creator-core' ); ?></p>
                     </div>
 
-                    <form id="creator-safety-form" class="creator-setup-form">
-                        <label class="creator-checkbox-label">
-                            <input type="checkbox" id="accept-responsibility" name="accept_responsibility" value="1">
-                            <span class="creator-checkbox-text">
-                                <strong><?php esc_html_e( 'I understand and accept. I am responsible for daily backups.', 'creator-core' ); ?></strong>
-                            </span>
-                        </label>
-                        <div id="safety-error" class="creator-error-message" style="display: none;">
-                            <span class="dashicons dashicons-warning"></span>
-                            <?php esc_html_e( 'You must accept the responsibility notice to use Creator', 'creator-core' ); ?>
-                        </div>
-                    </form>
+                    <p class="creator-welcome-intro"><?php esc_html_e( 'Here\'s what you can do with Creator:', 'creator-core' ); ?></p>
+
+                    <!-- Feature Cards -->
+                    <div class="creator-feature-cards">
+                        <?php foreach ( $features as $key => $feature ) : ?>
+                            <div class="creator-feature-card">
+                                <div class="creator-feature-icon">
+                                    <span class="dashicons dashicons-<?php echo esc_attr( $feature['icon'] ); ?>"></span>
+                                </div>
+                                <h3><?php echo esc_html( $feature['title'] ); ?></h3>
+                                <p><?php echo esc_html( $feature['description'] ); ?></p>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <!-- Friendly responsibility note -->
+                    <div class="creator-responsibility-note">
+                        <p>
+                            <span class="dashicons dashicons-info-outline"></span>
+                            <?php esc_html_e( 'Creator has the same capabilities as you do in WordPress. We recommend having daily backups enabled (standard practice). Your responsibility as site owner is to test changes on staging first.', 'creator-core' ); ?>
+                        </p>
+                        <a href="https://developer.wordpress.org/advanced-administration/security/backup/" target="_blank" rel="noopener noreferrer" class="creator-learn-link">
+                            <?php esc_html_e( 'Learn about backup options', 'creator-core' ); ?>
+                            <span class="dashicons dashicons-external"></span>
+                        </a>
+                    </div>
                 </div>
                 <?php
                 break;
@@ -121,53 +91,38 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                 $theme = $data['step_data']['theme'] ?? [];
                 $content = $data['step_data']['content'] ?? [];
                 $suggested = $data['step_data']['suggested_plugins'] ?? [];
+                $backup = $data['step_data']['backup'] ?? [];
                 ?>
                 <div class="creator-setup-section creator-overview-section">
-                    <h2><?php esc_html_e( 'Creator System Overview', 'creator-core' ); ?></h2>
+                    <h2><?php esc_html_e( 'System Overview & Configuration', 'creator-core' ); ?></h2>
                     <p><?php esc_html_e( 'Here\'s your current WordPress setup. Creator will adapt to work with your installed plugins.', 'creator-core' ); ?></p>
 
-                    <!-- System Info -->
+                    <!-- Section A: System Info (Read-Only) -->
                     <div class="creator-system-info">
                         <h3><?php esc_html_e( 'Your Current Setup', 'creator-core' ); ?></h3>
                         <div class="creator-info-grid">
                             <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'WordPress Version', 'creator-core' ); ?></span>
+                                <span class="creator-info-label"><?php esc_html_e( 'WordPress', 'creator-core' ); ?></span>
                                 <span class="creator-info-value"><?php echo esc_html( $system['wordpress_version'] ?? '?' ); ?></span>
                             </div>
                             <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'PHP Version', 'creator-core' ); ?></span>
+                                <span class="creator-info-label"><?php esc_html_e( 'PHP', 'creator-core' ); ?></span>
                                 <span class="creator-info-value"><?php echo esc_html( $system['php_version'] ?? '?' ); ?></span>
                             </div>
                             <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'MySQL Version', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $system['mysql_version'] ?? '?' ); ?></span>
+                                <span class="creator-info-label"><?php esc_html_e( 'Theme', 'creator-core' ); ?></span>
+                                <span class="creator-info-value"><?php echo esc_html( $theme['name'] ?? '?' ); ?></span>
                             </div>
                             <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'Database Size', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $system['db_size'] ?? '?' ); ?></span>
-                            </div>
-                        </div>
-
-                        <div class="creator-info-grid">
-                            <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'Active Theme', 'creator-core' ); ?></span>
-                                <span class="creator-info-value">
-                                    <?php echo esc_html( $theme['name'] ?? '?' ); ?>
-                                    <?php if ( ! empty( $theme['is_child'] ) && ! empty( $theme['parent_name'] ) ) : ?>
-                                        <small>(<?php echo esc_html( sprintf( __( 'Child of %s', 'creator-core' ), $theme['parent_name'] ) ); ?>)</small>
-                                    <?php endif; ?>
-                                </span>
+                                <span class="creator-info-label"><?php esc_html_e( 'Plugins', 'creator-core' ); ?></span>
+                                <span class="creator-info-value"><?php echo esc_html( $plugins['count'] ?? 0 ); ?> <?php esc_html_e( 'active', 'creator-core' ); ?></span>
                             </div>
                             <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'Active Plugins', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $plugins['count'] ?? 0 ); ?></span>
-                            </div>
-                            <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'Custom Post Types', 'creator-core' ); ?></span>
+                                <span class="creator-info-label"><?php esc_html_e( 'CPTs', 'creator-core' ); ?></span>
                                 <span class="creator-info-value"><?php echo esc_html( $content['cpt_count'] ?? 0 ); ?></span>
                             </div>
                             <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'Custom Taxonomies', 'creator-core' ); ?></span>
+                                <span class="creator-info-label"><?php esc_html_e( 'Taxonomies', 'creator-core' ); ?></span>
                                 <span class="creator-info-value"><?php echo esc_html( $content['taxonomy_count'] ?? 0 ); ?></span>
                             </div>
                         </div>
@@ -192,54 +147,7 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                         <?php endif; ?>
                     </div>
 
-                    <!-- Capabilities -->
-                    <div class="creator-capabilities-overview">
-                        <h3><?php esc_html_e( 'What You Can Do With Creator', 'creator-core' ); ?></h3>
-                        <div class="creator-capability-cards">
-                            <div class="creator-capability-card">
-                                <div class="creator-card-icon"><span class="dashicons dashicons-plus-alt"></span></div>
-                                <h4><?php esc_html_e( 'CREATE', 'creator-core' ); ?></h4>
-                                <ul>
-                                    <li><?php esc_html_e( 'Custom Post Types', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Custom Fields', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Landing Pages', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Content Automation', 'creator-core' ); ?></li>
-                                </ul>
-                            </div>
-                            <div class="creator-capability-card">
-                                <div class="creator-card-icon"><span class="dashicons dashicons-admin-tools"></span></div>
-                                <h4><?php esc_html_e( 'MANAGE', 'creator-core' ); ?></h4>
-                                <ul>
-                                    <li><?php esc_html_e( 'SEO Settings', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Plugin Settings', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'User Roles', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Database Queries', 'creator-core' ); ?></li>
-                                </ul>
-                            </div>
-                            <div class="creator-capability-card">
-                                <div class="creator-card-icon"><span class="dashicons dashicons-performance"></span></div>
-                                <h4><?php esc_html_e( 'OPTIMIZE', 'creator-core' ); ?></h4>
-                                <ul>
-                                    <li><?php esc_html_e( 'Performance Setup', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Security Hardening', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Database Cleanup', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Cache Strategy', 'creator-core' ); ?></li>
-                                </ul>
-                            </div>
-                            <div class="creator-capability-card">
-                                <div class="creator-card-icon"><span class="dashicons dashicons-admin-generic"></span></div>
-                                <h4><?php esc_html_e( 'CUSTOMIZE', 'creator-core' ); ?></h4>
-                                <ul>
-                                    <li><?php esc_html_e( 'Custom Code Scripts', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Advanced Workflows', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Third-party APIs', 'creator-core' ); ?></li>
-                                    <li><?php esc_html_e( 'Automation Rules', 'creator-core' ); ?></li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Suggested Plugins (Optional) -->
+                    <!-- Section B: Suggested Plugins (Optional) -->
                     <?php if ( ! empty( $suggested ) ) : ?>
                         <div class="creator-suggested-plugins">
                             <h3><?php esc_html_e( 'Recommended Plugins (Optional)', 'creator-core' ); ?></h3>
@@ -266,7 +174,7 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                                         <div class="creator-suggested-actions">
                                             <?php if ( ! $plugin['installed'] ) : ?>
                                                 <?php
-                                                $slug_parts = explode( '/', $plugin['key'] );
+                                                $slug_parts   = explode( '/', $plugin['key'] );
                                                 $install_slug = $slug_parts[0] ?? $key;
                                                 ?>
                                                 <button type="button" class="creator-btn creator-btn-sm creator-install-plugin" data-plugin="<?php echo esc_attr( $install_slug ); ?>">
@@ -291,47 +199,58 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                             </div>
                         </div>
                     <?php endif; ?>
-                </div>
-                <?php
-                break;
 
-            case 'backup':
-                ?>
-                <div class="creator-setup-section">
-                    <h2><?php esc_html_e( 'Configure Backup', 'creator-core' ); ?></h2>
-                    <p><?php esc_html_e( 'Creator automatically creates backups before making changes. Configure your backup preferences.', 'creator-core' ); ?></p>
+                    <!-- Section C: Backup Configuration -->
+                    <div class="creator-backup-config">
+                        <h3><?php esc_html_e( 'Backup Configuration', 'creator-core' ); ?></h3>
+                        <p class="creator-backup-description"><?php esc_html_e( 'We recommend daily backups as standard WordPress practice.', 'creator-core' ); ?></p>
 
-                    <form id="creator-backup-form" class="creator-setup-form">
-                        <div class="creator-form-row">
-                            <label for="backup-path"><?php esc_html_e( 'Backup Location', 'creator-core' ); ?></label>
-                            <input type="text" id="backup-path" value="<?php echo esc_attr( $data['step_data']['backup_path'] ); ?>" readonly>
-                            <?php if ( $data['step_data']['path_writable'] ) : ?>
-                                <span class="creator-status-ok">
-                                    <span class="dashicons dashicons-yes"></span>
-                                    <?php esc_html_e( 'Writable', 'creator-core' ); ?>
-                                </span>
-                            <?php else : ?>
-                                <span class="creator-status-error">
-                                    <span class="dashicons dashicons-no"></span>
-                                    <?php esc_html_e( 'Not writable', 'creator-core' ); ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
+                        <form id="creator-backup-form" class="creator-setup-form">
+                            <div class="creator-backup-options">
+                                <label class="creator-backup-option">
+                                    <input type="radio" name="backup_frequency" value="daily" checked>
+                                    <div class="creator-backup-option-content">
+                                        <strong><?php esc_html_e( 'Daily backups', 'creator-core' ); ?></strong>
+                                        <span class="creator-recommended-badge"><?php esc_html_e( 'Recommended', 'creator-core' ); ?></span>
+                                        <p><?php esc_html_e( 'Automatically backup database and files every day', 'creator-core' ); ?></p>
+                                    </div>
+                                </label>
 
-                        <div class="creator-form-row">
-                            <label for="retention-days"><?php esc_html_e( 'Retention Period (days)', 'creator-core' ); ?></label>
-                            <input type="number" id="retention-days" name="retention_days"
-                                   value="<?php echo esc_attr( $data['step_data']['retention_days'] ); ?>" min="1" max="365">
-                            <p class="description"><?php esc_html_e( 'How long to keep backup snapshots', 'creator-core' ); ?></p>
-                        </div>
+                                <label class="creator-backup-option">
+                                    <input type="radio" name="backup_frequency" value="weekly">
+                                    <div class="creator-backup-option-content">
+                                        <strong><?php esc_html_e( 'Weekly backups', 'creator-core' ); ?></strong>
+                                        <p><?php esc_html_e( 'Automatically backup every week', 'creator-core' ); ?></p>
+                                    </div>
+                                </label>
 
-                        <div class="creator-form-row">
-                            <label for="max-size"><?php esc_html_e( 'Maximum Size (MB)', 'creator-core' ); ?></label>
-                            <input type="number" id="max-size" name="max_size_mb"
-                                   value="<?php echo esc_attr( $data['step_data']['max_size_mb'] ); ?>" min="50" max="5000">
-                            <p class="description"><?php esc_html_e( 'Maximum total backup storage', 'creator-core' ); ?></p>
-                        </div>
-                    </form>
+                                <label class="creator-backup-option">
+                                    <input type="radio" name="backup_frequency" value="manual">
+                                    <div class="creator-backup-option-content">
+                                        <strong><?php esc_html_e( 'Manual backups only', 'creator-core' ); ?></strong>
+                                        <p><?php esc_html_e( 'I\'ll handle backups manually', 'creator-core' ); ?></p>
+                                    </div>
+                                </label>
+
+                                <label class="creator-backup-option">
+                                    <input type="radio" name="backup_frequency" value="external">
+                                    <div class="creator-backup-option-content">
+                                        <strong><?php esc_html_e( 'Already configured', 'creator-core' ); ?></strong>
+                                        <p><?php esc_html_e( 'I already have a backup system in place', 'creator-core' ); ?></p>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div class="creator-backup-confirm">
+                                <label class="creator-checkbox-label">
+                                    <input type="checkbox" id="backup-confirmed" name="backup_confirmed" value="1">
+                                    <span class="creator-checkbox-text">
+                                        <?php esc_html_e( 'I have backups enabled or will configure them', 'creator-core' ); ?>
+                                    </span>
+                                </label>
+                            </div>
+                        </form>
+                    </div>
                 </div>
                 <?php
                 break;
@@ -526,7 +445,7 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
     <!-- Navigation -->
     <div class="creator-setup-nav">
         <?php $prev_url = $setup_wizard->get_previous_step_url( $data['current_step'] ); ?>
-        <?php if ( $prev_url && $data['current_step'] !== 'safety' ) : ?>
+        <?php if ( $prev_url && $data['current_step'] !== 'welcome' ) : ?>
             <a href="<?php echo esc_url( $prev_url ); ?>" class="creator-btn creator-btn-outline">
                 <span class="dashicons dashicons-arrow-left-alt2"></span>
                 <?php esc_html_e( 'Back', 'creator-core' ); ?>
@@ -537,9 +456,14 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
 
         <?php if ( $data['current_step'] !== 'finish' ) : ?>
             <div class="creator-nav-right">
-                <?php if ( $data['current_step'] === 'safety' ) : ?>
-                    <button type="button" id="accept-and-continue-btn" class="creator-btn creator-btn-primary" disabled>
-                        <?php esc_html_e( 'I understand and accept - Continue to Setup', 'creator-core' ); ?>
+                <?php if ( $data['current_step'] === 'welcome' ) : ?>
+                    <button type="button" id="continue-from-welcome-btn" class="creator-btn creator-btn-primary">
+                        <?php esc_html_e( 'Continue to Setup', 'creator-core' ); ?>
+                        <span class="dashicons dashicons-arrow-right-alt2"></span>
+                    </button>
+                <?php elseif ( $data['current_step'] === 'profile' ) : ?>
+                    <button type="button" id="next-step-btn" class="creator-btn creator-btn-primary">
+                        <?php esc_html_e( 'Complete Setup', 'creator-core' ); ?>
                         <span class="dashicons dashicons-arrow-right-alt2"></span>
                     </button>
                 <?php else : ?>

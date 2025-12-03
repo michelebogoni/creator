@@ -30,39 +30,29 @@ class SetupWizard {
     /**
      * Wizard steps
      *
-     * Step 1: Safety Warning (must accept responsibility)
-     * Step 2: System Overview (info + optional plugin suggestions)
-     * Step 3: Backup Configuration
-     * Step 4: License Activation
-     * Step 5: Profile Selection
-     * Step 6: Finish
+     * Step 1: What You Can Do (features + brief responsibility note)
+     * Step 2: System Overview + Backup Configuration (combined)
+     * Step 3: License Activation
+     * Step 4: Profile Selection (redirects to dashboard on completion)
      *
      * @var array
      */
     private array $steps = [
-        'safety' => [
-            'name'  => 'Safety Notice',
+        'welcome' => [
+            'name'  => 'What You Can Do',
             'order' => 1,
         ],
         'overview' => [
-            'name'  => 'System Overview',
+            'name'  => 'System & Backup',
             'order' => 2,
         ],
-        'backup' => [
-            'name'  => 'Configure Backup',
-            'order' => 3,
-        ],
         'license' => [
-            'name'  => 'License Activation',
-            'order' => 4,
+            'name'  => 'License',
+            'order' => 3,
         ],
         'profile' => [
             'name'  => 'Your Profile',
-            'order' => 5,
-        ],
-        'finish' => [
-            'name'  => 'Ready to Go',
-            'order' => 6,
+            'order' => 4,
         ],
     ];
 
@@ -139,10 +129,10 @@ class SetupWizard {
      * @return void
      */
     public function render(): void {
-        $current_step = isset( $_GET['step'] ) ? sanitize_key( $_GET['step'] ) : 'safety';
+        $current_step = isset( $_GET['step'] ) ? sanitize_key( $_GET['step'] ) : 'welcome';
 
         if ( ! isset( $this->steps[ $current_step ] ) ) {
-            $current_step = 'safety';
+            $current_step = 'welcome';
         }
 
         $data = [
@@ -162,14 +152,15 @@ class SetupWizard {
      */
     private function get_step_data( string $step ): array {
         switch ( $step ) {
-            case 'safety':
-                return $this->get_safety_data();
+            case 'welcome':
+                return $this->get_welcome_data();
 
             case 'overview':
-                return $this->get_overview_data();
-
-            case 'backup':
-                return $this->get_backup_data();
+                // Combine system overview with backup configuration
+                return array_merge(
+                    $this->get_overview_data(),
+                    [ 'backup' => $this->get_backup_data() ]
+                );
 
             case 'license':
                 return $this->get_license_data();
@@ -177,24 +168,54 @@ class SetupWizard {
             case 'profile':
                 return $this->get_profile_data();
 
-            case 'finish':
-                return $this->get_finish_data();
-
             default:
                 return [];
         }
     }
 
     /**
-     * Get safety step data
+     * Get welcome step data
+     *
+     * Features showcase with brief responsibility note
      *
      * @return array
      */
-    private function get_safety_data(): array {
+    private function get_welcome_data(): array {
         return [
-            'already_accepted' => (bool) get_option( 'creator_user_accepted_responsibility', false ),
-            'accepted_at'      => get_option( 'creator_user_accepted_responsibility_at', null ),
+            'features' => [
+                'content' => [
+                    'icon'        => 'edit-page',
+                    'title'       => __( 'Create & Manage Content', 'creator-core' ),
+                    'description' => __( 'Create posts, pages, custom post types, and automate content workflows', 'creator-core' ),
+                ],
+                'customize' => [
+                    'icon'        => 'admin-customizer',
+                    'title'       => __( 'Customize Your Site', 'creator-core' ),
+                    'description' => __( 'Add custom fields, taxonomies, and create specialized functionality without coding', 'creator-core' ),
+                ],
+                'optimize' => [
+                    'icon'        => 'performance',
+                    'title'       => __( 'Optimize Performance', 'creator-core' ),
+                    'description' => __( 'Configure SEO, caching, security, and improve site speed', 'creator-core' ),
+                ],
+                'automate' => [
+                    'icon'        => 'update',
+                    'title'       => __( 'Automate Workflows', 'creator-core' ),
+                    'description' => __( 'Set up automations, integrate third-party services, and save time', 'creator-core' ),
+                ],
+            ],
+            'already_acknowledged' => (bool) get_option( 'creator_user_accepted_responsibility', false ),
         ];
+    }
+
+    /**
+     * Get safety step data (deprecated, kept for backward compatibility)
+     *
+     * @return array
+     * @deprecated Use get_welcome_data() instead
+     */
+    private function get_safety_data(): array {
+        return $this->get_welcome_data();
     }
 
     /**
@@ -357,21 +378,18 @@ class SetupWizard {
     }
 
     /**
-     * Get finish step data
+     * Get finish step data (deprecated - setup now completes on profile step)
      *
      * @return array
+     * @deprecated No longer used as setup completes on profile step
      */
     private function get_finish_data(): array {
-        // Mark setup as complete when finish step is displayed
-        // This ensures the user can navigate away without being redirected back
-        update_option( 'creator_setup_completed', true );
-
         return [
-            'integrations' => $this->plugin_detector->get_all_integrations(),
-            'features'     => $this->plugin_detector->get_available_features(),
+            'integrations'  => $this->plugin_detector->get_all_integrations(),
+            'features'      => $this->plugin_detector->get_available_features(),
             'dashboard_url' => admin_url( 'admin.php?page=creator-dashboard' ),
-            'chat_url'     => admin_url( 'admin.php?page=creator-chat' ),
-            'settings_url' => admin_url( 'admin.php?page=creator-settings' ),
+            'chat_url'      => admin_url( 'admin.php?page=creator-chat' ),
+            'settings_url'  => admin_url( 'admin.php?page=creator-settings' ),
         ];
     }
 
@@ -427,8 +445,14 @@ class SetupWizard {
         $data = isset( $_POST['data'] ) ? $this->sanitize_array( wp_unslash( $_POST['data'] ) ) : [];
 
         switch ( $step ) {
-            case 'backup':
-                $this->process_backup_step( $data );
+            case 'welcome':
+                // Welcome step just continues, no data to save
+                wp_send_json_success( [ 'next_url' => $this->get_next_step_url( $step ) ] );
+                break;
+
+            case 'overview':
+                // Overview now includes backup configuration
+                $this->process_overview_step( $data );
                 break;
 
             case 'license':
@@ -436,11 +460,8 @@ class SetupWizard {
                 break;
 
             case 'profile':
+                // Profile is the final step - complete setup after saving
                 $this->process_profile_step( $data );
-                break;
-
-            case 'finish':
-                $this->complete_setup();
                 break;
 
             default:
@@ -449,10 +470,55 @@ class SetupWizard {
     }
 
     /**
-     * Process backup step
+     * Process overview step (includes backup configuration)
      *
      * @param array $data Form data.
      * @return void
+     */
+    private function process_overview_step( array $data ): void {
+        // Save backup configuration from combined step
+        if ( isset( $data['backup_frequency'] ) ) {
+            update_option( 'creator_backup_frequency', sanitize_key( $data['backup_frequency'] ) );
+        }
+
+        if ( isset( $data['backup_confirmed'] ) ) {
+            update_option( 'creator_backup_confirmed', (bool) $data['backup_confirmed'] );
+            update_option( 'creator_backup_confirmed_at', current_time( 'mysql' ) );
+        }
+
+        // Process any backup settings if provided
+        if ( isset( $data['retention_days'] ) ) {
+            update_option( 'creator_backup_retention', absint( $data['retention_days'] ) );
+        }
+
+        if ( isset( $data['max_size_mb'] ) ) {
+            update_option( 'creator_max_backup_size_mb', absint( $data['max_size_mb'] ) );
+        }
+
+        // Ensure backup directory exists
+        $upload_dir  = wp_upload_dir();
+        $backup_path = $upload_dir['basedir'] . '/creator-backups';
+
+        if ( ! file_exists( $backup_path ) ) {
+            wp_mkdir_p( $backup_path );
+            file_put_contents( $backup_path . '/.htaccess', "Order deny,allow\nDeny from all" );
+            file_put_contents( $backup_path . '/index.php', '<?php // Silence is golden.' );
+        }
+
+        update_option( 'creator_backup_path', $backup_path );
+
+        wp_send_json_success( [
+            'message'  => __( 'System configuration saved', 'creator-core' ),
+            'next_url' => $this->get_next_step_url( 'overview' ),
+        ] );
+    }
+
+    /**
+     * Process backup step (deprecated - use process_overview_step)
+     *
+     * @param array $data Form data.
+     * @return void
+     * @deprecated Use process_overview_step() instead
      */
     private function process_backup_step( array $data ): void {
         if ( isset( $data['retention_days'] ) ) {
@@ -511,7 +577,7 @@ class SetupWizard {
     }
 
     /**
-     * Process profile step
+     * Process profile step (final step - completes setup)
      *
      * @param array $data Form data.
      * @return void
@@ -530,9 +596,12 @@ class SetupWizard {
         $saved = UserProfile::set_level( $level );
 
         if ( $saved ) {
+            // Mark setup as complete - profile is now the final step
+            update_option( 'creator_setup_completed', true );
+
             wp_send_json_success( [
-                'message'  => __( 'Profile saved', 'creator-core' ),
-                'next_url' => $this->get_next_step_url( 'profile' ),
+                'message'  => __( 'Setup completed! Redirecting to dashboard...', 'creator-core' ),
+                'next_url' => admin_url( 'admin.php?page=creator-dashboard' ),
             ]);
         } else {
             wp_send_json_error( [ 'message' => __( 'Failed to save profile', 'creator-core' ) ] );
@@ -753,10 +822,11 @@ class SetupWizard {
     }
 
     /**
-     * AJAX: Accept safety responsibility
+     * AJAX: Accept responsibility acknowledgment
      *
-     * User must explicitly accept responsibility before using Creator.
+     * User acknowledges understanding of Creator's capabilities.
      * This is logged with timestamp for audit purposes.
+     * In the new friendly wizard, this is called when continuing from Welcome step.
      *
      * @return void
      */
@@ -767,17 +837,9 @@ class SetupWizard {
             wp_send_json_error( [ 'message' => __( 'Permission denied', 'creator-core' ) ] );
         }
 
-        $accepted = isset( $_POST['accepted'] ) && $_POST['accepted'] === 'true';
-
-        if ( ! $accepted ) {
-            wp_send_json_error( [
-                'message' => __( 'You must accept the responsibility notice to use Creator', 'creator-core' ),
-            ]);
-        }
-
-        // Save acceptance with timestamp and user info
+        // Save acknowledgment with timestamp and user info
         $user_id = get_current_user_id();
-        $user = get_userdata( $user_id );
+        $user    = get_userdata( $user_id );
 
         update_option( 'creator_user_accepted_responsibility', true );
         update_option( 'creator_user_accepted_responsibility_at', current_time( 'mysql' ) );
@@ -785,18 +847,18 @@ class SetupWizard {
             'user_id'  => $user_id,
             'username' => $user ? $user->user_login : 'unknown',
             'ip'       => sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ),
-        ]);
+        ] );
 
         // Log to audit trail if available
-        do_action( 'creator_audit_log', 'safety_accepted', [
-            'user_id'  => $user_id,
-            'accepted' => true,
-        ]);
+        do_action( 'creator_audit_log', 'welcome_acknowledged', [
+            'user_id'      => $user_id,
+            'acknowledged' => true,
+        ] );
 
         wp_send_json_success( [
-            'message'  => __( 'Responsibility accepted', 'creator-core' ),
-            'next_url' => $this->get_next_step_url( 'safety' ),
-        ]);
+            'message'  => __( 'Welcome completed', 'creator-core' ),
+            'next_url' => $this->get_next_step_url( 'welcome' ),
+        ] );
     }
 
     /**

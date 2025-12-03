@@ -27,7 +27,6 @@ $settings_page = new \CreatorCore\Admin\Settings(
                 <a href="#profile" class="creator-tab" data-tab="profile"><?php esc_html_e( 'Your Profile', 'creator-core' ); ?></a>
                 <a href="#context" class="creator-tab" data-tab="context"><?php esc_html_e( 'AI Context', 'creator-core' ); ?></a>
                 <a href="#backup" class="creator-tab" data-tab="backup"><?php esc_html_e( 'Backup Settings', 'creator-core' ); ?></a>
-                <a href="#integrations" class="creator-tab" data-tab="integrations"><?php esc_html_e( 'Integrations', 'creator-core' ); ?></a>
                 <a href="#permissions" class="creator-tab" data-tab="permissions"><?php esc_html_e( 'Permissions', 'creator-core' ); ?></a>
                 <a href="#advanced" class="creator-tab" data-tab="advanced"><?php esc_html_e( 'Advanced', 'creator-core' ); ?></a>
             </nav>
@@ -319,40 +318,6 @@ $settings_page = new \CreatorCore\Admin\Settings(
                             </button>
                         </td>
                     </tr>
-                </table>
-            </div>
-
-            <!-- Integrations -->
-            <div id="integrations" class="creator-tab-content">
-                <h2><?php esc_html_e( 'Integrations', 'creator-core' ); ?></h2>
-
-                <table class="wp-list-table widefat striped">
-                    <thead>
-                        <tr>
-                            <th><?php esc_html_e( 'Plugin', 'creator-core' ); ?></th>
-                            <th><?php esc_html_e( 'Status', 'creator-core' ); ?></th>
-                            <th><?php esc_html_e( 'Version', 'creator-core' ); ?></th>
-                            <th><?php esc_html_e( 'Features', 'creator-core' ); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ( $data['integrations'] as $key => $integration ) : ?>
-                            <tr>
-                                <td><strong><?php echo esc_html( $integration['name'] ); ?></strong></td>
-                                <td>
-                                    <?php if ( $integration['active'] ) : ?>
-                                        <span class="creator-status-badge success"><?php esc_html_e( 'Active', 'creator-core' ); ?></span>
-                                    <?php elseif ( $integration['installed'] ) : ?>
-                                        <span class="creator-status-badge warning"><?php esc_html_e( 'Inactive', 'creator-core' ); ?></span>
-                                    <?php else : ?>
-                                        <span class="creator-status-badge"><?php esc_html_e( 'Not Installed', 'creator-core' ); ?></span>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?php echo $integration['version'] ? esc_html( $integration['version'] ) : '-'; ?></td>
-                                <td><?php echo esc_html( implode( ', ', $integration['features'] ) ); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
                 </table>
             </div>
 

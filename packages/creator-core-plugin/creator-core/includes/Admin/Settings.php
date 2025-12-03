@@ -44,13 +44,12 @@ class Settings {
      * @var array
      */
     private array $settings_groups = [
-        'api'          => 'API Configuration',
-        'profile'      => 'Your Profile',
-        'context'      => 'AI Context',
-        'backup'       => 'Backup Settings',
-        'integrations' => 'Integrations',
-        'permissions'  => 'User Permissions',
-        'advanced'     => 'Advanced',
+        'api'         => 'API Configuration',
+        'profile'     => 'Your Profile',
+        'context'     => 'AI Context',
+        'backup'      => 'Backup Settings',
+        'permissions' => 'User Permissions',
+        'advanced'    => 'Advanced',
     ];
 
     /**
@@ -84,7 +83,6 @@ class Settings {
 
         $data = [
             'settings'       => $this->get_all_settings(),
-            'integrations'   => $this->plugin_detector->get_all_integrations(),
             'roles'          => $this->get_roles_settings(),
             'backup_stats'   => $this->get_backup_stats(),
             'connection'     => $this->proxy_client->check_connection(),
