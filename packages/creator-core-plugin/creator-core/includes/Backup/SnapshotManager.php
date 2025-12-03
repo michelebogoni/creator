@@ -526,4 +526,69 @@ class SnapshotManager {
     public function get_backup_path(): string {
         return $this->backup_path;
     }
+
+    /**
+     * Enforce max size limit by deleting oldest snapshots
+     *
+     * @param int $max_size_mb Maximum size in MB.
+     * @return int Number of deleted snapshots.
+     */
+    public function enforce_size_limit( int $max_size_mb ): int {
+        global $wpdb;
+
+        $max_size_kb = $max_size_mb * 1024;
+        $deleted_count = 0;
+
+        // Get current total size
+        $current_size_kb = (int) $wpdb->get_var(
+            "SELECT SUM(storage_size_kb) FROM {$wpdb->prefix}creator_snapshots WHERE deleted = 0"
+        );
+
+        // If under limit, nothing to do
+        if ( $current_size_kb <= $max_size_kb ) {
+            return 0;
+        }
+
+        // Get oldest snapshots first
+        $snapshots = $wpdb->get_results(
+            "SELECT id, storage_file, storage_size_kb FROM {$wpdb->prefix}creator_snapshots
+             WHERE deleted = 0
+             ORDER BY created_at ASC",
+            ARRAY_A
+        );
+
+        foreach ( $snapshots as $snapshot ) {
+            // Stop if we're under the limit
+            if ( $current_size_kb <= $max_size_kb ) {
+                break;
+            }
+
+            // Delete file
+            if ( ! empty( $snapshot['storage_file'] ) && file_exists( $snapshot['storage_file'] ) ) {
+                unlink( $snapshot['storage_file'] );
+            }
+
+            // Delete record
+            $wpdb->delete(
+                $wpdb->prefix . 'creator_snapshots',
+                [ 'id' => $snapshot['id'] ],
+                [ '%d' ]
+            );
+
+            $current_size_kb -= (int) $snapshot['storage_size_kb'];
+            $deleted_count++;
+        }
+
+        // Clean up empty directories
+        if ( $deleted_count > 0 ) {
+            $this->cleanup_empty_directories( $this->backup_path );
+
+            $this->logger->success( 'snapshots_size_cleanup', [
+                'deleted_count' => $deleted_count,
+                'max_size_mb'   => $max_size_mb,
+            ]);
+        }
+
+        return $deleted_count;
+    }
 }

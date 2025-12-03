@@ -70,84 +70,39 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                         <?php endforeach; ?>
                     </div>
 
-                    <!-- Friendly responsibility note -->
-                    <div class="creator-responsibility-note">
+                    <!-- Warning note with backup checkbox -->
+                    <div class="creator-warning-note">
+                        <div class="creator-warning-note-header">
+                            <span class="dashicons dashicons-warning"></span>
+                            <strong><?php esc_html_e( 'Important', 'creator-core' ); ?></strong>
+                        </div>
                         <p>
-                            <span class="dashicons dashicons-info-outline"></span>
                             <?php esc_html_e( 'Creator has the same capabilities as you do in WordPress. We recommend having daily backups enabled (standard practice). Your responsibility as site owner is to test changes on staging first.', 'creator-core' ); ?>
                         </p>
                         <a href="https://developer.wordpress.org/advanced-administration/security/backup/" target="_blank" rel="noopener noreferrer" class="creator-learn-link">
                             <?php esc_html_e( 'Learn about backup options', 'creator-core' ); ?>
                             <span class="dashicons dashicons-external"></span>
                         </a>
+                        <div class="creator-backup-acknowledge">
+                            <label class="creator-checkbox-inline">
+                                <input type="checkbox" id="backup-acknowledged" name="backup_acknowledged" value="1">
+                                <span><?php esc_html_e( 'I have backups enabled or will configure them', 'creator-core' ); ?></span>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <?php
                 break;
 
             case 'overview':
-                $system = $data['step_data']['system'] ?? [];
-                $plugins = $data['step_data']['plugins'] ?? [];
-                $theme = $data['step_data']['theme'] ?? [];
-                $content = $data['step_data']['content'] ?? [];
                 $suggested = $data['step_data']['suggested_plugins'] ?? [];
                 $backup = $data['step_data']['backup'] ?? [];
                 ?>
                 <div class="creator-setup-section creator-overview-section">
-                    <h2><?php esc_html_e( 'System Overview & Configuration', 'creator-core' ); ?></h2>
-                    <p><?php esc_html_e( 'Here\'s your current WordPress setup. Creator will adapt to work with your installed plugins.', 'creator-core' ); ?></p>
+                    <h2><?php esc_html_e( 'Configuration', 'creator-core' ); ?></h2>
+                    <p><?php esc_html_e( 'Configure Creator settings and optional plugins.', 'creator-core' ); ?></p>
 
-                    <!-- Section A: System Info (Read-Only) -->
-                    <div class="creator-system-info">
-                        <h3><?php esc_html_e( 'Your Current Setup', 'creator-core' ); ?></h3>
-                        <div class="creator-info-grid">
-                            <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'WordPress', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $system['wordpress_version'] ?? '?' ); ?></span>
-                            </div>
-                            <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'PHP', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $system['php_version'] ?? '?' ); ?></span>
-                            </div>
-                            <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'Theme', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $theme['name'] ?? '?' ); ?></span>
-                            </div>
-                            <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'Plugins', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $plugins['count'] ?? 0 ); ?> <?php esc_html_e( 'active', 'creator-core' ); ?></span>
-                            </div>
-                            <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'CPTs', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $content['cpt_count'] ?? 0 ); ?></span>
-                            </div>
-                            <div class="creator-info-item">
-                                <span class="creator-info-label"><?php esc_html_e( 'Taxonomies', 'creator-core' ); ?></span>
-                                <span class="creator-info-value"><?php echo esc_html( $content['taxonomy_count'] ?? 0 ); ?></span>
-                            </div>
-                        </div>
-
-                        <?php if ( ! empty( $plugins['list'] ) ) : ?>
-                            <div class="creator-plugins-list-toggle">
-                                <button type="button" class="creator-btn-link" id="toggle-plugins-list">
-                                    <span class="dashicons dashicons-arrow-down-alt2"></span>
-                                    <?php esc_html_e( 'View installed plugins', 'creator-core' ); ?>
-                                </button>
-                                <div id="plugins-list-content" class="creator-plugins-list-content" style="display: none;">
-                                    <ul>
-                                        <?php foreach ( $plugins['list'] as $plugin ) : ?>
-                                            <li>
-                                                <strong><?php echo esc_html( $plugin['name'] ); ?></strong>
-                                                <span class="creator-plugin-version">v<?php echo esc_html( $plugin['version'] ); ?></span>
-                                            </li>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- Section B: Suggested Plugins (Optional) -->
+                    <!-- Section A: Suggested Plugins (Optional) -->
                     <?php if ( ! empty( $suggested ) ) : ?>
                         <div class="creator-suggested-plugins">
                             <h3><?php esc_html_e( 'Recommended Plugins (Optional)', 'creator-core' ); ?></h3>
@@ -200,54 +155,42 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                         </div>
                     <?php endif; ?>
 
-                    <!-- Section C: Backup Configuration -->
-                    <div class="creator-backup-config">
-                        <h3><?php esc_html_e( 'Backup Configuration', 'creator-core' ); ?></h3>
-                        <p class="creator-backup-description"><?php esc_html_e( 'We recommend daily backups as standard WordPress practice.', 'creator-core' ); ?></p>
+                    <!-- Section B: Chat Backup -->
+                    <div class="creator-chat-backup">
+                        <h3><?php esc_html_e( 'Chat Backup', 'creator-core' ); ?></h3>
+                        <p class="creator-backup-description"><?php esc_html_e( 'Configure where chat history is stored and retention limits.', 'creator-core' ); ?></p>
 
                         <form id="creator-backup-form" class="creator-setup-form">
-                            <div class="creator-backup-options">
-                                <label class="creator-backup-option">
-                                    <input type="radio" name="backup_frequency" value="daily" checked>
-                                    <div class="creator-backup-option-content">
-                                        <strong><?php esc_html_e( 'Daily backups', 'creator-core' ); ?></strong>
-                                        <span class="creator-recommended-badge"><?php esc_html_e( 'Recommended', 'creator-core' ); ?></span>
-                                        <p><?php esc_html_e( 'Automatically backup database and files every day', 'creator-core' ); ?></p>
-                                    </div>
-                                </label>
-
-                                <label class="creator-backup-option">
-                                    <input type="radio" name="backup_frequency" value="weekly">
-                                    <div class="creator-backup-option-content">
-                                        <strong><?php esc_html_e( 'Weekly backups', 'creator-core' ); ?></strong>
-                                        <p><?php esc_html_e( 'Automatically backup every week', 'creator-core' ); ?></p>
-                                    </div>
-                                </label>
-
-                                <label class="creator-backup-option">
-                                    <input type="radio" name="backup_frequency" value="manual">
-                                    <div class="creator-backup-option-content">
-                                        <strong><?php esc_html_e( 'Manual backups only', 'creator-core' ); ?></strong>
-                                        <p><?php esc_html_e( 'I\'ll handle backups manually', 'creator-core' ); ?></p>
-                                    </div>
-                                </label>
-
-                                <label class="creator-backup-option">
-                                    <input type="radio" name="backup_frequency" value="external">
-                                    <div class="creator-backup-option-content">
-                                        <strong><?php esc_html_e( 'Already configured', 'creator-core' ); ?></strong>
-                                        <p><?php esc_html_e( 'I already have a backup system in place', 'creator-core' ); ?></p>
-                                    </div>
-                                </label>
+                            <div class="creator-form-row">
+                                <label for="backup-path"><?php esc_html_e( 'Backup Path', 'creator-core' ); ?></label>
+                                <input type="text" id="backup-path" name="backup_path"
+                                       value="<?php echo esc_attr( $backup['backup_path'] ?? '' ); ?>"
+                                       readonly class="creator-input-readonly">
+                                <p class="description">
+                                    <?php if ( $backup['path_writable'] ?? false ) : ?>
+                                        <span class="creator-status-ok"><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Writable', 'creator-core' ); ?></span>
+                                    <?php else : ?>
+                                        <span class="creator-status-warning"><span class="dashicons dashicons-warning"></span> <?php esc_html_e( 'Not writable', 'creator-core' ); ?></span>
+                                    <?php endif; ?>
+                                </p>
                             </div>
 
-                            <div class="creator-backup-confirm">
-                                <label class="creator-checkbox-label">
-                                    <input type="checkbox" id="backup-confirmed" name="backup_confirmed" value="1">
-                                    <span class="creator-checkbox-text">
-                                        <?php esc_html_e( 'I have backups enabled or will configure them', 'creator-core' ); ?>
-                                    </span>
-                                </label>
+                            <div class="creator-form-row-inline">
+                                <div class="creator-form-field">
+                                    <label for="retention-days"><?php esc_html_e( 'Retention (days)', 'creator-core' ); ?></label>
+                                    <input type="number" id="retention-days" name="retention_days"
+                                           value="<?php echo esc_attr( $backup['retention_days'] ?? 30 ); ?>"
+                                           min="1" max="365" class="creator-input-small">
+                                    <p class="description"><?php esc_html_e( 'Chat history older than this will be deleted', 'creator-core' ); ?></p>
+                                </div>
+
+                                <div class="creator-form-field">
+                                    <label for="max-size-mb"><?php esc_html_e( 'Max Size (MB)', 'creator-core' ); ?></label>
+                                    <input type="number" id="max-size-mb" name="max_size_mb"
+                                           value="<?php echo esc_attr( $backup['max_size_mb'] ?? 500 ); ?>"
+                                           min="50" max="5000" class="creator-input-small">
+                                    <p class="description"><?php esc_html_e( 'Oldest chats deleted when exceeded', 'creator-core' ); ?></p>
+                                </div>
                             </div>
                         </form>
                     </div>

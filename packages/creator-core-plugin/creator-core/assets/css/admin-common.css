@@ -93,6 +93,14 @@
     color: white;
 }
 
+.creator-btn-primary:disabled,
+.creator-btn-primary.disabled {
+    background: var(--creator-gray-300);
+    color: var(--creator-gray-500);
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .creator-btn-secondary {
     background: var(--creator-gray-100);
     color: var(--creator-gray-700);
