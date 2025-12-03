@@ -23,9 +23,8 @@
          * Bind event handlers
          */
         bindEvents: function() {
-            // Safety step - checkbox and accept button
-            $('#accept-responsibility').on('change', this.handleSafetyCheckbox.bind(this));
-            $('#accept-and-continue-btn').on('click', this.acceptSafetyAndContinue.bind(this));
+            // Welcome step - continue button
+            $('#continue-from-welcome-btn').on('click', this.continueFromWelcome.bind(this));
 
             // Overview step - plugins list toggle
             $('#toggle-plugins-list').on('click', this.togglePluginsList.bind(this));
@@ -34,6 +33,14 @@
             $(document).on('click', '.creator-install-plugin', this.installPlugin.bind(this));
             $(document).on('click', '.creator-activate-plugin', this.activatePlugin.bind(this));
             $(document).on('click', '.creator-dismiss-suggestion', this.dismissPluginSuggestion.bind(this));
+
+            // Overview step - backup configuration
+            $('.creator-backup-option input[type="radio"]').on('change', this.handleBackupSelection.bind(this));
+
+            // If on overview step, intercept the Continue link
+            if (typeof creatorSetupData !== 'undefined' && creatorSetupData.currentStep === 'overview') {
+                $('#next-step-btn').on('click', this.saveOverviewAndContinue.bind(this));
+            }
 
             // License validation
             $('#validate-license-btn').on('click', this.validateLicense.bind(this));
@@ -44,9 +51,9 @@
             // Model selection
             $('.creator-model-option input[type="radio"]').on('change', this.handleModelSelection.bind(this));
 
-            // If on profile step, intercept the Continue button
+            // If on profile step, intercept the Continue button (now final step)
             if (typeof creatorSetupData !== 'undefined' && creatorSetupData.currentStep === 'profile') {
-                $('#next-step-btn').on('click', this.saveProfileAndContinue.bind(this));
+                $('#next-step-btn').on('click', this.saveProfileAndComplete.bind(this));
             }
         },
 
@@ -57,51 +64,29 @@
             if (typeof creatorSetupData === 'undefined') return;
 
             switch (creatorSetupData.currentStep) {
-                case 'safety':
-                    // Ensure button is disabled initially
-                    $('#accept-and-continue-btn').prop('disabled', true);
+                case 'welcome':
+                    // No special initialization needed - button is always enabled
+                    break;
+                case 'overview':
+                    // Select first backup option by default
+                    this.handleBackupSelection({ currentTarget: $('.creator-backup-option input[type="radio"]:checked')[0] });
                     break;
             }
         },
 
         /**
-         * Handle safety checkbox change
+         * Continue from welcome step
          */
-        handleSafetyCheckbox: function(e) {
-            const isChecked = $(e.currentTarget).is(':checked');
-            const $btn = $('#accept-and-continue-btn');
-            const $error = $('#safety-error');
-
-            // Enable/disable button based on checkbox state
-            $btn.prop('disabled', !isChecked);
-
-            // Hide error message when checked
-            if (isChecked) {
-                $error.hide();
-            }
-        },
-
-        /**
-         * Accept safety terms and continue
-         */
-        acceptSafetyAndContinue: function(e) {
+        continueFromWelcome: function(e) {
             e.preventDefault();
 
             const $btn = $(e.currentTarget);
-            const $checkbox = $('#accept-responsibility');
-            const $error = $('#safety-error');
-
-            // Validate checkbox is checked
-            if (!$checkbox.is(':checked')) {
-                $error.show();
-                return;
-            }
 
             // Show loading state
             $btn.prop('disabled', true);
-            $btn.html('<span class="dashicons dashicons-update creator-spin"></span> Processing...');
+            $btn.html('<span class="dashicons dashicons-update creator-spin"></span> Loading...');
 
-            // Send AJAX request to save acceptance
+            // Send AJAX request to log acknowledgment and continue
             $.ajax({
                 url: creatorSetup.ajaxUrl,
                 type: 'POST',
@@ -120,17 +105,78 @@
                             window.location.href = creatorSetup.adminUrl + 'admin.php?page=creator-setup&step=overview';
                         }
                     } else {
-                        $error.text(response.data?.message || 'An error occurred').show();
                         $btn.prop('disabled', false);
-                        $btn.html('I understand and accept - Continue to Setup <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                        $btn.html('Continue to Setup <span class="dashicons dashicons-arrow-right-alt2"></span>');
                     }
                 },
                 error: function() {
-                    $error.text('An error occurred. Please try again.').show();
                     $btn.prop('disabled', false);
-                    $btn.html('I understand and accept - Continue to Setup <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                    $btn.html('Continue to Setup <span class="dashicons dashicons-arrow-right-alt2"></span>');
                 }
             });
+        },
+
+        /**
+         * Handle backup option selection (visual feedback)
+         */
+        handleBackupSelection: function(e) {
+            const $radio = $(e.currentTarget);
+            const $option = $radio.closest('.creator-backup-option');
+
+            // Remove selected class from all options
+            $('.creator-backup-option').removeClass('selected');
+
+            // Add selected class to current option
+            $option.addClass('selected');
+        },
+
+        /**
+         * Save overview step data (including backup config) and continue
+         */
+        saveOverviewAndContinue: function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const $btn = $(e.currentTarget);
+            const backupFrequency = $('input[name="backup_frequency"]:checked').val();
+            const backupConfirmed = $('#backup-confirmed').is(':checked');
+
+            // Show loading
+            $btn.addClass('loading').css('pointer-events', 'none');
+            $btn.html('<span class="dashicons dashicons-update creator-spin"></span> Saving...');
+
+            $.ajax({
+                url: creatorSetup.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'creator_process_step',
+                    nonce: creatorSetup.nonce,
+                    step: 'overview',
+                    data: {
+                        backup_frequency: backupFrequency,
+                        backup_confirmed: backupConfirmed
+                    }
+                },
+                success: function(response) {
+                    if (response.success) {
+                        const nextUrl = response.data?.next_url || creatorSetupData.nextUrl;
+                        if (nextUrl) {
+                            window.location.href = nextUrl;
+                        }
+                    } else {
+                        alert('Failed to save configuration: ' + (response.data?.message || 'Unknown error'));
+                        $btn.removeClass('loading').css('pointer-events', '');
+                        $btn.html('Continue <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                    }
+                },
+                error: function() {
+                    alert('Failed to save configuration. Please try again.');
+                    $btn.removeClass('loading').css('pointer-events', '');
+                    $btn.html('Continue <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                }
+            });
+
+            return false;
         },
 
         /**
@@ -391,18 +437,15 @@
         },
 
         /**
-         * Save profile and continue to next step
+         * Save profile and complete setup (profile is final step)
          */
-        saveProfileAndContinue: function(e) {
+        saveProfileAndComplete: function(e) {
             e.preventDefault();
             e.stopPropagation();
 
             const $btn = $(e.currentTarget);
             const selectedLevel = $('input[name="user_level"]:checked').val();
             const selectedModel = $('input[name="default_model"]:checked').val();
-
-            // Get the next URL from the button's href or from creatorSetupData
-            const nextUrl = $btn.attr('href') || (typeof creatorSetupData !== 'undefined' ? creatorSetupData.nextUrl : '');
 
             // Validate selections
             if (!selectedLevel) {
@@ -417,36 +460,35 @@
 
             // Show loading
             $btn.addClass('loading').css('pointer-events', 'none');
-            $btn.html('<span class="dashicons dashicons-update creator-spin"></span> Saving...');
+            $btn.html('<span class="dashicons dashicons-update creator-spin"></span> Completing setup...');
 
             $.ajax({
                 url: creatorSetup.ajaxUrl,
                 type: 'POST',
                 data: {
-                    action: 'creator_save_user_profile',
+                    action: 'creator_process_step',
                     nonce: creatorSetup.nonce,
-                    user_level: selectedLevel,
-                    default_model: selectedModel
+                    step: 'profile',
+                    data: {
+                        user_level: selectedLevel,
+                        default_model: selectedModel
+                    }
                 },
                 success: function(response) {
                     if (response.success) {
-                        // Navigate to next step using the stored URL
-                        if (nextUrl) {
-                            window.location.href = nextUrl;
-                        } else {
-                            // Fallback: construct URL manually
-                            window.location.href = creatorSetup.adminUrl + 'admin.php?page=creator-setup&step=finish';
-                        }
+                        // Navigate to dashboard (setup complete!)
+                        const nextUrl = response.data?.next_url || creatorSetup.adminUrl + 'admin.php?page=creator-dashboard';
+                        window.location.href = nextUrl;
                     } else {
                         alert('Failed to save profile: ' + (response.data?.message || 'Unknown error'));
                         $btn.removeClass('loading').css('pointer-events', '');
-                        $btn.html('Continue <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                        $btn.html('Complete Setup <span class="dashicons dashicons-arrow-right-alt2"></span>');
                     }
                 },
                 error: function() {
                     alert('Failed to save profile. Please try again.');
                     $btn.removeClass('loading').css('pointer-events', '');
-                    $btn.html('Continue <span class="dashicons dashicons-arrow-right-alt2"></span>');
+                    $btn.html('Complete Setup <span class="dashicons dashicons-arrow-right-alt2"></span>');
                 }
             });
 

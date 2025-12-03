@@ -1420,3 +1420,256 @@
         border-top: 1px solid var(--creator-gray-200);
     }
 }
+
+/* ============================================
+   Welcome Step - Feature Cards (New Design)
+   ============================================ */
+
+.creator-welcome-section {
+    text-align: center;
+}
+
+.creator-welcome-header {
+    margin-bottom: 24px;
+}
+
+.creator-welcome-header h2 {
+    font-size: 28px;
+    color: var(--creator-gray-900);
+    margin-bottom: 8px;
+}
+
+.creator-welcome-subtitle {
+    font-size: 16px;
+    color: var(--creator-primary);
+    font-weight: 500;
+    margin: 0;
+}
+
+.creator-welcome-intro {
+    font-size: 16px;
+    color: var(--creator-gray-600);
+    margin-bottom: 24px;
+}
+
+/* Feature Cards */
+.creator-feature-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+    text-align: left;
+}
+
+.creator-feature-card {
+    background: white;
+    border: 1px solid var(--creator-gray-200);
+    border-radius: var(--creator-border-radius);
+    padding: 20px;
+    transition: all 0.2s ease;
+}
+
+.creator-feature-card:hover {
+    border-color: var(--creator-primary);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
+}
+
+.creator-feature-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    margin-bottom: 12px;
+}
+
+.creator-feature-icon .dashicons {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+    color: var(--creator-primary);
+}
+
+.creator-feature-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--creator-gray-800);
+    margin: 0 0 8px;
+}
+
+.creator-feature-card p {
+    font-size: 14px;
+    color: var(--creator-gray-600);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Friendly Responsibility Note */
+.creator-responsibility-note {
+    background: #f8fafc;
+    border: 1px solid var(--creator-gray-200);
+    border-radius: var(--creator-border-radius);
+    padding: 16px 20px;
+    text-align: left;
+}
+
+.creator-responsibility-note p {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--creator-gray-600);
+    margin: 0 0 12px;
+    line-height: 1.6;
+}
+
+.creator-responsibility-note .dashicons {
+    flex-shrink: 0;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: var(--creator-gray-400);
+    margin-top: 2px;
+}
+
+.creator-learn-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--creator-primary);
+    text-decoration: none;
+}
+
+.creator-learn-link:hover {
+    text-decoration: underline;
+}
+
+.creator-learn-link .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+}
+
+/* Welcome responsive */
+@media (max-width: 600px) {
+    .creator-feature-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .creator-welcome-header h2 {
+        font-size: 24px;
+    }
+}
+
+/* ============================================
+   Backup Configuration Styles
+   ============================================ */
+
+.creator-backup-config {
+    margin-top: 32px;
+    padding-top: 32px;
+    border-top: 1px solid var(--creator-gray-200);
+}
+
+.creator-backup-config h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--creator-gray-800);
+    margin: 0 0 8px;
+}
+
+.creator-backup-description {
+    color: var(--creator-gray-600);
+    font-size: 14px;
+    margin: 0 0 20px;
+}
+
+.creator-backup-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.creator-backup-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 20px;
+    background: white;
+    border: 2px solid var(--creator-gray-200);
+    border-radius: var(--creator-border-radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.creator-backup-option:hover {
+    border-color: var(--creator-primary);
+    background: var(--creator-gray-50);
+}
+
+.creator-backup-option.selected {
+    border-color: var(--creator-primary);
+    background: linear-gradient(to bottom, #f0f7ff, white);
+}
+
+.creator-backup-option input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.creator-backup-option-content {
+    flex: 1;
+}
+
+.creator-backup-option-content strong {
+    display: inline;
+    font-size: 14px;
+    color: var(--creator-gray-800);
+}
+
+.creator-recommended-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: #22c55e;
+    color: white;
+    border-radius: 4px;
+}
+
+.creator-backup-option-content p {
+    font-size: 13px;
+    color: var(--creator-gray-600);
+    margin: 4px 0 0;
+}
+
+.creator-backup-confirm {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--creator-gray-200);
+}
+
+.creator-backup-confirm .creator-checkbox-label {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.creator-backup-confirm .creator-checkbox-label:hover {
+    border-color: #22c55e;
+}
+
+/* Backup responsive */
+@media (max-width: 600px) {
+    .creator-backup-option {
+        padding: 12px 16px;
+    }
+}
