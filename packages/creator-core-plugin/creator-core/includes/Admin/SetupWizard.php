@@ -65,6 +65,7 @@ class SetupWizard {
         $this->plugin_detector = $plugin_detector;
 
         add_action( 'wp_ajax_creator_setup_step', [ $this, 'ajax_process_step' ] );
+        add_action( 'wp_ajax_creator_process_step', [ $this, 'ajax_process_step' ] ); // Alias for JS compatibility
         add_action( 'wp_ajax_creator_install_plugin', [ $this, 'ajax_install_plugin' ] );
         add_action( 'wp_ajax_creator_activate_plugin', [ $this, 'ajax_activate_plugin' ] );
         add_action( 'wp_ajax_creator_skip_setup', [ $this, 'ajax_skip_setup' ] );

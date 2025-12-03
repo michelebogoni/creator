@@ -74,7 +74,7 @@ $setup_wizard = new \CreatorCore\Admin\SetupWizard( new \CreatorCore\Integration
                     <div class="creator-warning-note">
                         <div class="creator-warning-note-header">
                             <span class="dashicons dashicons-warning"></span>
-                            <strong><?php esc_html_e( 'Important', 'creator-core' ); ?></strong>
+                            <strong><?php esc_html_e( 'Important Warning', 'creator-core' ); ?></strong>
                         </div>
                         <p>
                             <?php esc_html_e( 'Creator has the same capabilities as you do in WordPress. We recommend having daily backups enabled (standard practice). Your responsibility as site owner is to test changes on staging first.', 'creator-core' ); ?>
