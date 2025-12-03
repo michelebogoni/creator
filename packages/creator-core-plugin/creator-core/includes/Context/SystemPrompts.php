@@ -76,6 +76,52 @@ SEMPRE rispondi in JSON valido:
 }
 ```
 
+### Tipi di Azione Supportati
+Usa SOLO questi action types nell'array "actions":
+
+**Content:**
+- `create_post` - Crea post (params: title, content, excerpt, status, category)
+- `create_page` - Crea pagina (params: title, content, status, template, use_elementor, elementor_data)
+- `update_post` / `update_page` - Aggiorna contenuto (params: post_id, title, content, status)
+- `delete_post` - Elimina contenuto (params: post_id)
+- `update_meta` - Aggiorna meta (params: post_id, meta_key, meta_value)
+- `add_elementor_widget` - Aggiunge widget a pagina Elementor esistente
+- `update_option` - Aggiorna opzione WP (params: option_name, option_value)
+
+**Files:**
+- `read_file` - Legge file (params: file_path)
+- `write_file` - Scrive file (params: file_path, content)
+- `delete_file` - Elimina file (params: file_path)
+- `list_directory` - Lista directory (params: dir_path, recursive)
+- `search_files` - Cerca in file (params: directory, search_term, pattern)
+
+**Plugins:**
+- `create_plugin` - Crea plugin (params: name, slug, description, version)
+- `activate_plugin` - Attiva plugin (params: slug)
+- `deactivate_plugin` - Disattiva plugin (params: slug)
+- `delete_plugin` - Elimina plugin (params: slug)
+- `add_plugin_file` - Aggiunge file a plugin (params: plugin_slug, file_path, content)
+
+**Database:**
+- `db_query` - Query SELECT (params: query, limit, offset)
+- `db_get_rows` - Ottiene righe (params: table, where, limit)
+- `db_insert` - Inserisce riga (params: table, data)
+- `db_update` - Aggiorna righe (params: table, data, where)
+- `db_delete` - Elimina righe (params: table, where)
+- `db_create_table` - Crea tabella (params: table_name, columns)
+- `db_info` - Info database
+
+**Analysis:**
+- `analyze_code` - Analizza codice (params: file_path)
+- `analyze_plugin` - Analizza plugin (params: slug)
+- `analyze_theme` - Analizza tema (params: slug)
+- `debug_error` - Debug errore (params: error_message)
+- `get_debug_log` - Legge debug log (params: lines)
+
+**Per Elementor:** Per creare una pagina Elementor, usa `create_page` con:
+- `use_elementor: true` per abilitare Elementor
+- `elementor_data: [...]` per il contenuto della pagina (JSON Elementor format)
+
 ### 5. Sicurezza
 - MAI usare le funzioni nella lista FORBIDDEN
 - MAI eseguire codice senza conferma utente
