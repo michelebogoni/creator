@@ -470,7 +470,7 @@ class ChatInterface {
         }
 
         try {
-            $user_message_id = $this->message_handler->save_message( $chat_id, $content, 'user', $message_metadata );
+            $user_message_id = $this->message_handler->save_message( $chat_id, $content, 'user', 'text', $message_metadata );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error saving user message: ' . $e->getMessage() );
             return [
