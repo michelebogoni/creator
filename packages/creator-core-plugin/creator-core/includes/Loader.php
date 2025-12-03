@@ -178,6 +178,36 @@ class Loader {
 
         // Register context auto-refresh hooks
         $this->context_refresher->register_hooks();
+
+        // Register cron handler for backup cleanup
+        add_action( 'creator_cleanup_backups', [ $this, 'run_backup_cleanup' ] );
+    }
+
+    /**
+     * Run scheduled backup cleanup
+     *
+     * Enforces both retention days and max size limits.
+     *
+     * @return void
+     */
+    public function run_backup_cleanup(): void {
+        $retention_days = (int) get_option( 'creator_backup_retention', 30 );
+        $max_size_mb    = (int) get_option( 'creator_max_backup_size_mb', 500 );
+
+        // Clean up old snapshots by retention days
+        $deleted_by_age = $this->snapshot_manager->cleanup_old_snapshots( $retention_days );
+
+        // Enforce max size limit
+        $deleted_by_size = $this->snapshot_manager->enforce_size_limit( $max_size_mb );
+
+        if ( $deleted_by_age > 0 || $deleted_by_size > 0 ) {
+            $this->audit_logger->success( 'scheduled_backup_cleanup', [
+                'deleted_by_age'  => $deleted_by_age,
+                'deleted_by_size' => $deleted_by_size,
+                'retention_days'  => $retention_days,
+                'max_size_mb'     => $max_size_mb,
+            ]);
+        }
     }
 
     /**

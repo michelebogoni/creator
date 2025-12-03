@@ -23,6 +23,9 @@
          * Bind event handlers
          */
         bindEvents: function() {
+            // Welcome step - backup acknowledge checkbox
+            $('#backup-acknowledged').on('change', this.handleBackupAcknowledge.bind(this));
+
             // Welcome step - continue button
             $('#continue-from-welcome-btn').on('click', this.continueFromWelcome.bind(this));
 
@@ -65,13 +68,34 @@
 
             switch (creatorSetupData.currentStep) {
                 case 'welcome':
-                    // No special initialization needed - button is always enabled
+                    // Disable continue button until checkbox is checked
+                    this.updateWelcomeContinueState();
                     break;
                 case 'overview':
-                    // Select first backup option by default
-                    this.handleBackupSelection({ currentTarget: $('.creator-backup-option input[type="radio"]:checked')[0] });
+                    // No special initialization needed
                     break;
             }
+        },
+
+        /**
+         * Update welcome continue button state based on checkbox
+         */
+        updateWelcomeContinueState: function() {
+            const $checkbox = $('#backup-acknowledged');
+            const $btn = $('#continue-from-welcome-btn');
+
+            if ($checkbox.is(':checked')) {
+                $btn.prop('disabled', false).removeClass('disabled');
+            } else {
+                $btn.prop('disabled', true).addClass('disabled');
+            }
+        },
+
+        /**
+         * Handle backup acknowledge checkbox change
+         */
+        handleBackupAcknowledge: function(e) {
+            this.updateWelcomeContinueState();
         },
 
         /**
@@ -131,15 +155,15 @@
         },
 
         /**
-         * Save overview step data (including backup config) and continue
+         * Save overview step data (including chat backup config) and continue
          */
         saveOverviewAndContinue: function(e) {
             e.preventDefault();
             e.stopPropagation();
 
             const $btn = $(e.currentTarget);
-            const backupFrequency = $('input[name="backup_frequency"]:checked').val();
-            const backupConfirmed = $('#backup-confirmed').is(':checked');
+            const retentionDays = $('#retention-days').val();
+            const maxSizeMb = $('#max-size-mb').val();
 
             // Show loading
             $btn.addClass('loading').css('pointer-events', 'none');
@@ -153,8 +177,8 @@
                     nonce: creatorSetup.nonce,
                     step: 'overview',
                     data: {
-                        backup_frequency: backupFrequency,
-                        backup_confirmed: backupConfirmed
+                        retention_days: retentionDays,
+                        max_size_mb: maxSizeMb
                     }
                 },
                 success: function(response) {
