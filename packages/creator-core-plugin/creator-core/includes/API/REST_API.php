@@ -127,10 +127,24 @@ class REST_API {
             ],
         ]);
 
-        // Rollback endpoint
+        // Rollback endpoint (by action ID)
         register_rest_route( self::NAMESPACE, '/actions/(?P<action_id>\d+)/rollback', [
             'methods'             => \WP_REST_Server::CREATABLE,
             'callback'            => [ $this, 'rollback_action' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+        ]);
+
+        // Undo endpoint (by message ID)
+        register_rest_route( self::NAMESPACE, '/chats/(?P<chat_id>\d+)/messages/(?P<message_id>\d+)/undo', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'undo_message' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+        ]);
+
+        // Check undo availability
+        register_rest_route( self::NAMESPACE, '/messages/(?P<message_id>\d+)/undo-status', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_undo_status' ],
             'permission_callback' => [ $this, 'check_permission' ],
         ]);
 
@@ -503,6 +517,58 @@ class REST_API {
         }
 
         return rest_ensure_response( $result );
+    }
+
+    /**
+     * Undo a message action
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function undo_message( \WP_REST_Request $request ) {
+        $chat_id    = (int) $request->get_param( 'chat_id' );
+        $message_id = (int) $request->get_param( 'message_id' );
+
+        $result = $this->chat_interface->handle_undo( $chat_id, $message_id );
+
+        if ( ! $result['success'] ) {
+            $error_code = $result['code'] ?? 'undo_failed';
+            $status_code = 500;
+
+            // Map error codes to HTTP status codes
+            if ( $error_code === 'chat_not_found' || $error_code === 'snapshot_not_found' ) {
+                $status_code = 404;
+            } elseif ( $error_code === 'access_denied' ) {
+                $status_code = 403;
+            } elseif ( $error_code === 'snapshot_expired' ) {
+                $status_code = 410; // Gone
+            }
+
+            return new \WP_Error(
+                $error_code,
+                $result['error'] ?? __( 'Undo failed', 'creator-core' ),
+                [
+                    'status'     => $status_code,
+                    'suggestion' => $result['suggestion'] ?? null,
+                ]
+            );
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Get undo status for a message
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response
+     */
+    public function get_undo_status( \WP_REST_Request $request ): \WP_REST_Response {
+        $message_id = (int) $request->get_param( 'message_id' );
+
+        $status = $this->chat_interface->check_undo_availability( $message_id );
+
+        return rest_ensure_response( $status );
     }
 
     /**
