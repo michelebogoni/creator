@@ -1144,6 +1144,10 @@
         logs: [],
         eventSource: null,
         chatId: null,
+        lastReceivedIndex: -1,
+        connectionLost: false,
+        recoveryAttempts: 0,
+        maxRecoveryAttempts: 3,
 
         /**
          * Initialize the thinking panel
@@ -1160,6 +1164,9 @@
         startStreaming: function(chatId) {
             const self = this;
             this.chatId = chatId;
+            this.lastReceivedIndex = -1;
+            this.connectionLost = false;
+            this.recoveryAttempts = 0;
 
             // Close any existing connection
             this.stopStreaming();
@@ -1179,12 +1186,20 @@
                 this.eventSource.addEventListener('connected', function(event) {
                     const data = JSON.parse(event.data);
                     console.log('[CreatorThinking] SSE connected for chat:', data.chat_id);
+                    self.connectionLost = false;
+                    self.recoveryAttempts = 0;
                 });
 
                 // Handle incoming thinking logs
                 this.eventSource.addEventListener('thinking', function(event) {
                     try {
                         const log = JSON.parse(event.data);
+                        // Track last received index for recovery
+                        if (log.id) {
+                            self.lastReceivedIndex = log.id;
+                        } else {
+                            self.lastReceivedIndex = self.logs.length;
+                        }
                         self.addLog(log);
                     } catch (e) {
                         console.error('[CreatorThinking] Error parsing log:', e);
@@ -1207,27 +1222,23 @@
                 this.eventSource.addEventListener('timeout', function(event) {
                     console.warn('[CreatorThinking] Stream timed out');
                     self.addLog({
-                        phase: 'error',
+                        phase: 'system',
                         level: 'warning',
                         message: 'Stream timed out - processing may still continue',
                         elapsed_ms: 0
                     });
                     self.stopStreaming();
+                    // Try to recover any missed logs
+                    self.handleConnectionLoss();
                 });
 
                 // Handle connection errors
                 this.eventSource.onerror = function(error) {
                     console.error('[CreatorThinking] SSE error:', error);
-                    // Don't show error if we already have logs (connection closed normally)
-                    if (self.logs.length === 0) {
-                        self.addLog({
-                            phase: 'error',
-                            level: 'error',
-                            message: 'Connection lost - retrying...',
-                            elapsed_ms: 0
-                        });
-                    }
+                    self.connectionLost = true;
                     self.stopStreaming();
+                    // Try to recover any missed logs
+                    self.handleConnectionLoss();
                 };
 
             } catch (e) {
@@ -1245,6 +1256,46 @@
                 this.eventSource.close();
                 this.eventSource = null;
             }
+        },
+
+        /**
+         * Handle connection loss - recover missed logs from REST API
+         */
+        handleConnectionLoss: function() {
+            const self = this;
+
+            // Don't retry too many times
+            if (this.recoveryAttempts >= this.maxRecoveryAttempts) {
+                console.warn('[CreatorThinking] Max recovery attempts reached');
+                return;
+            }
+
+            this.recoveryAttempts++;
+            console.log('[CreatorThinking] Attempting to recover logs (attempt ' + this.recoveryAttempts + ')');
+
+            // Fetch logs from REST API
+            $.ajax({
+                url: creatorChat.restUrl + 'thinking/' + this.chatId,
+                type: 'GET',
+                headers: {
+                    'X-WP-Nonce': creatorChat.restNonce
+                },
+                success: function(response) {
+                    if (response.success && response.thinking && response.thinking.length > 0) {
+                        // Add logs that we didn't receive via SSE
+                        const existingCount = self.logs.length;
+                        response.thinking.forEach(function(log, index) {
+                            if (index >= existingCount) {
+                                self.addLog(log);
+                            }
+                        });
+                        console.log('[CreatorThinking] Recovered ' + (response.thinking.length - existingCount) + ' missed logs');
+                    }
+                },
+                error: function(xhr) {
+                    console.error('[CreatorThinking] Failed to recover logs:', xhr.responseText);
+                }
+            });
         },
 
         /**
