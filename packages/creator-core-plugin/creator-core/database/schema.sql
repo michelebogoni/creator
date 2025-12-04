@@ -120,3 +120,23 @@ CREATE TABLE IF NOT EXISTS wp_creator_backups (
     KEY chat_id (chat_id),
     KEY expires_at (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Table: wp_creator_thinking_logs
+-- Stores Creator's reasoning process for transparency
+-- Milestone 8: Thinking Process Transparency
+-- ============================================
+CREATE TABLE IF NOT EXISTS wp_creator_thinking_logs (
+    id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+    chat_id bigint(20) unsigned NOT NULL,
+    message_id bigint(20) unsigned DEFAULT NULL,
+    logs longtext NOT NULL COMMENT 'JSON array of thinking log entries',
+    summary longtext COMMENT 'JSON summary statistics',
+    created_at datetime DEFAULT CURRENT_TIMESTAMP,
+    updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    duration_ms int(11) DEFAULT 0 COMMENT 'Total processing time in milliseconds',
+    PRIMARY KEY (id),
+    KEY chat_id (chat_id),
+    KEY message_id (message_id),
+    KEY created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

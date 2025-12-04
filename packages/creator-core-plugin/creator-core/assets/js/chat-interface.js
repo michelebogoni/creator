@@ -1135,12 +1135,15 @@
 
     /**
      * ThinkingPanel - Shows Creator's thinking process to users
+     * Supports real-time streaming via Server-Sent Events (SSE)
      */
     window.CreatorThinking = {
         panel: null,
         logContainer: null,
         isVisible: false,
         logs: [],
+        eventSource: null,
+        chatId: null,
 
         /**
          * Initialize the thinking panel
@@ -1148,6 +1151,111 @@
         init: function() {
             this.createPanel();
             this.bindEvents();
+        },
+
+        /**
+         * Start streaming thinking logs via SSE
+         * @param {number} chatId - The chat ID to stream logs for
+         */
+        startStreaming: function(chatId) {
+            const self = this;
+            this.chatId = chatId;
+
+            // Close any existing connection
+            this.stopStreaming();
+
+            // Show panel and clear previous logs
+            this.show();
+
+            // Initialize EventSource for SSE
+            const url = creatorChat.restUrl + 'thinking/stream/' + chatId;
+
+            try {
+                this.eventSource = new EventSource(url, {
+                    withCredentials: true
+                });
+
+                // Handle connection established
+                this.eventSource.addEventListener('connected', function(event) {
+                    const data = JSON.parse(event.data);
+                    console.log('[CreatorThinking] SSE connected for chat:', data.chat_id);
+                });
+
+                // Handle incoming thinking logs
+                this.eventSource.addEventListener('thinking', function(event) {
+                    try {
+                        const log = JSON.parse(event.data);
+                        self.addLog(log);
+                    } catch (e) {
+                        console.error('[CreatorThinking] Error parsing log:', e);
+                    }
+                });
+
+                // Handle completion
+                this.eventSource.addEventListener('complete', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('[CreatorThinking] Stream complete:', data);
+                        self.onStreamComplete(data);
+                    } catch (e) {
+                        console.error('[CreatorThinking] Error parsing complete event:', e);
+                    }
+                    self.stopStreaming();
+                });
+
+                // Handle timeout
+                this.eventSource.addEventListener('timeout', function(event) {
+                    console.warn('[CreatorThinking] Stream timed out');
+                    self.addLog({
+                        phase: 'error',
+                        level: 'warning',
+                        message: 'Stream timed out - processing may still continue',
+                        elapsed_ms: 0
+                    });
+                    self.stopStreaming();
+                });
+
+                // Handle connection errors
+                this.eventSource.onerror = function(error) {
+                    console.error('[CreatorThinking] SSE error:', error);
+                    // Don't show error if we already have logs (connection closed normally)
+                    if (self.logs.length === 0) {
+                        self.addLog({
+                            phase: 'error',
+                            level: 'error',
+                            message: 'Connection lost - retrying...',
+                            elapsed_ms: 0
+                        });
+                    }
+                    self.stopStreaming();
+                };
+
+            } catch (e) {
+                console.error('[CreatorThinking] Failed to create EventSource:', e);
+                // Fallback to non-streaming mode
+                this.showLoading();
+            }
+        },
+
+        /**
+         * Stop streaming and close EventSource connection
+         */
+        stopStreaming: function() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+        },
+
+        /**
+         * Handle stream completion
+         * @param {object} data - Completion data from server
+         */
+        onStreamComplete: function(data) {
+            this.hide();
+            if (data.total_logs === 0) {
+                this.remove();
+            }
         },
 
         /**
@@ -1331,10 +1439,19 @@
         // Don't hide thinking panel immediately - let it stay visible
     };
 
-    // Handle thinking data from response
+    // Handle thinking data from response with SSE streaming support
     const originalSendMessageToChat = CreatorChat.sendMessageToChat;
     CreatorChat.sendMessageToChat = function(chatId, message) {
         const self = this;
+
+        // Start SSE streaming for real-time thinking updates
+        // This will display thinking logs as they're generated
+        if (chatId) {
+            CreatorThinking.startStreaming(chatId);
+        } else {
+            // For new chats, just show loading until we get the chat ID
+            CreatorThinking.showLoading();
+        }
 
         // Build request data
         const requestData = {
@@ -1363,14 +1480,28 @@
                     if (response.chat_id) {
                         self.chatId = response.chat_id;
                         self.updateUrl(response.chat_id);
+
+                        // If this was a new chat, start streaming now that we have the ID
+                        if (!chatId && response.chat_id) {
+                            CreatorThinking.startStreaming(response.chat_id);
+                        }
                     }
 
-                    // Handle thinking logs if present
+                    // Stop streaming since response is complete
+                    CreatorThinking.stopStreaming();
+
+                    // Handle thinking logs if present (fallback if SSE didn't get them)
                     if (response.thinking && response.thinking.length > 0) {
-                        CreatorThinking.clear();
-                        CreatorThinking.addLogs(response.thinking);
+                        // Only add logs if we didn't receive them via SSE
+                        if (CreatorThinking.logs.length === 0) {
+                            CreatorThinking.addLogs(response.thinking);
+                        }
+                        CreatorThinking.hide();
+                    } else if (CreatorThinking.logs.length > 0) {
+                        // We got logs via SSE, just hide the panel
                         CreatorThinking.hide();
                     } else {
+                        // No logs at all, remove panel
                         CreatorThinking.remove();
                     }
 
@@ -1387,6 +1518,7 @@
                         self.processActions(response.actions);
                     }
                 } else {
+                    CreatorThinking.stopStreaming();
                     CreatorThinking.remove();
                     const errorMsg = response.message || 'Failed to send message';
                     self.showError(errorMsg, self.isLicenseError(errorMsg));
@@ -1394,6 +1526,7 @@
             },
             error: function(xhr) {
                 self.hideTypingIndicator();
+                CreatorThinking.stopStreaming();
                 CreatorThinking.remove();
                 const error = xhr.responseJSON?.message || 'Failed to send message';
                 self.showError(error, self.isLicenseError(error));
