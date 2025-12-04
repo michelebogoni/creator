@@ -1129,10 +1129,283 @@
         }
     };
 
+    // ==========================================
+    // THINKING PANEL - Creator's Reasoning Process
+    // ==========================================
+
+    /**
+     * ThinkingPanel - Shows Creator's thinking process to users
+     */
+    window.CreatorThinking = {
+        panel: null,
+        logContainer: null,
+        isVisible: false,
+        logs: [],
+
+        /**
+         * Initialize the thinking panel
+         */
+        init: function() {
+            this.createPanel();
+            this.bindEvents();
+        },
+
+        /**
+         * Create the thinking panel HTML
+         */
+        createPanel: function() {
+            const panelHtml = `
+                <div class="creator-thinking-panel collapsed" id="creator-thinking-panel" style="display: none;">
+                    <div class="creator-thinking-header">
+                        <span class="creator-thinking-icon">💭</span>
+                        <span class="creator-thinking-title">Creator's Thinking</span>
+                        <span class="creator-thinking-badge" id="thinking-badge">0</span>
+                        <button class="creator-thinking-toggle" id="thinking-toggle">+</button>
+                    </div>
+                    <div class="creator-thinking-content">
+                        <div class="creator-thinking-log" id="thinking-log"></div>
+                    </div>
+                    <div class="creator-thinking-summary" id="thinking-summary" style="display: none;">
+                        <div class="creator-thinking-summary-stats">
+                            <span class="creator-thinking-summary-stat" id="thinking-elapsed">
+                                <span class="dashicons dashicons-clock"></span>
+                                <span>0ms</span>
+                            </span>
+                            <span class="creator-thinking-summary-stat" id="thinking-steps">
+                                <span class="dashicons dashicons-list-view"></span>
+                                <span>0 steps</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Insert panel before the input area
+            $('.creator-input-container').before(panelHtml);
+            this.panel = $('#creator-thinking-panel');
+            this.logContainer = $('#thinking-log');
+        },
+
+        /**
+         * Bind event handlers
+         */
+        bindEvents: function() {
+            const self = this;
+
+            // Toggle collapse/expand
+            $(document).on('click', '#thinking-toggle, .creator-thinking-header', function(e) {
+                if ($(e.target).is('#thinking-toggle') || $(e.target).closest('.creator-thinking-header').length) {
+                    self.togglePanel();
+                }
+            });
+        },
+
+        /**
+         * Toggle panel collapse state
+         */
+        togglePanel: function() {
+            this.panel.toggleClass('collapsed');
+            const isCollapsed = this.panel.hasClass('collapsed');
+            $('#thinking-toggle').text(isCollapsed ? '+' : '−');
+        },
+
+        /**
+         * Show the thinking panel
+         */
+        show: function() {
+            this.isVisible = true;
+            this.logs = [];
+            this.logContainer.empty();
+            this.panel.show().removeClass('collapsed');
+            $('#thinking-toggle').text('−');
+            $('#thinking-badge').text('0');
+            $('#thinking-summary').hide();
+        },
+
+        /**
+         * Hide the thinking panel (collapse but keep visible)
+         */
+        hide: function() {
+            this.isVisible = false;
+            this.panel.addClass('collapsed');
+            $('#thinking-toggle').text('+');
+            this.showSummary();
+        },
+
+        /**
+         * Add a log entry
+         */
+        addLog: function(log) {
+            this.logs.push(log);
+
+            const logItem = $(`
+                <div class="creator-thinking-log-item level-${log.level || 'info'}">
+                    <span class="creator-thinking-log-phase ${log.phase || ''}">${log.phase || ''}</span>
+                    <span class="creator-thinking-log-message">${this.escapeHtml(log.message)}</span>
+                    <span class="creator-thinking-log-time">${log.elapsed_ms || 0}ms</span>
+                </div>
+            `);
+
+            this.logContainer.append(logItem);
+            this.logContainer.scrollTop(this.logContainer[0].scrollHeight);
+
+            // Update badge
+            $('#thinking-badge').text(this.logs.length);
+        },
+
+        /**
+         * Add multiple logs at once
+         */
+        addLogs: function(logs) {
+            if (!Array.isArray(logs)) return;
+
+            logs.forEach(log => this.addLog(log));
+        },
+
+        /**
+         * Show summary after completion
+         */
+        showSummary: function() {
+            if (this.logs.length === 0) return;
+
+            const lastLog = this.logs[this.logs.length - 1];
+            const elapsed = lastLog ? lastLog.elapsed_ms : 0;
+
+            $('#thinking-elapsed span:last-child').text(elapsed + 'ms');
+            $('#thinking-steps span:last-child').text(this.logs.length + ' steps');
+            $('#thinking-summary').show();
+        },
+
+        /**
+         * Clear the thinking panel
+         */
+        clear: function() {
+            this.logs = [];
+            this.logContainer.empty();
+            $('#thinking-badge').text('0');
+            $('#thinking-summary').hide();
+        },
+
+        /**
+         * Completely hide the panel
+         */
+        remove: function() {
+            this.panel.hide();
+            this.clear();
+        },
+
+        /**
+         * Show loading state
+         */
+        showLoading: function() {
+            this.show();
+            this.addLog({
+                phase: 'discovery',
+                level: 'info',
+                message: 'Analyzing your request...',
+                elapsed_ms: 0
+            });
+        },
+
+        /**
+         * Escape HTML entities
+         */
+        escapeHtml: function(text) {
+            if (typeof text !== 'string') return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    };
+
+    // Extend CreatorChat to use ThinkingPanel
+    const originalShowTypingIndicator = CreatorChat.showTypingIndicator;
+    CreatorChat.showTypingIndicator = function() {
+        originalShowTypingIndicator.call(this);
+        CreatorThinking.showLoading();
+    };
+
+    const originalHideTypingIndicator = CreatorChat.hideTypingIndicator;
+    CreatorChat.hideTypingIndicator = function() {
+        originalHideTypingIndicator.call(this);
+        // Don't hide thinking panel immediately - let it stay visible
+    };
+
+    // Handle thinking data from response
+    const originalSendMessageToChat = CreatorChat.sendMessageToChat;
+    CreatorChat.sendMessageToChat = function(chatId, message) {
+        const self = this;
+
+        // Build request data
+        const requestData = {
+            content: message || ''
+        };
+
+        // Include files if present
+        if (this.pendingFiles && this.pendingFiles.length > 0) {
+            requestData.files = this.pendingFiles;
+            this.pendingFiles = [];
+        }
+
+        $.ajax({
+            url: creatorChat.restUrl + 'chats/' + chatId + '/messages',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'X-WP-Nonce': creatorChat.restNonce
+            },
+            data: JSON.stringify(requestData),
+            success: function(response) {
+                self.hideTypingIndicator();
+
+                if (response.success) {
+                    // Update chat ID if new chat
+                    if (response.chat_id) {
+                        self.chatId = response.chat_id;
+                        self.updateUrl(response.chat_id);
+                    }
+
+                    // Handle thinking logs if present
+                    if (response.thinking && response.thinking.length > 0) {
+                        CreatorThinking.clear();
+                        CreatorThinking.addLogs(response.thinking);
+                        CreatorThinking.hide();
+                    } else {
+                        CreatorThinking.remove();
+                    }
+
+                    // Add AI response
+                    self.addMessage({
+                        role: 'assistant',
+                        content: response.response,
+                        timestamp: new Date().toISOString(),
+                        actions: response.actions || []
+                    });
+
+                    // Process any actions
+                    if (response.actions && response.actions.length > 0) {
+                        self.processActions(response.actions);
+                    }
+                } else {
+                    CreatorThinking.remove();
+                    const errorMsg = response.message || 'Failed to send message';
+                    self.showError(errorMsg, self.isLicenseError(errorMsg));
+                }
+            },
+            error: function(xhr) {
+                self.hideTypingIndicator();
+                CreatorThinking.remove();
+                const error = xhr.responseJSON?.message || 'Failed to send message';
+                self.showError(error, self.isLicenseError(error));
+            }
+        });
+    };
+
     // Initialize on document ready
     $(document).ready(function() {
         if ($('.creator-chat-container').length) {
             CreatorChat.init();
+            CreatorThinking.init();
         }
     });
 

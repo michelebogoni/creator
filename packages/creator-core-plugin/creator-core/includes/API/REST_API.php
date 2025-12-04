@@ -197,6 +197,23 @@ class REST_API {
             'permission_callback' => [ $this, 'check_permission' ],
         ]);
 
+        // Thinking logs endpoint - retrieve Creator's reasoning process
+        register_rest_route( self::NAMESPACE, '/thinking/(?P<chat_id>\d+)', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_thinking_logs' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+            'args'                => [
+                'chat_id' => [
+                    'required' => true,
+                    'type'     => 'integer',
+                ],
+                'message_id' => [
+                    'required' => false,
+                    'type'     => 'integer',
+                ],
+            ],
+        ]);
+
         // Health check
         register_rest_route( self::NAMESPACE, '/health', [
             'methods'             => \WP_REST_Server::READABLE,
@@ -775,6 +792,58 @@ class REST_API {
                 [ 'status' => 500 ]
             );
         }
+    }
+
+    /**
+     * Get thinking logs for a chat
+     *
+     * Retrieves Creator's reasoning process for transparency.
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function get_thinking_logs( \WP_REST_Request $request ) {
+        $chat_id    = (int) $request->get_param( 'chat_id' );
+        $message_id = $request->get_param( 'message_id' ) ? (int) $request->get_param( 'message_id' ) : null;
+
+        // Try to get from transient first (most recent/in-progress)
+        $logs = \CreatorCore\Context\ThinkingLogger::get_from_transient( $chat_id );
+
+        // If not in transient, try database
+        if ( ! $logs ) {
+            $db_result = \CreatorCore\Context\ThinkingLogger::get_from_database( $chat_id, $message_id );
+            if ( $db_result ) {
+                return rest_ensure_response( [
+                    'success'    => true,
+                    'chat_id'    => $chat_id,
+                    'message_id' => $db_result['message_id'],
+                    'thinking'   => $db_result['logs'],
+                    'summary'    => $db_result['summary'],
+                    'created_at' => $db_result['created_at'],
+                    'source'     => 'database',
+                ]);
+            }
+
+            // No logs found
+            return rest_ensure_response( [
+                'success'  => true,
+                'chat_id'  => $chat_id,
+                'thinking' => [],
+                'summary'  => null,
+                'message'  => 'No thinking logs available for this chat',
+            ]);
+        }
+
+        // Return transient logs
+        return rest_ensure_response( [
+            'success'  => true,
+            'chat_id'  => $chat_id,
+            'thinking' => $logs,
+            'summary'  => [
+                'total_logs' => count( $logs ),
+            ],
+            'source'   => 'transient',
+        ]);
     }
 
     /**
