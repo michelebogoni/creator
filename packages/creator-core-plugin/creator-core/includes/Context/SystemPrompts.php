@@ -789,143 +789,219 @@ RULES;
 	}
 
 	/**
-	 * Get Elementor page building capability prompt
+	 * Get Elementor page building capability prompt (freeform AI-first approach)
 	 *
 	 * Called when Elementor is detected on the site.
-	 * Provides AI with detailed instructions for generating Elementor pages.
+	 * Provides AI with detailed instructions for generating Elementor pages
+	 * using a freeform approach where AI has creative freedom.
 	 *
 	 * @param string $elementor_version Elementor version.
 	 * @param bool   $has_pro           Whether Elementor Pro is available.
+	 * @param array  $breakpoints       Available responsive breakpoints.
 	 * @return string
 	 */
-	public function get_elementor_capability( string $elementor_version = '', bool $has_pro = false ): string {
+	public function get_elementor_capability( string $elementor_version = '', bool $has_pro = false, array $breakpoints = [] ): string {
 		$pro_status = $has_pro ? 'Sì' : 'No';
+		$breakpoint_list = ! empty( $breakpoints ) ? implode( ', ', $breakpoints ) : 'desktop, tablet, mobile';
 
 		return <<<PROMPT
-## CAPACITÀ ELEMENTOR PAGE BUILDER
+## CAPACITÀ ELEMENTOR PAGE BUILDER (Freeform AI-First)
 
-Elementor è installato su questo sito. Puoi generare pagine Elementor complete e production-ready.
+Elementor è installato su questo sito. Hai **libertà creativa totale** per generare qualsiasi layout di pagina.
 
 **Versione Elementor:** {$elementor_version}
 **Elementor Pro:** {$pro_status}
+**Breakpoints disponibili:** {$breakpoint_list}
 
-### Widget Disponibili
-Puoi usare questi widget nelle pagine:
-- **heading**: Titoli h1-h6 con stile personalizzato
-- **text-editor**: Paragrafi e contenuto HTML
-- **button**: Pulsanti CTA con link
-- **image**: Immagini responsive
-- **spacer**: Spaziatura verticale
-- **divider**: Linee divisorie
-- **icon**: Icone FontAwesome
-- **icon-box**: Box con icona, titolo e descrizione
+### APPROCCIO FREEFORM
+Non sei limitato a template predefiniti. Puoi descrivere QUALSIASI layout e il sistema lo convertirà in Elementor JSON valido.
 
-### Struttura Pagina
-Le pagine Elementor seguono questa gerarchia:
+### Widget Supportati
+Il sistema converte automaticamente questi tipi:
+- **heading/title/h1/h2/h3**: Titoli con qualsiasi stile
+- **text/paragraph/content**: Contenuto testuale HTML
+- **button/cta**: Pulsanti con link e stili personalizzati
+- **image/img/photo**: Immagini responsive
+- **spacer/space**: Spaziatura verticale
+- **divider/separator**: Linee divisorie
+- **icon**: Icone FontAwesome singole
+- **icon-box/feature/feature-box**: Box con icona + titolo + descrizione
+- **video**: Embed video YouTube/Vimeo
+- **html**: HTML personalizzato
+- **shortcode**: Shortcode WordPress
+
+**Widget sconosciuti**: Vengono automaticamente convertiti in text-editor come fallback.
+
+### Struttura Flessibile
+Descrivi il layout in modo naturale. Il sistema accetta:
+
+```json
+{
+  "title": "Nome Pagina",
+  "status": "draft",
+  "sections": [
+    {
+      "background_color": "#hex",
+      "min_height": 500,
+      "padding": {"top": 60, "bottom": 60},
+      "columns": [
+        {
+          "width": 50,
+          "widgets": [
+            {"type": "heading", "text": "Titolo", "level": "h1", "color": "#fff"},
+            {"type": "text", "content": "Paragrafo descrittivo"},
+            {"type": "button", "text": "CTA", "url": "/link", "bg_color": "#2563EB"}
+          ]
+        },
+        {
+          "width": 50,
+          "widgets": [
+            {"type": "image", "url": "...", "alt": "descrizione"}
+          ]
+        }
+      ]
+    }
+  ],
+  "seo": {
+    "title": "SEO Title | Site",
+    "description": "Meta description",
+    "focus_keyword": "keyword"
+  }
+}
 ```
-PAGINA
-└── SEZIONE (sfondo, padding, min-height)
-    └── COLONNA (larghezza %, padding)
-        └── WIDGET (contenuto, stile)
-```
 
-### Tipi di Sezione Predefiniti
-Usa questi tipi per creare rapidamente layout comuni:
+### Sezioni Predefinite (Opzionali)
+Per velocizzare, puoi usare questi tipi di sezione che hanno template ottimizzati:
 
-1. **hero** - Hero section con:
-   - heading: Titolo principale
-   - subheading: Sottotitolo (opzionale)
-   - cta_text, cta_url: Pulsante CTA
-   - background_color: Colore sfondo (es. "#1a1a2e")
-   - text_color: Colore testo (es. "#ffffff")
-   - min_height: Altezza minima in px
+1. **type: "hero"** - Hero section:
+   - heading, subheading, cta_text, cta_url
+   - background_color, text_color, min_height
 
-2. **features** - Griglia di feature con:
-   - heading: Titolo sezione
-   - features: Array di {icon, title, description}
-   - columns: Numero colonne (2-4)
-   - icon_color: Colore icone
+2. **type: "features"** - Griglia feature:
+   - heading, features: [{icon, title, description}]
+   - columns: 2-6, icon_color
 
-3. **cta** - Call to action con:
-   - heading: Titolo
-   - subheading: Sottotitolo
-   - cta_text, cta_url: Pulsante
-   - background_color: Sfondo (es. "#2563EB")
+3. **type: "cta"** - Call to action:
+   - heading, subheading, cta_text, cta_url
+   - background_color, cta_bg_color
 
-### Esempio Creazione Pagina
-Quando l'utente chiede una landing page, genera questa struttura:
+4. **type: "custom"** - Layout completamente libero (default)
 
+### Nomi Proprietà Flessibili
+Il sistema accetta varianti comuni:
+- background_color / bg_color / background
+- text_color / color
+- min_height / height
+- widgets / elements / content
+- url / link / href
+- text / content / label
+
+### SEO Automatico (Cascade)
+I metadati SEO vengono salvati automaticamente:
+1. **RankMath** (se installato) - Priorità
+2. **Yoast SEO** (se installato) - Fallback
+3. **Basic Meta** - Se nessun plugin SEO
+
+Campi supportati:
+- title, description, focus_keyword
+- og_title, og_description (Open Graph)
+- twitter_title, twitter_description
+
+### Validazione Automatica
+Prima della creazione, il sistema:
+1. Valida la struttura JSON
+2. Converte widget sconosciuti in fallback
+3. Normalizza padding/margin
+4. Genera ID univoci per ogni elemento
+5. Crea snapshot per undo
+
+### Esempio Risposta AI
 ```json
 {
   "phase": "execution",
   "message": "Creo la landing page con le sezioni richieste...",
-  "code": {
-    "type": "wpcode_snippet",
-    "title": "Crea Landing Page Elementor",
-    "content": "// Codice per creare la pagina...",
-    "auto_execute": false
-  },
   "actions": [
     {
       "type": "create_elementor_page",
-      "title": "Landing Page",
+      "title": "Landing Page Moderna",
       "status": "draft",
+      "template": "elementor_canvas",
       "sections": [
         {
           "type": "hero",
-          "heading": "Benvenuto",
-          "subheading": "La soluzione per il tuo business",
-          "cta_text": "Scopri di più",
-          "cta_url": "#features",
-          "background_color": "#1a1a2e",
+          "heading": "Trasforma il Tuo Business",
+          "subheading": "Soluzioni innovative per la crescita",
+          "cta_text": "Inizia Ora",
+          "cta_url": "#contact",
+          "background_color": "#0f172a",
           "text_color": "#ffffff",
-          "min_height": 500
+          "min_height": 600
+        },
+        {
+          "background_color": "#ffffff",
+          "padding": 80,
+          "columns": [
+            {
+              "width": 60,
+              "widgets": [
+                {"type": "heading", "text": "Chi Siamo", "level": "h2"},
+                {"type": "text", "content": "Descrizione aziendale..."},
+                {"type": "button", "text": "Scopri di più", "url": "/about"}
+              ]
+            },
+            {
+              "width": 40,
+              "widgets": [
+                {"type": "image", "url": "/wp-content/uploads/team.jpg", "alt": "Team"}
+              ]
+            }
+          ]
         },
         {
           "type": "features",
           "heading": "I Nostri Servizi",
           "columns": 3,
           "features": [
-            {"icon": "fas fa-rocket", "title": "Velocità", "description": "Risultati rapidi"},
-            {"icon": "fas fa-shield-alt", "title": "Sicurezza", "description": "Dati protetti"},
-            {"icon": "fas fa-headset", "title": "Supporto", "description": "Assistenza 24/7"}
+            {"icon": "fas fa-rocket", "title": "Velocità", "description": "Risultati in tempi record"},
+            {"icon": "fas fa-shield-alt", "title": "Sicurezza", "description": "Protezione garantita"},
+            {"icon": "fas fa-headset", "title": "Supporto", "description": "Assistenza dedicata"}
           ]
         },
         {
           "type": "cta",
-          "heading": "Pronto a iniziare?",
-          "cta_text": "Contattaci",
-          "cta_url": "/contatti"
+          "heading": "Pronto a Iniziare?",
+          "subheading": "Contattaci per una consulenza gratuita",
+          "cta_text": "Richiedi Preventivo",
+          "cta_url": "/contatti",
+          "background_color": "#2563EB"
         }
       ],
       "seo": {
-        "title": "Landing Page | Nome Sito",
-        "description": "Descrizione per i motori di ricerca",
-        "focus_keyword": "keyword principale"
+        "title": "Landing Page | Nome Azienda",
+        "description": "Descrizione ottimizzata per i motori di ricerca con keyword principale",
+        "focus_keyword": "servizi aziendali"
       }
     }
   ]
 }
 ```
 
-### Vincoli e Best Practice
-- **Max 10 sezioni** per pagina (performance)
-- **Responsive**: Le dimensioni si adattano automaticamente
+### Vincoli
+- **Max 20 sezioni** per pagina (performance)
 - **Colori**: Usa codici HEX (#RRGGBB)
 - **Icone**: Formato "fas fa-nome" (FontAwesome 5)
-- **Template**: Usa "elementor_canvas" per pagine full-width
-- **SEO**: Aggiungi sempre title e description
+- **Template consigliato**: "elementor_canvas" per full-width
+- **Validazione**: Il JSON viene validato prima della creazione
 
-### Quando Creare Pagine Elementor
-Usa Elementor quando l'utente chiede:
-- Landing page
-- Homepage personalizzata
-- Pagine con layout a più colonne
-- Pagine con hero section
-- Pagine di servizi/features
-- Pagine di contatto elaborate
+### Quando Usare Elementor
+Usa Elementor per:
+- Landing page e homepage
+- Pagine con layout complessi multi-colonna
+- Pagine di servizi/prodotti
+- Pagine con hero section e CTA
+- Qualsiasi layout visivamente elaborato
 
-Per contenuti semplici (blog post, pagine testo), usa l'editor classico.
+Per contenuti semplici (blog post, pagine testo base), usa l'editor classico WordPress.
 PROMPT;
 	}
 }
