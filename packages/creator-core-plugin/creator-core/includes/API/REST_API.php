@@ -148,6 +148,48 @@ class REST_API {
             'permission_callback' => [ $this, 'check_permission' ],
         ]);
 
+        // Execute action endpoint
+        register_rest_route( self::NAMESPACE, '/actions/execute', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'execute_action' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+            'args'                => [
+                'action' => [
+                    'required' => true,
+                    'type'     => 'object',
+                ],
+                'chat_id' => [
+                    'required' => false,
+                    'type'     => 'integer',
+                ],
+            ],
+        ]);
+
+        // Context endpoints for lazy-loading plugin/ACF/CPT details
+        register_rest_route( self::NAMESPACE, '/context/plugins/(?P<slug>[a-zA-Z0-9_-]+)', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_plugin_context' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+            'args'                => [
+                'slug' => [
+                    'required' => true,
+                    'type'     => 'string',
+                ],
+            ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/context/acf/(?P<group>[a-zA-Z0-9_-]+)', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_acf_context' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+        ]);
+
+        register_rest_route( self::NAMESPACE, '/context/cpt/(?P<post_type>[a-zA-Z0-9_-]+)', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_cpt_context' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+        ]);
+
         // Stats endpoint
         register_rest_route( self::NAMESPACE, '/stats', [
             'methods'             => \WP_REST_Server::READABLE,
@@ -569,6 +611,170 @@ class REST_API {
         $status = $this->chat_interface->check_undo_availability( $message_id );
 
         return rest_ensure_response( $status );
+    }
+
+    /**
+     * Execute an action (context request or code execution)
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function execute_action( \WP_REST_Request $request ) {
+        $action  = $request->get_param( 'action' );
+        $chat_id = (int) $request->get_param( 'chat_id' );
+
+        if ( empty( $action ) || ! is_array( $action ) ) {
+            return new \WP_Error(
+                'invalid_action',
+                __( 'Invalid action data', 'creator-core' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $type = $action['type'] ?? '';
+
+        // Handle context request actions (lazy-load)
+        $context_types = [
+            'get_plugin_details',
+            'get_acf_details',
+            'get_cpt_details',
+            'get_taxonomy_details',
+            'get_wp_functions',
+        ];
+
+        if ( in_array( $type, $context_types, true ) ) {
+            try {
+                $context_loader = new \CreatorCore\Context\ContextLoader();
+                $result         = $context_loader->handle_context_request( $action );
+
+                return rest_ensure_response( [
+                    'success' => $result['success'] ?? false,
+                    'data'    => $result['data'] ?? null,
+                    'error'   => $result['error'] ?? null,
+                    'type'    => $type,
+                ]);
+            } catch ( \Throwable $e ) {
+                return new \WP_Error(
+                    'context_request_failed',
+                    $e->getMessage(),
+                    [ 'status' => 500 ]
+                );
+            }
+        }
+
+        // Handle code execution actions
+        if ( ! empty( $action['code'] ) ) {
+            try {
+                $result = $this->chat_interface->execute_action_code( $action, $chat_id );
+
+                return rest_ensure_response( $result );
+            } catch ( \Throwable $e ) {
+                return new \WP_Error(
+                    'code_execution_failed',
+                    $e->getMessage(),
+                    [ 'status' => 500 ]
+                );
+            }
+        }
+
+        return new \WP_Error(
+            'unknown_action_type',
+            sprintf( __( 'Unknown action type: %s', 'creator-core' ), $type ),
+            [ 'status' => 400 ]
+        );
+    }
+
+    /**
+     * Get plugin context details (lazy-load)
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function get_plugin_context( \WP_REST_Request $request ) {
+        $slug = $request->get_param( 'slug' );
+
+        try {
+            $context_loader = new \CreatorCore\Context\ContextLoader();
+            $result         = $context_loader->get_plugin_details( $slug );
+
+            if ( ! $result['success'] ) {
+                return new \WP_Error(
+                    'plugin_not_found',
+                    $result['error'] ?? __( 'Plugin not found', 'creator-core' ),
+                    [ 'status' => 404 ]
+                );
+            }
+
+            return rest_ensure_response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_Error(
+                'context_request_failed',
+                $e->getMessage(),
+                [ 'status' => 500 ]
+            );
+        }
+    }
+
+    /**
+     * Get ACF group context details (lazy-load)
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function get_acf_context( \WP_REST_Request $request ) {
+        $group = $request->get_param( 'group' );
+
+        try {
+            $context_loader = new \CreatorCore\Context\ContextLoader();
+            $result         = $context_loader->get_acf_group_details( $group );
+
+            if ( ! $result['success'] ) {
+                return new \WP_Error(
+                    'acf_group_not_found',
+                    $result['error'] ?? __( 'ACF group not found', 'creator-core' ),
+                    [ 'status' => 404 ]
+                );
+            }
+
+            return rest_ensure_response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_Error(
+                'context_request_failed',
+                $e->getMessage(),
+                [ 'status' => 500 ]
+            );
+        }
+    }
+
+    /**
+     * Get CPT context details (lazy-load)
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function get_cpt_context( \WP_REST_Request $request ) {
+        $post_type = $request->get_param( 'post_type' );
+
+        try {
+            $context_loader = new \CreatorCore\Context\ContextLoader();
+            $result         = $context_loader->get_cpt_details( $post_type );
+
+            if ( ! $result['success'] ) {
+                return new \WP_Error(
+                    'cpt_not_found',
+                    $result['error'] ?? __( 'Post type not found', 'creator-core' ),
+                    [ 'status' => 404 ]
+                );
+            }
+
+            return rest_ensure_response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_Error(
+                'context_request_failed',
+                $e->getMessage(),
+                [ 'status' => 500 ]
+            );
+        }
     }
 
     /**
