@@ -214,6 +214,19 @@ class REST_API {
             ],
         ]);
 
+        // Thinking logs streaming (SSE) - real-time thinking process updates
+        register_rest_route( self::NAMESPACE, '/thinking/stream/(?P<chat_id>\d+)', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'stream_thinking_logs' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+            'args'                => [
+                'chat_id' => [
+                    'required' => true,
+                    'type'     => 'integer',
+                ],
+            ],
+        ]);
+
         // Health check
         register_rest_route( self::NAMESPACE, '/health', [
             'methods'             => \WP_REST_Server::READABLE,
@@ -844,6 +857,137 @@ class REST_API {
             ],
             'source'   => 'transient',
         ]);
+    }
+
+    /**
+     * Stream thinking logs via Server-Sent Events (SSE)
+     *
+     * Provides real-time streaming of Creator's thinking process.
+     * Frontend connects via EventSource and receives logs as they're generated.
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return void
+     */
+    public function stream_thinking_logs( \WP_REST_Request $request ): void {
+        $chat_id = (int) $request->get_param( 'chat_id' );
+
+        // Set SSE headers
+        header( 'Content-Type: text/event-stream; charset=utf-8' );
+        header( 'Cache-Control: no-cache' );
+        header( 'Connection: keep-alive' );
+        header( 'X-Accel-Buffering: no' );
+
+        // Disable output buffering
+        @ini_set( 'output_buffering', 'off' ); // phpcs:ignore
+        @ini_set( 'zlib.output_compression', false ); // phpcs:ignore
+
+        if ( ob_get_level() ) {
+            ob_end_clean();
+        }
+
+        $last_count = 0;
+        $start_time = time();
+        $timeout    = 120; // 2 minute timeout
+        $completed  = false;
+
+        // Send initial connection event
+        echo "event: connected\n";
+        echo "data: {\"chat_id\":{$chat_id}}\n\n";
+        $this->flush_output();
+
+        while ( time() - $start_time < $timeout && ! $completed ) {
+            // Get current logs from transient
+            $logs = \CreatorCore\Context\ThinkingLogger::get_from_transient( $chat_id );
+
+            if ( $logs && is_array( $logs ) ) {
+                $current_count = count( $logs );
+
+                // Send any new logs
+                if ( $current_count > $last_count ) {
+                    for ( $i = $last_count; $i < $current_count; $i++ ) {
+                        $log = $logs[ $i ];
+                        echo "event: thinking\n";
+                        echo 'data: ' . wp_json_encode( $log ) . "\n\n";
+                        $this->flush_output();
+                    }
+                    $last_count = $current_count;
+                }
+
+                // Check if processing is complete (look for completion indicators)
+                $last_log = end( $logs );
+                if ( $last_log ) {
+                    $is_complete = (
+                        $last_log['level'] === 'success' &&
+                        ( stripos( $last_log['message'], 'complete' ) !== false ||
+                          stripos( $last_log['message'], 'finished' ) !== false ||
+                          stripos( $last_log['message'], 'done' ) !== false )
+                    );
+
+                    if ( $is_complete ) {
+                        // Send completion event
+                        echo "event: complete\n";
+                        echo 'data: ' . wp_json_encode( [
+                            'status'     => 'complete',
+                            'total_logs' => $current_count,
+                            'elapsed_ms' => $last_log['elapsed_ms'] ?? 0,
+                        ] ) . "\n\n";
+                        $this->flush_output();
+                        $completed = true;
+                        break;
+                    }
+                }
+            }
+
+            // Check if transient was cleared (processing ended)
+            if ( ! $logs && $last_count > 0 ) {
+                echo "event: complete\n";
+                echo 'data: ' . wp_json_encode( [
+                    'status'     => 'complete',
+                    'total_logs' => $last_count,
+                ] ) . "\n\n";
+                $this->flush_output();
+                $completed = true;
+                break;
+            }
+
+            // Send keepalive every 15 seconds to prevent timeout
+            if ( ( time() - $start_time ) % 15 === 0 && $last_count === 0 ) {
+                echo ": keepalive\n\n";
+                $this->flush_output();
+            }
+
+            // Poll interval - 200ms for responsiveness
+            usleep( 200000 );
+
+            // Check if connection is still alive
+            if ( connection_aborted() ) {
+                break;
+            }
+        }
+
+        // Send timeout event if we hit the limit
+        if ( ! $completed ) {
+            echo "event: timeout\n";
+            echo 'data: ' . wp_json_encode( [
+                'status'  => 'timeout',
+                'message' => 'Stream timed out after 2 minutes',
+            ] ) . "\n\n";
+            $this->flush_output();
+        }
+
+        exit;
+    }
+
+    /**
+     * Flush output buffers for SSE streaming
+     *
+     * @return void
+     */
+    private function flush_output(): void {
+        if ( ob_get_level() ) {
+            ob_flush();
+        }
+        flush();
     }
 
     /**
