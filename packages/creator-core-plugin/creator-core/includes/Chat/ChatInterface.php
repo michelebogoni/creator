@@ -1357,6 +1357,33 @@ class ChatInterface {
     }
 
     /**
+     * Execute action code from REST API
+     *
+     * Public wrapper for handle_code_execution, used by REST API endpoint.
+     *
+     * @param array $action  Action data containing code.
+     * @param int   $chat_id Optional chat ID for context.
+     * @return array Execution result.
+     */
+    public function execute_action_code( array $action, int $chat_id = 0 ): array {
+        // Extract code data from action
+        $code_data = $action['code'] ?? $action;
+
+        // Force auto_execute since user clicked execute button
+        $code_data['auto_execute'] = true;
+
+        // Execute using existing handler
+        $result = $this->handle_code_execution( $code_data );
+
+        // Add chat context if provided
+        if ( $chat_id > 0 ) {
+            $result['chat_id'] = $chat_id;
+        }
+
+        return $result;
+    }
+
+    /**
      * Handle verification after code execution
      *
      * @param array $parsed_response Parsed AI response.
