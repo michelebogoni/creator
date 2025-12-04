@@ -15,6 +15,7 @@ defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Integrations\WPCodeIntegration;
 use CreatorCore\Audit\AuditLogger;
+use CreatorCore\Executor\CustomFileManager;
 
 /**
  * Class CodeExecutor
@@ -39,8 +40,9 @@ class CodeExecutor {
 	/**
 	 * Execution methods
 	 */
-	public const METHOD_WPCODE = 'wpcode_snippet';
-	public const METHOD_DIRECT = 'direct_execution';
+	public const METHOD_WPCODE      = 'wpcode_snippet';
+	public const METHOD_CUSTOM_FILE = 'custom_file';
+	public const METHOD_DIRECT      = 'direct_execution';
 
 	/**
 	 * WP Code integration instance
@@ -55,6 +57,13 @@ class CodeExecutor {
 	 * @var AuditLogger
 	 */
 	private AuditLogger $logger;
+
+	/**
+	 * Custom file manager instance
+	 *
+	 * @var CustomFileManager
+	 */
+	private CustomFileManager $custom_file_manager;
 
 	/**
 	 * Forbidden functions that should never be executed
@@ -194,12 +203,18 @@ class CodeExecutor {
 	/**
 	 * Constructor
 	 *
-	 * @param WPCodeIntegration|null $wpcode WP Code integration instance.
-	 * @param AuditLogger|null       $logger Audit logger instance.
+	 * @param WPCodeIntegration|null  $wpcode              WP Code integration instance.
+	 * @param AuditLogger|null        $logger              Audit logger instance.
+	 * @param CustomFileManager|null  $custom_file_manager Custom file manager instance.
 	 */
-	public function __construct( ?WPCodeIntegration $wpcode = null, ?AuditLogger $logger = null ) {
-		$this->wpcode = $wpcode ?? new WPCodeIntegration();
-		$this->logger = $logger ?? new AuditLogger();
+	public function __construct(
+		?WPCodeIntegration $wpcode = null,
+		?AuditLogger $logger = null,
+		?CustomFileManager $custom_file_manager = null
+	) {
+		$this->wpcode              = $wpcode ?? new WPCodeIntegration();
+		$this->logger              = $logger ?? new AuditLogger();
+		$this->custom_file_manager = $custom_file_manager ?? new CustomFileManager( $this->logger );
 	}
 
 	/**
@@ -237,13 +252,19 @@ class CodeExecutor {
 			);
 		}
 
+		// Detect code type if not specified or if it's 'php' (may be CSS/JS)
+		$detected_type = $this->custom_file_manager->detect_code_type( $code );
+		if ( empty( $language ) || $language === 'php' ) {
+			$language = $detected_type;
+		}
+
 		// Determine execution method
 		if ( $this->wpcode->is_available() ) {
 			return $this->execute_via_wpcode( $code, $title, $description, $language, $location, $auto_execute );
 		}
 
-		// Fallback to direct execution
-		return $this->execute_directly( $code, $title );
+		// Fallback to custom files (preferred over direct execution)
+		return $this->execute_via_custom_files( $code, $title, $description, $language, $auto_execute );
 	}
 
 	/**
@@ -322,7 +343,156 @@ class CodeExecutor {
 	}
 
 	/**
-	 * Execute code directly (fallback when WP Code not available)
+	 * Execute code via custom files (fallback when WP Code not available)
+	 *
+	 * @param string $code        Code content.
+	 * @param string $title       Code title.
+	 * @param string $description Code description.
+	 * @param string $language    Code language/type.
+	 * @param bool   $auto_execute Whether to auto-execute (for PHP only).
+	 * @return array Execution result.
+	 */
+	private function execute_via_custom_files(
+		string $code,
+		string $title,
+		string $description,
+		string $language,
+		bool $auto_execute
+	): array {
+		// Map language to custom file type
+		$type = $this->map_language_to_file_type( $language );
+
+		// Write to custom file
+		$write_result = $this->custom_file_manager->write_code( $code, $type, $title, $description );
+
+		if ( ! $write_result['success'] ) {
+			$this->logger->failure( 'custom_file_write_failed', [
+				'reason' => $write_result['error'] ?? 'Unknown error',
+				'type'   => $type,
+			] );
+
+			// Fall back to direct execution for PHP only
+			if ( $type === CustomFileManager::TYPE_PHP ) {
+				$this->logger->info( 'fallback_to_direct_execution', [ 'title' => $title ] );
+				return $this->execute_directly( $code, $title );
+			}
+
+			return $this->create_result(
+				self::STATUS_ERROR,
+				'Failed to write to custom file: ' . ( $write_result['error'] ?? 'Unknown error' ),
+				null
+			);
+		}
+
+		$mod_id = $write_result['modification_id'];
+
+		// For PHP code with auto_execute, we need to execute it immediately
+		$execution_result = null;
+		if ( $type === CustomFileManager::TYPE_PHP && $auto_execute ) {
+			// The PHP file is automatically loaded by our loader, but for immediate execution
+			// we can run the code directly this once
+			$execution_result = $this->execute_php_once( $code );
+		}
+
+		$this->logger->success( 'code_executed_via_custom_file', [
+			'method'          => self::METHOD_CUSTOM_FILE,
+			'modification_id' => $mod_id,
+			'type'            => $type,
+			'auto_execute'    => $auto_execute,
+		] );
+
+		$status_message = match ( $type ) {
+			CustomFileManager::TYPE_PHP => $auto_execute
+				? 'PHP code executed and saved to custom file. Will run on every page load.'
+				: 'PHP code saved to custom file. Will run on every page load.',
+			CustomFileManager::TYPE_CSS => 'CSS saved to custom file. Styles will be loaded on frontend.',
+			CustomFileManager::TYPE_JS  => 'JavaScript saved to custom file. Script will be loaded on frontend.',
+			default => 'Code saved to custom file.',
+		};
+
+		return $this->create_result(
+			self::STATUS_SUCCESS,
+			$status_message,
+			$mod_id,
+			[
+				'method'           => self::METHOD_CUSTOM_FILE,
+				'modification_id'  => $mod_id,
+				'file'             => $write_result['file'],
+				'type'             => $type,
+				'execution_result' => $execution_result,
+				'rollback_method'  => sprintf( 'Remove modification %s', $mod_id ),
+			]
+		);
+	}
+
+	/**
+	 * Execute PHP code once (without saving)
+	 *
+	 * @param string $code PHP code.
+	 * @return array Execution result.
+	 */
+	private function execute_php_once( string $code ): array {
+		$prepared_code = $this->prepare_code_for_direct_execution( $code );
+
+		ob_start();
+		$errors = [];
+
+		set_error_handler( function( $errno, $errstr, $errfile, $errline ) use ( &$errors ) {
+			$errors[] = [
+				'type'    => $errno,
+				'message' => $errstr,
+				'file'    => $errfile,
+				'line'    => $errline,
+			];
+			return true;
+		} );
+
+		$success = false;
+		$result  = null;
+
+		try {
+			$result = eval( $prepared_code );
+			$success = true;
+		} catch ( \Throwable $e ) {
+			$errors[] = [
+				'type'    => E_ERROR,
+				'message' => $e->getMessage(),
+				'file'    => $e->getFile(),
+				'line'    => $e->getLine(),
+			];
+		}
+
+		restore_error_handler();
+		$output = ob_get_clean();
+
+		return [
+			'executed' => $success,
+			'result'   => $result,
+			'output'   => $output,
+			'errors'   => $errors,
+		];
+	}
+
+	/**
+	 * Map language to custom file type
+	 *
+	 * @param string $language Language identifier.
+	 * @return string Custom file type.
+	 */
+	private function map_language_to_file_type( string $language ): string {
+		$map = [
+			'php'        => CustomFileManager::TYPE_PHP,
+			'css'        => CustomFileManager::TYPE_CSS,
+			'javascript' => CustomFileManager::TYPE_JS,
+			'js'         => CustomFileManager::TYPE_JS,
+			'html'       => CustomFileManager::TYPE_PHP, // HTML goes in PHP for shortcode/output context
+		];
+
+		return $map[ strtolower( $language ) ] ?? CustomFileManager::TYPE_PHP;
+	}
+
+	/**
+	 * Execute code directly (last resort fallback)
 	 *
 	 * @param string $code  PHP code.
 	 * @param string $title Code title for logging.
@@ -631,13 +801,14 @@ class CodeExecutor {
 	/**
 	 * Rollback a code execution
 	 *
-	 * @param int    $snippet_id Snippet ID (for WP Code method).
-	 * @param string $method     Execution method used.
+	 * @param string|int $identifier Snippet ID or modification ID.
+	 * @param string     $method     Execution method used.
 	 * @return array Rollback result.
 	 */
-	public function rollback( int $snippet_id, string $method = self::METHOD_WPCODE ): array {
+	public function rollback( $identifier, string $method = self::METHOD_WPCODE ): array {
+		// Handle WP Code snippet rollback
 		if ( $method === self::METHOD_WPCODE && $this->wpcode->is_available() ) {
-			// Deactivate snippet
+			$snippet_id = (int) $identifier;
 			$success = $this->wpcode->deactivate_snippet( $snippet_id );
 
 			if ( $success ) {
@@ -660,12 +831,47 @@ class CodeExecutor {
 			);
 		}
 
+		// Handle custom file rollback
+		if ( $method === self::METHOD_CUSTOM_FILE ) {
+			$mod_id = (string) $identifier;
+			$result = $this->custom_file_manager->remove_modification( $mod_id );
+
+			if ( $result['success'] ) {
+				$this->logger->success( 'code_rollback', [
+					'method'          => $method,
+					'modification_id' => $mod_id,
+				] );
+
+				return $this->create_result(
+					self::STATUS_SUCCESS,
+					sprintf( 'Modification %s removed successfully', $mod_id ),
+					$mod_id
+				);
+			}
+
+			return $this->create_result(
+				self::STATUS_ERROR,
+				$result['error'] ?? 'Failed to remove modification',
+				null
+			);
+		}
+
 		// Direct execution cannot be rolled back
 		return $this->create_result(
 			self::STATUS_ERROR,
 			'Direct execution cannot be automatically rolled back',
 			null
 		);
+	}
+
+	/**
+	 * Rollback by modification ID (convenience method)
+	 *
+	 * @param string $mod_id Modification ID.
+	 * @return array Rollback result.
+	 */
+	public function rollback_modification( string $mod_id ): array {
+		return $this->rollback( $mod_id, self::METHOD_CUSTOM_FILE );
 	}
 
 	/**
@@ -709,8 +915,27 @@ class CodeExecutor {
 	 */
 	public function get_available_methods(): array {
 		return [
-			self::METHOD_WPCODE => $this->wpcode->is_available(),
-			self::METHOD_DIRECT => true, // Always available but restricted
+			self::METHOD_WPCODE      => $this->wpcode->is_available(),
+			self::METHOD_CUSTOM_FILE => $this->custom_file_manager->is_initialized() || true, // Can be initialized on demand
+			self::METHOD_DIRECT      => true, // Always available but restricted (last resort)
 		];
+	}
+
+	/**
+	 * Get custom file manager instance
+	 *
+	 * @return CustomFileManager
+	 */
+	public function get_custom_file_manager(): CustomFileManager {
+		return $this->custom_file_manager;
+	}
+
+	/**
+	 * Get all modifications from custom files
+	 *
+	 * @return array
+	 */
+	public function get_custom_modifications(): array {
+		return $this->custom_file_manager->get_manifest();
 	}
 }

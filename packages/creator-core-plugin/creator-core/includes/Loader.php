@@ -20,6 +20,7 @@ use CreatorCore\Integrations\ProxyClient;
 use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\API\REST_API;
 use CreatorCore\Context\ContextRefresher;
+use CreatorCore\Executor\CustomCodeLoader;
 
 /**
  * Class Loader
@@ -106,6 +107,13 @@ class Loader {
     private ContextRefresher $context_refresher;
 
     /**
+     * Custom code loader instance
+     *
+     * @var CustomCodeLoader
+     */
+    private CustomCodeLoader $custom_code_loader;
+
+    /**
      * Run the loader
      *
      * @return void
@@ -150,6 +158,9 @@ class Loader {
 
         // Context auto-refresh
         $this->context_refresher = new ContextRefresher();
+
+        // Custom code loader (for WP Code fallback)
+        $this->custom_code_loader = new CustomCodeLoader();
     }
 
     /**
@@ -178,6 +189,9 @@ class Loader {
 
         // Register context auto-refresh hooks
         $this->context_refresher->register_hooks();
+
+        // Initialize custom code loader (loads PHP, enqueues CSS/JS)
+        $this->custom_code_loader->init();
 
         // Register cron handler for backup cleanup
         add_action( 'creator_cleanup_backups', [ $this, 'run_backup_cleanup' ] );
