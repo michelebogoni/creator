@@ -353,6 +353,34 @@ class REST_API {
             'callback'            => [ $this, 'get_table_structure' ],
             'permission_callback' => [ $this, 'check_admin_permission' ],
         ]);
+
+        // =========================================================================
+        // ELEMENTOR PAGE BUILDER ENDPOINTS
+        // =========================================================================
+
+        // Create Elementor page from specification
+        register_rest_route( self::NAMESPACE, '/elementor/pages', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ $this, 'create_elementor_page' ],
+            'permission_callback' => [ $this, 'check_admin_permission' ],
+            'args'                => [
+                'title' => [
+                    'required' => true,
+                    'type'     => 'string',
+                ],
+                'sections' => [
+                    'required' => true,
+                    'type'     => 'array',
+                ],
+            ],
+        ]);
+
+        // Get Elementor capabilities and status
+        register_rest_route( self::NAMESPACE, '/elementor/status', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_elementor_status' ],
+            'permission_callback' => [ $this, 'check_permission' ],
+        ]);
     }
 
     /**
@@ -1343,5 +1371,128 @@ class REST_API {
         }
 
         return rest_ensure_response( $result );
+    }
+
+    // =========================================================================
+    // ELEMENTOR PAGE BUILDER
+    // =========================================================================
+
+    /**
+     * Create Elementor page from specification
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response|\WP_Error
+     */
+    public function create_elementor_page( \WP_REST_Request $request ) {
+        // Check if Elementor is available
+        if ( ! class_exists( '\Elementor\Plugin' ) ) {
+            return new \WP_Error(
+                'elementor_not_available',
+                __( 'Elementor is not installed or activated', 'creator-core' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $title    = $request->get_param( 'title' );
+        $sections = $request->get_param( 'sections' );
+        $status   = $request->get_param( 'status' ) ?? 'draft';
+        $seo      = $request->get_param( 'seo' ) ?? [];
+        $template = $request->get_param( 'template' ) ?? 'elementor_canvas';
+        $chat_id  = $request->get_param( 'chat_id' ) ?? 0;
+
+        try {
+            // Initialize thinking logger if chat_id provided
+            $logger = null;
+            if ( $chat_id > 0 ) {
+                $logger = new \CreatorCore\Context\ThinkingLogger( $chat_id );
+                $logger->set_phase( \CreatorCore\Context\ThinkingLogger::PHASE_EXECUTION );
+            }
+
+            // Create page builder
+            $builder = new \CreatorCore\Integrations\ElementorPageBuilder( $logger );
+
+            // Build page specification
+            $spec = [
+                'title'    => $title,
+                'status'   => $status,
+                'template' => $template,
+                'sections' => $sections,
+            ];
+
+            // Add SEO if provided
+            if ( ! empty( $seo ) ) {
+                $spec['seo'] = $seo;
+            }
+
+            // Generate page
+            $result = $builder->generate_page( $spec );
+
+            // Save thinking logs
+            if ( $logger ) {
+                $logger->save_to_database();
+            }
+
+            // Log audit
+            $this->logger->info( 'elementor_page_created', [
+                'page_id' => $result['page_id'],
+                'title'   => $title,
+                'url'     => $result['url'],
+            ]);
+
+            return rest_ensure_response( $result );
+
+        } catch ( \Exception $e ) {
+            return new \WP_Error(
+                'page_creation_failed',
+                $e->getMessage(),
+                [ 'status' => 500 ]
+            );
+        }
+    }
+
+    /**
+     * Get Elementor status and capabilities
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return \WP_REST_Response
+     */
+    public function get_elementor_status( \WP_REST_Request $request ): \WP_REST_Response {
+        $elementor_integration = new \CreatorCore\Integrations\ElementorIntegration();
+
+        $status = [
+            'available'   => $elementor_integration->is_available(),
+            'pro'         => $elementor_integration->is_pro_available(),
+            'version'     => $elementor_integration->get_version() ?? 'N/A',
+            'widgets'     => [],
+            'templates'   => [
+                'default'               => 'Default Template',
+                'elementor_canvas'      => 'Elementor Canvas (Full Width)',
+                'elementor_header_footer' => 'Elementor Header & Footer',
+            ],
+            'section_types' => [
+                'hero'     => 'Hero section with heading, subheading, and CTA',
+                'features' => 'Feature grid with icon boxes',
+                'cta'      => 'Call to action section',
+                'custom'   => 'Custom section with columns and widgets',
+            ],
+            'widget_types' => [
+                'heading'  => 'Title/heading (h1-h6)',
+                'text'     => 'Text/paragraph content',
+                'button'   => 'CTA button with link',
+                'image'    => 'Responsive image',
+                'spacer'   => 'Vertical spacing',
+                'divider'  => 'Horizontal line',
+                'icon'     => 'FontAwesome icon',
+                'icon_box' => 'Icon with title and description',
+            ],
+        ];
+
+        // Add available widgets if Elementor is active
+        if ( $status['available'] ) {
+            $widgets = $elementor_integration->get_widget_types();
+            $status['widgets'] = array_keys( $widgets );
+        }
+
+        return rest_ensure_response( $status );
     }
 }

@@ -787,4 +787,145 @@ RULES;
 - Suggerimenti per testing
 RULES;
 	}
+
+	/**
+	 * Get Elementor page building capability prompt
+	 *
+	 * Called when Elementor is detected on the site.
+	 * Provides AI with detailed instructions for generating Elementor pages.
+	 *
+	 * @param string $elementor_version Elementor version.
+	 * @param bool   $has_pro           Whether Elementor Pro is available.
+	 * @return string
+	 */
+	public function get_elementor_capability( string $elementor_version = '', bool $has_pro = false ): string {
+		$pro_status = $has_pro ? 'Sì' : 'No';
+
+		return <<<PROMPT
+## CAPACITÀ ELEMENTOR PAGE BUILDER
+
+Elementor è installato su questo sito. Puoi generare pagine Elementor complete e production-ready.
+
+**Versione Elementor:** {$elementor_version}
+**Elementor Pro:** {$pro_status}
+
+### Widget Disponibili
+Puoi usare questi widget nelle pagine:
+- **heading**: Titoli h1-h6 con stile personalizzato
+- **text-editor**: Paragrafi e contenuto HTML
+- **button**: Pulsanti CTA con link
+- **image**: Immagini responsive
+- **spacer**: Spaziatura verticale
+- **divider**: Linee divisorie
+- **icon**: Icone FontAwesome
+- **icon-box**: Box con icona, titolo e descrizione
+
+### Struttura Pagina
+Le pagine Elementor seguono questa gerarchia:
+```
+PAGINA
+└── SEZIONE (sfondo, padding, min-height)
+    └── COLONNA (larghezza %, padding)
+        └── WIDGET (contenuto, stile)
+```
+
+### Tipi di Sezione Predefiniti
+Usa questi tipi per creare rapidamente layout comuni:
+
+1. **hero** - Hero section con:
+   - heading: Titolo principale
+   - subheading: Sottotitolo (opzionale)
+   - cta_text, cta_url: Pulsante CTA
+   - background_color: Colore sfondo (es. "#1a1a2e")
+   - text_color: Colore testo (es. "#ffffff")
+   - min_height: Altezza minima in px
+
+2. **features** - Griglia di feature con:
+   - heading: Titolo sezione
+   - features: Array di {icon, title, description}
+   - columns: Numero colonne (2-4)
+   - icon_color: Colore icone
+
+3. **cta** - Call to action con:
+   - heading: Titolo
+   - subheading: Sottotitolo
+   - cta_text, cta_url: Pulsante
+   - background_color: Sfondo (es. "#2563EB")
+
+### Esempio Creazione Pagina
+Quando l'utente chiede una landing page, genera questa struttura:
+
+```json
+{
+  "phase": "execution",
+  "message": "Creo la landing page con le sezioni richieste...",
+  "code": {
+    "type": "wpcode_snippet",
+    "title": "Crea Landing Page Elementor",
+    "content": "// Codice per creare la pagina...",
+    "auto_execute": false
+  },
+  "actions": [
+    {
+      "type": "create_elementor_page",
+      "title": "Landing Page",
+      "status": "draft",
+      "sections": [
+        {
+          "type": "hero",
+          "heading": "Benvenuto",
+          "subheading": "La soluzione per il tuo business",
+          "cta_text": "Scopri di più",
+          "cta_url": "#features",
+          "background_color": "#1a1a2e",
+          "text_color": "#ffffff",
+          "min_height": 500
+        },
+        {
+          "type": "features",
+          "heading": "I Nostri Servizi",
+          "columns": 3,
+          "features": [
+            {"icon": "fas fa-rocket", "title": "Velocità", "description": "Risultati rapidi"},
+            {"icon": "fas fa-shield-alt", "title": "Sicurezza", "description": "Dati protetti"},
+            {"icon": "fas fa-headset", "title": "Supporto", "description": "Assistenza 24/7"}
+          ]
+        },
+        {
+          "type": "cta",
+          "heading": "Pronto a iniziare?",
+          "cta_text": "Contattaci",
+          "cta_url": "/contatti"
+        }
+      ],
+      "seo": {
+        "title": "Landing Page | Nome Sito",
+        "description": "Descrizione per i motori di ricerca",
+        "focus_keyword": "keyword principale"
+      }
+    }
+  ]
+}
+```
+
+### Vincoli e Best Practice
+- **Max 10 sezioni** per pagina (performance)
+- **Responsive**: Le dimensioni si adattano automaticamente
+- **Colori**: Usa codici HEX (#RRGGBB)
+- **Icone**: Formato "fas fa-nome" (FontAwesome 5)
+- **Template**: Usa "elementor_canvas" per pagine full-width
+- **SEO**: Aggiungi sempre title e description
+
+### Quando Creare Pagine Elementor
+Usa Elementor quando l'utente chiede:
+- Landing page
+- Homepage personalizzata
+- Pagine con layout a più colonne
+- Pagine con hero section
+- Pagine di servizi/features
+- Pagine di contatto elaborate
+
+Per contenuti semplici (blog post, pagine testo), usa l'editor classico.
+PROMPT;
+	}
 }
