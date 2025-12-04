@@ -316,6 +316,34 @@ class Activator {
         if ( ! wp_next_scheduled( 'creator_cleanup_backups' ) ) {
             wp_schedule_event( time(), 'daily', 'creator_cleanup_backups' );
         }
+
+        // Schedule thinking logs cleanup (30 days retention)
+        if ( ! wp_next_scheduled( 'creator_cleanup_thinking_logs' ) ) {
+            wp_schedule_event( time(), 'daily', 'creator_cleanup_thinking_logs' );
+        }
+    }
+
+    /**
+     * Cleanup old thinking logs (older than 30 days)
+     *
+     * @return int Number of deleted rows.
+     */
+    public static function cleanup_thinking_logs(): int {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'creator_thinking_logs';
+
+        // Check if table exists
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" ) !== $table ) {
+            return 0;
+        }
+
+        // Delete logs older than 30 days
+        $deleted = $wpdb->query(
+            "DELETE FROM {$table} WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)"
+        );
+
+        return $deleted !== false ? $deleted : 0;
     }
 
     /**

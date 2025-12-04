@@ -195,6 +195,9 @@ class Loader {
 
         // Register cron handler for backup cleanup
         add_action( 'creator_cleanup_backups', [ $this, 'run_backup_cleanup' ] );
+
+        // Register cron handler for thinking logs cleanup (30 days retention)
+        add_action( 'creator_cleanup_thinking_logs', [ Activator::class, 'cleanup_thinking_logs' ] );
     }
 
     /**
