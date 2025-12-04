@@ -247,6 +247,45 @@ class SnapshotManager {
     }
 
     /**
+     * Get snapshot for a message
+     *
+     * @param int $message_id Message ID.
+     * @return array|null
+     */
+    public function get_message_snapshot( int $message_id ): ?array {
+        global $wpdb;
+
+        $snapshot = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}creator_snapshots
+                 WHERE message_id = %d AND deleted = 0
+                 ORDER BY created_at DESC
+                 LIMIT 1",
+                $message_id
+            ),
+            ARRAY_A
+        );
+
+        if ( ! $snapshot ) {
+            return null;
+        }
+
+        $snapshot['operations'] = json_decode( $snapshot['operations'], true );
+
+        // Load full data from file if available
+        if ( ! empty( $snapshot['storage_file'] ) && file_exists( $snapshot['storage_file'] ) ) {
+            $file_content = file_get_contents( $snapshot['storage_file'] );
+            $file_data    = json_decode( $file_content, true );
+
+            if ( $file_data ) {
+                $snapshot['file_data'] = $file_data;
+            }
+        }
+
+        return $snapshot;
+    }
+
+    /**
      * Generate rollback instructions for operations
      *
      * @param array $operations Operations array.

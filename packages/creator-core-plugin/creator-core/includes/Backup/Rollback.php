@@ -10,6 +10,8 @@ namespace CreatorCore\Backup;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Audit\AuditLogger;
+use CreatorCore\Executor\CustomFileManager;
+use CreatorCore\Executor\CodeExecutor;
 
 /**
  * Class Rollback
@@ -151,6 +153,12 @@ class Rollback {
 
             case 'create_term':
                 return $this->rollback_create_term( $operation );
+
+            case 'custom_file_modify':
+                return $this->rollback_custom_file( $operation );
+
+            case 'wpcode_snippet':
+                return $this->rollback_wpcode_snippet( $operation );
 
             default:
                 return $this->rollback_generic( $operation );
@@ -603,5 +611,112 @@ class Rollback {
     private function is_operation_reversible( array $operation ): bool {
         // Most operations with before state can be reversed
         return isset( $operation['before'] ) || isset( $operation['after'] );
+    }
+
+    /**
+     * Rollback custom file modification
+     *
+     * @param array $operation Operation data.
+     * @return array
+     */
+    private function rollback_custom_file( array $operation ): array {
+        $before = $operation['before'] ?? null;
+
+        if ( ! $before ) {
+            return [
+                'success' => false,
+                'error'   => __( 'No previous state to restore for custom file', 'creator-core' ),
+            ];
+        }
+
+        $file_state = $before['file'] ?? null;
+        $manifest_state = $before['manifest'] ?? null;
+
+        if ( ! $file_state ) {
+            return [
+                'success' => false,
+                'error'   => __( 'No file state found in snapshot', 'creator-core' ),
+            ];
+        }
+
+        try {
+            $custom_file_manager = new CustomFileManager( $this->logger );
+
+            // Restore file state
+            $file_restored = $custom_file_manager->restore_file_state( $file_state );
+
+            // Restore manifest state if available
+            $manifest_restored = true;
+            if ( $manifest_state ) {
+                $manifest_restored = $custom_file_manager->restore_file_state( $manifest_state );
+            }
+
+            if ( $file_restored && $manifest_restored ) {
+                return [
+                    'success'   => true,
+                    'operation' => 'restore_custom_file',
+                    'type'      => $file_state['type'] ?? 'unknown',
+                    'file'      => $file_state['path'] ?? '',
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error'   => __( 'Failed to restore custom file state', 'creator-core' ),
+            ];
+        } catch ( \Throwable $e ) {
+            return [
+                'success' => false,
+                'error'   => sprintf(
+                    /* translators: %s: Error message */
+                    __( 'Error restoring custom file: %s', 'creator-core' ),
+                    $e->getMessage()
+                ),
+            ];
+        }
+    }
+
+    /**
+     * Rollback WP Code snippet creation
+     *
+     * @param array $operation Operation data.
+     * @return array
+     */
+    private function rollback_wpcode_snippet( array $operation ): array {
+        $snippet_id = $operation['after']['snippet_id'] ?? $operation['target'] ?? null;
+
+        if ( ! $snippet_id ) {
+            return [
+                'success' => false,
+                'error'   => __( 'No snippet ID found in operation', 'creator-core' ),
+            ];
+        }
+
+        try {
+            $code_executor = new CodeExecutor();
+            $result = $code_executor->rollback( $snippet_id, CodeExecutor::METHOD_WPCODE );
+
+            if ( $result['success'] ) {
+                return [
+                    'success'    => true,
+                    'operation'  => 'rollback_wpcode_snippet',
+                    'snippet_id' => $snippet_id,
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error'   => $result['message'] ?? __( 'Failed to rollback WP Code snippet', 'creator-core' ),
+            ];
+        } catch ( \Throwable $e ) {
+            return [
+                'success' => false,
+                'error'   => sprintf(
+                    /* translators: %s: Error message */
+                    __( 'Error rolling back snippet: %s', 'creator-core' ),
+                    $e->getMessage()
+                ),
+            ];
+        }
     }
 }

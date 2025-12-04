@@ -12,6 +12,7 @@ defined( 'ABSPATH' ) || exit;
 use CreatorCore\Integrations\ProxyClient;
 use CreatorCore\Permission\CapabilityChecker;
 use CreatorCore\Backup\SnapshotManager;
+use CreatorCore\Backup\Rollback;
 use CreatorCore\Audit\AuditLogger;
 use CreatorCore\User\UserProfile;
 use CreatorCore\Context\CreatorContext;
@@ -422,6 +423,27 @@ class ChatInterface {
     private const MAX_FILES_PER_MESSAGE = 3;
 
     /**
+     * Maximum retry attempts for AI requests
+     *
+     * @var int
+     */
+    private const MAX_RETRY_ATTEMPTS = 5;
+
+    /**
+     * Base delay for exponential backoff (milliseconds)
+     *
+     * @var int
+     */
+    private const RETRY_BASE_DELAY_MS = 1000;
+
+    /**
+     * Snapshot expiration time in hours (after which undo is disabled)
+     *
+     * @var int
+     */
+    private const SNAPSHOT_EXPIRATION_HOURS = 24;
+
+    /**
      * Send a message
      *
      * @param int    $chat_id Chat ID.
@@ -536,7 +558,7 @@ class ChatInterface {
         // Get the chat's AI model (locked per chat)
         $ai_model = $chat['ai_model'] ?? UserProfile::get_default_model();
 
-        // Send to AI with system_prompt separated from main prompt
+        // Send to AI with system_prompt separated from main prompt (with retry logic)
         try {
             $ai_options = [
                 'chat_id'         => $chat_id,
@@ -553,30 +575,46 @@ class ChatInterface {
                 $ai_options['files'] = $processed_files;
             }
 
-            $ai_response = $this->proxy_client->send_to_ai( $prompts['prompt'], 'TEXT_GEN', $ai_options );
+            // Use retry logic for AI requests
+            $ai_response = $this->send_ai_request_with_retry( $prompts['prompt'], $ai_options );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error sending to AI: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
             return [
                 'success'         => false,
                 'user_message_id' => $user_message_id,
                 'error'           => 'Error sending to AI: ' . $e->getMessage(),
+                'suggestion'      => $this->get_ai_error_suggestion( $e->getMessage() ),
             ];
         }
 
         if ( ! $ai_response['success'] ) {
+            // Build error message with suggestion
+            $error_msg = $ai_response['error'] ?? __( 'AI request failed', 'creator-core' );
+            $suggestion = $ai_response['suggestion'] ?? '';
+
+            $display_error = __( 'Sorry, I encountered an error processing your request.', 'creator-core' );
+            if ( ! empty( $suggestion ) ) {
+                $display_error .= "\n\n💡 " . $suggestion;
+            }
+
             // Save error as assistant message
             $this->message_handler->save_message(
                 $chat_id,
-                __( 'Sorry, I encountered an error processing your request.', 'creator-core' ),
+                $display_error,
                 'assistant',
                 'error',
-                [ 'error' => $ai_response['error'] ?? 'Unknown error' ]
+                [
+                    'error'      => $error_msg,
+                    'suggestion' => $suggestion,
+                    'retries'    => $ai_response['retries'] ?? 0,
+                ]
             );
 
             return [
                 'success'        => false,
                 'user_message_id' => $user_message_id,
-                'error'          => $ai_response['error'] ?? __( 'AI request failed', 'creator-core' ),
+                'error'          => $error_msg,
+                'suggestion'     => $suggestion,
             ];
         }
 
@@ -646,6 +684,365 @@ class ChatInterface {
             'actions'             => $parsed_response['actions'],
             'usage'               => $usage_data,
         ];
+    }
+
+    /**
+     * Handle undo/rollback request for a message
+     *
+     * @param int $chat_id    Chat ID.
+     * @param int $message_id Message ID to undo.
+     * @return array Result with success status and details.
+     */
+    public function handle_undo( int $chat_id, int $message_id ): array {
+        // Verify chat exists and belongs to user
+        $chat = $this->get_chat( $chat_id );
+
+        if ( ! $chat ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Chat not found', 'creator-core' ),
+                'code'    => 'chat_not_found',
+            ];
+        }
+
+        if ( (int) $chat['user_id'] !== get_current_user_id() && ! current_user_can( 'manage_options' ) ) {
+            return [
+                'success' => false,
+                'error'   => __( 'Access denied', 'creator-core' ),
+                'code'    => 'access_denied',
+            ];
+        }
+
+        // Get snapshot for this message
+        $snapshot = $this->snapshot_manager->get_message_snapshot( $message_id );
+
+        if ( ! $snapshot ) {
+            return [
+                'success'    => false,
+                'error'      => __( 'No rollback data found for this action. The snapshot may have expired or was never created.', 'creator-core' ),
+                'code'       => 'snapshot_not_found',
+                'suggestion' => __( 'Rollback is available for 24 hours after an action is executed.', 'creator-core' ),
+            ];
+        }
+
+        // Check if snapshot is expired
+        $snapshot_age_hours = $this->get_snapshot_age_hours( $snapshot['created_at'] );
+
+        if ( $snapshot_age_hours > self::SNAPSHOT_EXPIRATION_HOURS ) {
+            return [
+                'success'    => false,
+                'error'      => __( 'This action can no longer be undone because the snapshot has expired.', 'creator-core' ),
+                'code'       => 'snapshot_expired',
+                'suggestion' => sprintf(
+                    /* translators: %d: Number of hours */
+                    __( 'Rollback is available for %d hours after an action is executed.', 'creator-core' ),
+                    self::SNAPSHOT_EXPIRATION_HOURS
+                ),
+                'expired_at' => gmdate( 'Y-m-d H:i:s', strtotime( $snapshot['created_at'] ) + ( self::SNAPSHOT_EXPIRATION_HOURS * 3600 ) ),
+            ];
+        }
+
+        // Perform rollback
+        $rollback = new Rollback( $this->snapshot_manager, $this->logger );
+        $result   = $rollback->rollback_snapshot( (int) $snapshot['id'] );
+
+        if ( $result['success'] ) {
+            // Save a system message noting the rollback
+            $this->message_handler->save_message(
+                $chat_id,
+                sprintf(
+                    /* translators: %s: Timestamp */
+                    __( '↩️ Action rolled back successfully at %s', 'creator-core' ),
+                    current_time( 'H:i:s' )
+                ),
+                'system',
+                'rollback',
+                [
+                    'snapshot_id'   => $snapshot['id'],
+                    'operations'    => count( $result['results'] ?? [] ),
+                    'original_msg'  => $message_id,
+                ]
+            );
+
+            $this->logger->success( 'undo_completed', [
+                'chat_id'     => $chat_id,
+                'message_id'  => $message_id,
+                'snapshot_id' => $snapshot['id'],
+            ]);
+
+            return [
+                'success'    => true,
+                'message'    => $result['message'],
+                'operations' => count( $result['results'] ?? [] ),
+                'details'    => $result['results'],
+            ];
+        }
+
+        // Partial or failed rollback
+        $this->logger->warning( 'undo_failed', [
+            'chat_id'     => $chat_id,
+            'message_id'  => $message_id,
+            'snapshot_id' => $snapshot['id'],
+            'errors'      => $result['errors'],
+        ]);
+
+        return [
+            'success'    => false,
+            'error'      => $result['message'] ?? __( 'Rollback failed', 'creator-core' ),
+            'code'       => 'rollback_failed',
+            'errors'     => $result['errors'] ?? [],
+            'suggestion' => $this->get_rollback_error_suggestion( $result['errors'] ?? [] ),
+        ];
+    }
+
+    /**
+     * Check if undo is available for a message
+     *
+     * @param int $message_id Message ID.
+     * @return array Undo availability info.
+     */
+    public function check_undo_availability( int $message_id ): array {
+        $snapshot = $this->snapshot_manager->get_message_snapshot( $message_id );
+
+        if ( ! $snapshot ) {
+            return [
+                'available' => false,
+                'reason'    => 'no_snapshot',
+            ];
+        }
+
+        $age_hours = $this->get_snapshot_age_hours( $snapshot['created_at'] );
+        $remaining_hours = max( 0, self::SNAPSHOT_EXPIRATION_HOURS - $age_hours );
+
+        if ( $age_hours > self::SNAPSHOT_EXPIRATION_HOURS ) {
+            return [
+                'available' => false,
+                'reason'    => 'expired',
+                'expired_at' => gmdate( 'Y-m-d H:i:s', strtotime( $snapshot['created_at'] ) + ( self::SNAPSHOT_EXPIRATION_HOURS * 3600 ) ),
+            ];
+        }
+
+        return [
+            'available'       => true,
+            'snapshot_id'     => $snapshot['id'],
+            'created_at'      => $snapshot['created_at'],
+            'expires_in_hours' => round( $remaining_hours, 1 ),
+            'operations_count' => count( $snapshot['operations'] ?? [] ),
+        ];
+    }
+
+    /**
+     * Get snapshot age in hours
+     *
+     * @param string $created_at Created at timestamp.
+     * @return float Age in hours.
+     */
+    private function get_snapshot_age_hours( string $created_at ): float {
+        $created_timestamp = strtotime( $created_at );
+        $current_timestamp = time();
+        return ( $current_timestamp - $created_timestamp ) / 3600;
+    }
+
+    /**
+     * Get helpful suggestion for rollback errors
+     *
+     * @param array $errors Rollback errors.
+     * @return string Suggestion message.
+     */
+    private function get_rollback_error_suggestion( array $errors ): string {
+        if ( empty( $errors ) ) {
+            return __( 'Please try again or contact support if the problem persists.', 'creator-core' );
+        }
+
+        // Analyze errors for specific suggestions
+        foreach ( $errors as $error ) {
+            $error_msg = $error['error'] ?? '';
+
+            if ( stripos( $error_msg, 'permission' ) !== false || stripos( $error_msg, 'capability' ) !== false ) {
+                return __( 'This rollback requires higher permissions. Please contact an administrator.', 'creator-core' );
+            }
+
+            if ( stripos( $error_msg, 'not found' ) !== false || stripos( $error_msg, 'deleted' ) !== false ) {
+                return __( 'Some items may have been manually modified or deleted. Partial rollback was attempted.', 'creator-core' );
+            }
+
+            if ( stripos( $error_msg, 'database' ) !== false || stripos( $error_msg, 'wpdb' ) !== false ) {
+                return __( 'A database error occurred. Please check the error log and try again.', 'creator-core' );
+            }
+        }
+
+        return __( 'Some operations could not be rolled back. Please review the error details.', 'creator-core' );
+    }
+
+    /**
+     * Send AI request with retry logic
+     *
+     * @param string $prompt     The prompt to send.
+     * @param array  $ai_options Options for the AI request.
+     * @return array AI response.
+     */
+    private function send_ai_request_with_retry( string $prompt, array $ai_options ): array {
+        $last_error   = null;
+        $attempt      = 0;
+
+        while ( $attempt < self::MAX_RETRY_ATTEMPTS ) {
+            $attempt++;
+
+            try {
+                $ai_response = $this->proxy_client->send_to_ai( $prompt, 'TEXT_GEN', $ai_options );
+
+                // Success - return response
+                if ( $ai_response['success'] ) {
+                    if ( $attempt > 1 ) {
+                        $this->logger->info( 'ai_request_succeeded_after_retry', [
+                            'attempt' => $attempt,
+                            'chat_id' => $ai_options['chat_id'] ?? null,
+                        ]);
+                    }
+                    return $ai_response;
+                }
+
+                // Non-retryable errors (authentication, rate limit exceeded, etc.)
+                $error_code = $ai_response['error_code'] ?? '';
+                if ( $this->is_non_retryable_error( $error_code, $ai_response['error'] ?? '' ) ) {
+                    return $ai_response;
+                }
+
+                $last_error = $ai_response['error'] ?? 'Unknown error';
+
+            } catch ( \Throwable $e ) {
+                $last_error = $e->getMessage();
+
+                // Non-retryable exceptions
+                if ( $this->is_non_retryable_error( '', $e->getMessage() ) ) {
+                    throw $e;
+                }
+            }
+
+            // Log retry attempt
+            $this->logger->warning( 'ai_request_retry', [
+                'attempt'   => $attempt,
+                'max'       => self::MAX_RETRY_ATTEMPTS,
+                'error'     => $last_error,
+                'chat_id'   => $ai_options['chat_id'] ?? null,
+            ]);
+
+            // Exponential backoff before retry (except on last attempt)
+            if ( $attempt < self::MAX_RETRY_ATTEMPTS ) {
+                $delay_ms = self::RETRY_BASE_DELAY_MS * pow( 2, $attempt - 1 );
+                usleep( $delay_ms * 1000 ); // Convert to microseconds
+            }
+        }
+
+        // All retries exhausted
+        $this->logger->failure( 'ai_request_all_retries_failed', [
+            'attempts'   => $attempt,
+            'last_error' => $last_error,
+            'chat_id'    => $ai_options['chat_id'] ?? null,
+        ]);
+
+        return [
+            'success' => false,
+            'error'   => $this->get_ai_error_message( $last_error, $attempt ),
+            'suggestion' => $this->get_ai_error_suggestion( $last_error ),
+            'retries' => $attempt,
+        ];
+    }
+
+    /**
+     * Check if an error is non-retryable
+     *
+     * @param string $error_code Error code.
+     * @param string $error_msg  Error message.
+     * @return bool
+     */
+    private function is_non_retryable_error( string $error_code, string $error_msg ): bool {
+        // Non-retryable error codes
+        $non_retryable_codes = [ 'auth_failed', 'invalid_api_key', 'quota_exceeded', 'model_not_found' ];
+        if ( in_array( $error_code, $non_retryable_codes, true ) ) {
+            return true;
+        }
+
+        // Non-retryable error patterns
+        $non_retryable_patterns = [
+            'authentication',
+            'unauthorized',
+            'api key',
+            'quota exceeded',
+            'rate limit',
+            'invalid model',
+            'permission denied',
+        ];
+
+        $error_lower = strtolower( $error_msg );
+        foreach ( $non_retryable_patterns as $pattern ) {
+            if ( strpos( $error_lower, $pattern ) !== false ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get user-friendly error message for AI failures
+     *
+     * @param string $error   Original error.
+     * @param int    $retries Number of retries attempted.
+     * @return string
+     */
+    private function get_ai_error_message( string $error, int $retries ): string {
+        $error_lower = strtolower( $error );
+
+        if ( strpos( $error_lower, 'timeout' ) !== false ) {
+            return __( 'The AI service is taking too long to respond. Please try again.', 'creator-core' );
+        }
+
+        if ( strpos( $error_lower, 'rate limit' ) !== false ) {
+            return __( 'Too many requests. Please wait a moment and try again.', 'creator-core' );
+        }
+
+        if ( strpos( $error_lower, 'network' ) !== false || strpos( $error_lower, 'connection' ) !== false ) {
+            return __( 'Network error. Please check your internet connection and try again.', 'creator-core' );
+        }
+
+        if ( strpos( $error_lower, 'auth' ) !== false || strpos( $error_lower, 'api key' ) !== false ) {
+            return __( 'Authentication error. Please check your API configuration.', 'creator-core' );
+        }
+
+        return sprintf(
+            /* translators: %d: Number of retries */
+            __( 'AI request failed after %d attempts. Please try again later.', 'creator-core' ),
+            $retries
+        );
+    }
+
+    /**
+     * Get suggestion for AI error recovery
+     *
+     * @param string $error Error message.
+     * @return string
+     */
+    private function get_ai_error_suggestion( string $error ): string {
+        $error_lower = strtolower( $error );
+
+        if ( strpos( $error_lower, 'timeout' ) !== false ) {
+            return __( 'Try sending a shorter message or wait for the service to recover.', 'creator-core' );
+        }
+
+        if ( strpos( $error_lower, 'rate limit' ) !== false ) {
+            return __( 'Wait 30-60 seconds before trying again.', 'creator-core' );
+        }
+
+        if ( strpos( $error_lower, 'network' ) !== false || strpos( $error_lower, 'connection' ) !== false ) {
+            return __( 'Check your internet connection and refresh the page.', 'creator-core' );
+        }
+
+        if ( strpos( $error_lower, 'auth' ) !== false ) {
+            return __( 'Go to Settings > API and verify your API credentials.', 'creator-core' );
+        }
+
+        return __( 'If the problem persists, try refreshing the page or contact support.', 'creator-core' );
     }
 
     /**
