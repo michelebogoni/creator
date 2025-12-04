@@ -392,9 +392,21 @@ class CustomFileManager {
 			$htaccess .= "    SetHandler application/x-httpd-php\n";
 			$htaccess .= "</FilesMatch>\n";
 			file_put_contents( $dir . '/.htaccess', $htaccess );
+			chmod( $dir . '/.htaccess', 0644 );
 
 			// Create index.php for security
 			file_put_contents( $dir . '/index.php', '<?php // Silence is golden' );
+			chmod( $dir . '/index.php', 0644 );
+
+			// Create .gitignore to exclude generated files from version control
+			$gitignore = "# Creator Custom Code - Auto-generated files\n";
+			$gitignore .= "# These files are managed by Creator and should not be version controlled\n";
+			$gitignore .= "codice-custom.php\n";
+			$gitignore .= "codice-custom.css\n";
+			$gitignore .= "codice-custom.js\n";
+			$gitignore .= "codice-manifest.json\n";
+			file_put_contents( $dir . '/.gitignore', $gitignore );
+			chmod( $dir . '/.gitignore', 0644 );
 		}
 
 		if ( ! is_writable( $dir ) ) {
@@ -421,6 +433,7 @@ class CustomFileManager {
 
 		$header = $this->get_file_header( $type );
 		file_put_contents( $file_path, $header );
+		chmod( $file_path, 0644 );
 	}
 
 	/**
@@ -721,7 +734,12 @@ JS;
 
 		$json = wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
 
-		return file_put_contents( $manifest_path, $json ) !== false;
+		$result = file_put_contents( $manifest_path, $json );
+		if ( $result !== false ) {
+			chmod( $manifest_path, 0644 );
+		}
+
+		return $result !== false;
 	}
 
 	/**
@@ -750,5 +768,79 @@ JS;
 	public function has_modifications( string $type ): bool {
 		$mods = $this->get_modifications_by_type( $type );
 		return ! empty( $mods );
+	}
+
+	/**
+	 * Get current file content for snapshot (before state)
+	 *
+	 * @param string $type Code type.
+	 * @return array File state including path, content, and exists flag.
+	 */
+	public function get_file_state( string $type ): array {
+		$file_path = $this->get_file_path( $type );
+
+		if ( ! $file_path ) {
+			return [
+				'exists'  => false,
+				'path'    => null,
+				'content' => null,
+			];
+		}
+
+		$exists = file_exists( $file_path );
+
+		return [
+			'exists'  => $exists,
+			'path'    => $file_path,
+			'content' => $exists ? file_get_contents( $file_path ) : null,
+			'type'    => $type,
+		];
+	}
+
+	/**
+	 * Get manifest file state for snapshot
+	 *
+	 * @return array Manifest state.
+	 */
+	public function get_manifest_state(): array {
+		$manifest_path = $this->base_dir . self::FILE_MANIFEST;
+		$exists = file_exists( $manifest_path );
+
+		return [
+			'exists'  => $exists,
+			'path'    => $manifest_path,
+			'content' => $exists ? file_get_contents( $manifest_path ) : null,
+		];
+	}
+
+	/**
+	 * Restore file from snapshot state
+	 *
+	 * @param array $state File state from get_file_state().
+	 * @return bool Success status.
+	 */
+	public function restore_file_state( array $state ): bool {
+		if ( empty( $state['path'] ) ) {
+			return false;
+		}
+
+		// If file didn't exist before, delete it
+		if ( ! $state['exists'] ) {
+			if ( file_exists( $state['path'] ) ) {
+				return unlink( $state['path'] );
+			}
+			return true;
+		}
+
+		// Restore content
+		if ( $state['content'] !== null ) {
+			$result = file_put_contents( $state['path'], $state['content'] );
+			if ( $result !== false ) {
+				chmod( $state['path'], 0644 );
+			}
+			return $result !== false;
+		}
+
+		return false;
 	}
 }

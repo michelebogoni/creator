@@ -16,6 +16,7 @@ defined( 'ABSPATH' ) || exit;
 use CreatorCore\Integrations\WPCodeIntegration;
 use CreatorCore\Audit\AuditLogger;
 use CreatorCore\Executor\CustomFileManager;
+use CreatorCore\Backup\SnapshotManager;
 
 /**
  * Class CodeExecutor
@@ -64,6 +65,13 @@ class CodeExecutor {
 	 * @var CustomFileManager
 	 */
 	private CustomFileManager $custom_file_manager;
+
+	/**
+	 * Snapshot manager instance
+	 *
+	 * @var SnapshotManager
+	 */
+	private SnapshotManager $snapshot_manager;
 
 	/**
 	 * Forbidden functions that should never be executed
@@ -206,24 +214,28 @@ class CodeExecutor {
 	 * @param WPCodeIntegration|null  $wpcode              WP Code integration instance.
 	 * @param AuditLogger|null        $logger              Audit logger instance.
 	 * @param CustomFileManager|null  $custom_file_manager Custom file manager instance.
+	 * @param SnapshotManager|null    $snapshot_manager    Snapshot manager instance.
 	 */
 	public function __construct(
 		?WPCodeIntegration $wpcode = null,
 		?AuditLogger $logger = null,
-		?CustomFileManager $custom_file_manager = null
+		?CustomFileManager $custom_file_manager = null,
+		?SnapshotManager $snapshot_manager = null
 	) {
 		$this->wpcode              = $wpcode ?? new WPCodeIntegration();
 		$this->logger              = $logger ?? new AuditLogger();
 		$this->custom_file_manager = $custom_file_manager ?? new CustomFileManager( $this->logger );
+		$this->snapshot_manager    = $snapshot_manager ?? new SnapshotManager( $this->logger );
 	}
 
 	/**
 	 * Execute code from AI response
 	 *
 	 * @param array $code_data Code data from AI response.
+	 * @param array $context   Optional context for snapshots (chat_id, message_id, action_id).
 	 * @return array Execution result.
 	 */
-	public function execute( array $code_data ): array {
+	public function execute( array $code_data, array $context = [] ): array {
 		$code        = $code_data['content'] ?? '';
 		$title       = $code_data['title'] ?? 'Creator Generated Code';
 		$description = $code_data['description'] ?? '';
@@ -264,7 +276,7 @@ class CodeExecutor {
 		}
 
 		// Fallback to custom files (preferred over direct execution)
-		return $this->execute_via_custom_files( $code, $title, $description, $language, $auto_execute );
+		return $this->execute_via_custom_files( $code, $title, $description, $language, $auto_execute, $context );
 	}
 
 	/**
@@ -350,6 +362,7 @@ class CodeExecutor {
 	 * @param string $description Code description.
 	 * @param string $language    Code language/type.
 	 * @param bool   $auto_execute Whether to auto-execute (for PHP only).
+	 * @param array  $context     Optional context for snapshots (chat_id, message_id, action_id).
 	 * @return array Execution result.
 	 */
 	private function execute_via_custom_files(
@@ -357,10 +370,17 @@ class CodeExecutor {
 		string $title,
 		string $description,
 		string $language,
-		bool $auto_execute
+		bool $auto_execute,
+		array $context = []
 	): array {
 		// Map language to custom file type
 		$type = $this->map_language_to_file_type( $language );
+
+		// Create delta snapshot before modification if context is provided
+		$snapshot_id = null;
+		if ( ! empty( $context['chat_id'] ) ) {
+			$snapshot_id = $this->create_custom_file_snapshot( $type, $context, $title );
+		}
 
 		// Write to custom file
 		$write_result = $this->custom_file_manager->write_code( $code, $type, $title, $description );
@@ -399,6 +419,7 @@ class CodeExecutor {
 			'modification_id' => $mod_id,
 			'type'            => $type,
 			'auto_execute'    => $auto_execute,
+			'snapshot_id'     => $snapshot_id,
 		] );
 
 		$status_message = match ( $type ) {
@@ -421,8 +442,65 @@ class CodeExecutor {
 				'type'             => $type,
 				'execution_result' => $execution_result,
 				'rollback_method'  => sprintf( 'Remove modification %s', $mod_id ),
+				'snapshot_id'      => $snapshot_id,
 			]
 		);
+	}
+
+	/**
+	 * Create a snapshot of custom file state before modification
+	 *
+	 * @param string $type    Code type.
+	 * @param array  $context Snapshot context (chat_id, message_id, action_id).
+	 * @param string $title   Operation title.
+	 * @return int|null Snapshot ID or null if failed.
+	 */
+	private function create_custom_file_snapshot( string $type, array $context, string $title ): ?int {
+		$chat_id    = (int) ( $context['chat_id'] ?? 0 );
+		$message_id = (int) ( $context['message_id'] ?? 0 );
+		$action_id  = (int) ( $context['action_id'] ?? 0 );
+
+		if ( ! $chat_id ) {
+			return null;
+		}
+
+		// Capture current file state
+		$file_state     = $this->custom_file_manager->get_file_state( $type );
+		$manifest_state = $this->custom_file_manager->get_manifest_state();
+
+		// Create snapshot operations array
+		$operations = [
+			[
+				'type'        => 'custom_file_modify',
+				'target'      => $type,
+				'title'       => $title,
+				'before'      => [
+					'file'     => $file_state,
+					'manifest' => $manifest_state,
+				],
+				'after'       => null, // Will be filled after successful write
+			],
+		];
+
+		$result = $this->snapshot_manager->create_snapshot(
+			$chat_id,
+			$message_id,
+			$action_id,
+			$operations
+		);
+
+		if ( is_int( $result ) ) {
+			return $result;
+		}
+
+		// Log warning if snapshot failed but continue execution
+		if ( is_wp_error( $result ) ) {
+			$this->logger->warning( 'custom_file_snapshot_failed', [
+				'error' => $result->get_error_message(),
+			] );
+		}
+
+		return null;
 	}
 
 	/**

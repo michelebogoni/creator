@@ -317,6 +317,18 @@ class SnapshotManager {
                     }
                     break;
 
+                case 'custom_file_modify':
+                    // Restore custom code file from before state
+                    if ( isset( $operation['before']['file'] ) ) {
+                        $instructions[] = [
+                            'action'   => 'restore_custom_file',
+                            'type'     => $operation['target'] ?? '',
+                            'file'     => $operation['before']['file'],
+                            'manifest' => $operation['before']['manifest'] ?? null,
+                        ];
+                    }
+                    break;
+
                 default:
                     // Generic instruction for unknown types
                     if ( isset( $operation['before'] ) ) {
