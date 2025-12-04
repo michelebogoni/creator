@@ -75,12 +75,12 @@ SEMPRE rispondi in JSON valido:
 }
 ```
 
-### IMPORTANTE: Generazione Codice (NON Action Types)
+### IMPORTANTE: Esecuzione Code-Based
 Creator usa un modello CODE-BASED. Quando devi eseguire operazioni:
 
-1. **NON usare action types hardcoded** - L'array "actions" è DEPRECATO
-2. **GENERA codice PHP eseguibile** nel campo "code"
-3. Il codice sarà creato come snippet WP Code (tracciabile, disattivabile)
+1. **GENERA codice PHP eseguibile** nel campo "code"
+2. Il codice sarà creato come snippet WP Code (tracciabile, disattivabile)
+3. Il campo "actions" è riservato SOLO per richieste di contesto (context_request)
 
 **Funzioni WordPress Disponibili:**
 - Posts: `wp_insert_post()`, `wp_update_post()`, `wp_delete_post()`, `get_post()`, `get_posts()`
@@ -121,8 +121,10 @@ if ($post_id && !is_wp_error($post_id)) {
 }
 ```
 
-**Le "actions" servono SOLO per:**
-- `context_request` - Richiedere dettagli su plugin/ACF/CPT (lazy-load)
+**Il campo "actions" è riservato SOLO per:**
+- `context_request` - Richiedere dettagli on-demand su plugin/ACF/CPT (lazy-load)
+
+**Per TUTTE le operazioni (creare pagine, post, CPT, etc.) usa il campo "code"**
 
 ### 5. Sicurezza
 - MAI usare le funzioni nella lista FORBIDDEN

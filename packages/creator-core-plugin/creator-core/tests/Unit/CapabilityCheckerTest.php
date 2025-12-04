@@ -31,46 +31,47 @@ class CapabilityCheckerTest extends TestCase {
     }
 
     /**
-     * Test can_manage returns true for administrators
+     * Test can_use_creator returns true for administrators
      */
-    public function test_can_manage_for_admin(): void {
-        $result = $this->checker->can_manage();
+    public function test_can_use_creator_for_admin(): void {
+        $result = $this->checker->can_use_creator();
         $this->assertTrue( $result );
     }
 
     /**
-     * Test can_use_chat returns true for valid users
+     * Test can_manage_settings returns true for administrators
      */
-    public function test_can_use_chat(): void {
-        $result = $this->checker->can_use_chat();
+    public function test_can_manage_settings(): void {
+        $result = $this->checker->can_manage_settings();
         $this->assertTrue( $result );
     }
 
     /**
-     * Test can_execute_action with allowed action
+     * Test check_operation_requirements with allowed operation
      */
-    public function test_can_execute_allowed_action(): void {
-        $result = $this->checker->can_execute_action( 'create_post' );
-        $this->assertTrue( $result );
+    public function test_check_operation_requirements_allowed(): void {
+        $result = $this->checker->check_operation_requirements( 'create_post' );
+        $this->assertTrue( $result['allowed'] );
+        $this->assertEmpty( $result['missing'] );
     }
 
     /**
-     * Test get_allowed_actions returns array
+     * Test get_all_operations returns array
      */
-    public function test_get_allowed_actions(): void {
-        $actions = $this->checker->get_allowed_actions();
+    public function test_get_all_operations(): void {
+        $operations = $this->checker->get_all_operations();
 
-        $this->assertIsArray( $actions );
-        $this->assertNotEmpty( $actions );
+        $this->assertIsArray( $operations );
+        $this->assertNotEmpty( $operations );
     }
 
     /**
-     * Test default allowed actions
+     * Test default operations exist
      */
-    public function test_default_allowed_actions(): void {
-        $actions = $this->checker->get_allowed_actions();
+    public function test_default_operations_exist(): void {
+        $operations = $this->checker->get_all_operations();
 
-        $expected_actions = [
+        $expected_operations = [
             'create_post',
             'update_post',
             'create_page',
@@ -78,32 +79,54 @@ class CapabilityCheckerTest extends TestCase {
             'upload_media',
         ];
 
-        foreach ( $expected_actions as $action ) {
-            $this->assertContains( $action, $actions );
+        foreach ( $expected_operations as $operation ) {
+            $this->assertContains( $operation, $operations );
         }
     }
 
     /**
-     * Test can_rollback returns true for administrators
+     * Test get_operation_capabilities returns correct capabilities
      */
-    public function test_can_rollback(): void {
-        $result = $this->checker->can_rollback();
+    public function test_get_operation_capabilities(): void {
+        $caps = $this->checker->get_operation_capabilities( 'create_post' );
+
+        $this->assertIsArray( $caps );
+        $this->assertContains( 'edit_posts', $caps );
+        $this->assertContains( 'publish_posts', $caps );
+    }
+
+    /**
+     * Test can_manage_backups returns true for administrators
+     */
+    public function test_can_manage_backups(): void {
+        $result = $this->checker->can_manage_backups();
         $this->assertTrue( $result );
     }
 
     /**
-     * Test can_view_logs returns true for administrators
+     * Test can_view_audit returns true for administrators
      */
-    public function test_can_view_logs(): void {
-        $result = $this->checker->can_view_logs();
+    public function test_can_view_audit(): void {
+        $result = $this->checker->can_view_audit();
         $this->assertTrue( $result );
     }
 
     /**
-     * Test get_user_role returns correct role
+     * Test check_permission returns true for allowed operations
      */
-    public function test_get_user_role(): void {
-        $role = $this->checker->get_user_role();
-        $this->assertEquals( 'administrator', $role );
+    public function test_check_permission_allowed(): void {
+        $result = $this->checker->check_permission( 'create_post' );
+        $this->assertTrue( $result );
+    }
+
+    /**
+     * Test get_user_operations returns array of available operations
+     */
+    public function test_get_user_operations(): void {
+        $operations = $this->checker->get_user_operations();
+
+        $this->assertIsArray( $operations );
+        // For admin, should have access to multiple operations
+        $this->assertNotEmpty( $operations );
     }
 }

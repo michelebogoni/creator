@@ -13,7 +13,6 @@ use CreatorCore\Chat\ChatInterface;
 use CreatorCore\Permission\CapabilityChecker;
 use CreatorCore\Audit\AuditLogger;
 use CreatorCore\Backup\Rollback;
-use CreatorCore\Executor\ActionExecutor;
 use CreatorCore\Development\FileSystemManager;
 use CreatorCore\Development\PluginGenerator;
 use CreatorCore\Development\CodeAnalyzer;
@@ -124,29 +123,6 @@ class REST_API {
                         'type'              => 'string',
                         'sanitize_callback' => 'sanitize_textarea_field',
                     ],
-                ],
-            ],
-        ]);
-
-        // Action endpoints
-        register_rest_route( self::NAMESPACE, '/actions/execute', [
-            'methods'             => \WP_REST_Server::CREATABLE,
-            'callback'            => [ $this, 'execute_action' ],
-            'permission_callback' => [ $this, 'check_permission' ],
-            'args'                => [
-                'action' => [
-                    'required' => true,
-                    'type'     => 'object',
-                ],
-                'chat_id' => [
-                    'required' => false,
-                    'type'     => 'integer',
-                    'default'  => 0,
-                ],
-                'message_id' => [
-                    'required' => false,
-                    'type'     => 'integer',
-                    'default'  => 0,
                 ],
             ],
         ]);
@@ -504,31 +480,6 @@ class REST_API {
                 [ 'status' => 500 ]
             );
         }
-    }
-
-    /**
-     * Execute an action
-     *
-     * @param \WP_REST_Request $request Request object.
-     * @return \WP_REST_Response|\WP_Error
-     */
-    public function execute_action( \WP_REST_Request $request ) {
-        $action     = $request->get_param( 'action' );
-        $chat_id    = (int) $request->get_param( 'chat_id' );
-        $message_id = (int) $request->get_param( 'message_id' );
-
-        $executor = new ActionExecutor( $this->logger, $this->capability_checker );
-        $result   = $executor->execute( $action, $chat_id, $message_id );
-
-        if ( ! $result['success'] ) {
-            return new \WP_Error(
-                $result['code'] ?? 'execution_failed',
-                $result['error'] ?? __( 'Action execution failed', 'creator-core' ),
-                [ 'status' => 500 ]
-            );
-        }
-
-        return rest_ensure_response( $result );
     }
 
     /**
