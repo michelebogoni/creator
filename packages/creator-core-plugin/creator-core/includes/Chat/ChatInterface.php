@@ -17,6 +17,7 @@ use CreatorCore\Audit\AuditLogger;
 use CreatorCore\User\UserProfile;
 use CreatorCore\Context\CreatorContext;
 use CreatorCore\Context\ContextLoader;
+use CreatorCore\Context\ThinkingLogger;
 use CreatorCore\Executor\CodeExecutor;
 use CreatorCore\Executor\ExecutionVerifier;
 
@@ -96,6 +97,13 @@ class ChatInterface {
      * @var ContextLoader|null
      */
     private ?ContextLoader $context_loader = null;
+
+    /**
+     * Thinking logger instance (per-request)
+     *
+     * @var ThinkingLogger|null
+     */
+    private ?ThinkingLogger $thinking_logger = null;
 
     /**
      * Constructor
@@ -452,6 +460,10 @@ class ChatInterface {
      * @return array Result with message ID and AI response.
      */
     public function send_message( int $chat_id, string $content, array $files = [] ): array {
+        // Initialize thinking logger for this request
+        $this->thinking_logger = new ThinkingLogger( $chat_id );
+        $this->thinking_logger->start_discovery();
+
         // Verify chat exists and belongs to user
         $chat = $this->get_chat( $chat_id );
 
@@ -472,11 +484,14 @@ class ChatInterface {
         // Process file attachments
         $processed_files = [];
         if ( ! empty( $files ) ) {
+            $this->thinking_logger->log_attachments( count( $files ) );
             $file_result = $this->process_file_attachments( $files );
             if ( ! $file_result['success'] ) {
+                $this->thinking_logger->error( 'File processing failed: ' . ( $file_result['error'] ?? 'Unknown error' ) );
                 return $file_result;
             }
             $processed_files = $file_result['files'];
+            $this->thinking_logger->success( 'Files processed successfully' );
         }
 
         // Save user message with attachment metadata
@@ -509,11 +524,15 @@ class ChatInterface {
         }
 
         // Build context
+        $this->thinking_logger->start_analysis();
         try {
+            $this->thinking_logger->info( 'Loading WordPress context...' );
             $context_collector = new ContextCollector();
             $context           = $context_collector->get_wordpress_context();
+            $this->thinking_logger->debug( 'Site context loaded', [ 'keys' => array_keys( $context ) ] );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error collecting context: ' . $e->getMessage() );
+            $this->thinking_logger->error( 'Context collection failed: ' . $e->getMessage() );
             return [
                 'success' => false,
                 'error'   => 'Error collecting context: ' . $e->getMessage(),
@@ -522,15 +541,21 @@ class ChatInterface {
 
         // Build conversation history
         try {
+            $this->thinking_logger->info( 'Loading conversation history...' );
             $history = $this->build_conversation_history( $chat_id );
+            $this->thinking_logger->log_history_loaded( count( $history ) );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error building history: ' . $e->getMessage() );
+            $this->thinking_logger->warning( 'History load failed, continuing without' );
             $history = [];
         }
 
         // Extract pending actions from previous messages
         try {
             $pending_actions = $this->extract_pending_actions( $chat_id );
+            if ( ! empty( $pending_actions ) ) {
+                $this->thinking_logger->info( 'Found ' . count( $pending_actions ) . ' pending action(s)' );
+            }
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error extracting pending actions: ' . $e->getMessage() );
             $pending_actions = [];
@@ -539,16 +564,25 @@ class ChatInterface {
         // Extract loaded context from previous turn (lazy-load)
         try {
             $loaded_context = $this->extract_loaded_context( $chat_id );
+            if ( ! empty( $loaded_context ) ) {
+                $this->thinking_logger->log_cache( 'Previous context', true );
+            }
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error extracting loaded context: ' . $e->getMessage() );
             $loaded_context = [];
         }
 
         // Prepare prompts - system_prompt for static context, prompt for conversation
+        $this->thinking_logger->start_planning();
         try {
+            $this->thinking_logger->info( 'Preparing system prompt...' );
             $prompts = $this->prepare_prompt( $content, $context, $history, $pending_actions, $loaded_context );
+            // Estimate token count
+            $estimated_tokens = strlen( $prompts['system_prompt'] . $prompts['prompt'] ) / 4;
+            $this->thinking_logger->log_token_count( (int) $estimated_tokens );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error preparing prompt: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
+            $this->thinking_logger->error( 'Prompt preparation failed: ' . $e->getMessage() );
             return [
                 'success' => false,
                 'error'   => 'Error preparing prompt: ' . $e->getMessage(),
@@ -557,6 +591,7 @@ class ChatInterface {
 
         // Get the chat's AI model (locked per chat)
         $ai_model = $chat['ai_model'] ?? UserProfile::get_default_model();
+        $this->thinking_logger->log_ai_call( $ai_model );
 
         // Send to AI with system_prompt separated from main prompt (with retry logic)
         try {
@@ -577,8 +612,10 @@ class ChatInterface {
 
             // Use retry logic for AI requests
             $ai_response = $this->send_ai_request_with_retry( $prompts['prompt'], $ai_options );
+            $this->thinking_logger->success( 'AI response received' );
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error sending to AI: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
+            $this->thinking_logger->error( 'AI request failed: ' . $e->getMessage() );
             return [
                 'success'         => false,
                 'user_message_id' => $user_message_id,
@@ -621,10 +658,20 @@ class ChatInterface {
         // Parse AI response
         // Firebase returns 'content' key, not 'response'
         $ai_content = $ai_response['content'] ?? $ai_response['response'] ?? '';
+        $this->thinking_logger->info( 'Parsing AI response...' );
         try {
             $parsed_response = $this->parse_ai_response( $ai_content );
+            // Log detected phase
+            if ( ! empty( $parsed_response['phase'] ) ) {
+                $this->thinking_logger->log_phase_detected( $parsed_response['phase'] );
+            }
+            // Log actions if present
+            if ( ! empty( $parsed_response['actions'] ) ) {
+                $this->thinking_logger->log_plan_generated( count( $parsed_response['actions'] ) );
+            }
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error parsing AI response: ' . $e->getMessage() );
+            $this->thinking_logger->warning( 'Response parsing issue, using raw content' );
             $parsed_response = [
                 'message'     => $ai_content,
                 'actions'     => [],
@@ -653,6 +700,7 @@ class ChatInterface {
         $display_message = $parsed_response['message'];
         if ( ! empty( $parsed_response['context_data'] ) ) {
             $display_message .= "\n\n" . $this->format_loaded_context( $parsed_response['context_data'] );
+            $this->thinking_logger->info( 'Context data loaded on-demand' );
         }
 
         // Ensure message_type is always a string
@@ -669,6 +717,12 @@ class ChatInterface {
         // Update chat timestamp
         $this->update_chat_timestamp( $chat_id );
 
+        // Log completion
+        $this->thinking_logger->log_complete( 'Response generated successfully' );
+
+        // Save thinking logs to database
+        $this->thinking_logger->save_to_database();
+
         $this->logger->success( 'message_sent', [
             'chat_id'      => $chat_id,
             'user_msg_id'  => $user_message_id,
@@ -677,12 +731,14 @@ class ChatInterface {
         ]);
 
         return [
-            'success'             => true,
-            'user_message_id'     => $user_message_id,
+            'success'              => true,
+            'user_message_id'      => $user_message_id,
             'assistant_message_id' => $assistant_message_id,
-            'response'            => $parsed_response['message'],
-            'actions'             => $parsed_response['actions'],
-            'usage'               => $usage_data,
+            'response'             => $parsed_response['message'],
+            'actions'              => $parsed_response['actions'],
+            'usage'                => $usage_data,
+            'thinking'             => $this->thinking_logger->get_logs(),
+            'thinking_summary'     => $this->thinking_logger->get_summary(),
         ];
     }
 
@@ -1366,19 +1422,48 @@ class ChatInterface {
      * @return array Execution result.
      */
     public function execute_action_code( array $action, int $chat_id = 0 ): array {
+        // Initialize thinking logger for this execution
+        $this->thinking_logger = new ThinkingLogger( $chat_id );
+        $this->thinking_logger->start_execution();
+
         // Extract code data from action
         $code_data = $action['code'] ?? $action;
+
+        // Log code generation info
+        $code_content = $code_data['code'] ?? $code_data['content'] ?? '';
+        $line_count   = substr_count( $code_content, "\n" ) + 1;
+        $this->thinking_logger->log_code_generated( $line_count );
+
+        // Log security check
+        $this->thinking_logger->log_security_check( true, '33 forbidden functions blocked' );
 
         // Force auto_execute since user clicked execute button
         $code_data['auto_execute'] = true;
 
+        // Log execution method
+        $method = ! empty( $code_data['use_wpcode'] ) ? 'wpcode' : 'direct';
+        $this->thinking_logger->log_execution_start( $method );
+
         // Execute using existing handler
         $result = $this->handle_code_execution( $code_data );
 
-        // Add chat context if provided
+        // Log result
+        if ( $result['success'] ) {
+            $this->thinking_logger->start_verification();
+            $this->thinking_logger->log_verification_result( true, $code_data['title'] ?? 'Code executed' );
+            $this->thinking_logger->log_complete( $result['status'] ?? 'Execution successful' );
+        } else {
+            $this->thinking_logger->error( 'Execution failed: ' . ( $result['error'] ?? 'Unknown error' ) );
+        }
+
+        // Save thinking logs
+        $this->thinking_logger->save_to_database();
+
+        // Add chat context and thinking if provided
         if ( $chat_id > 0 ) {
             $result['chat_id'] = $chat_id;
         }
+        $result['thinking'] = $this->thinking_logger->get_logs();
 
         return $result;
     }

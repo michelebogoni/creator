@@ -189,6 +189,22 @@ class Activator {
         ) {$charset_collate};";
         dbDelta( $sql_backups );
 
+        // Thinking logs table - stores Creator's reasoning process for transparency
+        $table_thinking = $wpdb->prefix . 'creator_thinking_logs';
+        $sql_thinking = "CREATE TABLE {$table_thinking} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            chat_id bigint(20) unsigned NOT NULL,
+            message_id bigint(20) unsigned DEFAULT NULL,
+            logs longtext NOT NULL,
+            summary longtext DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY chat_id (chat_id),
+            KEY message_id (message_id),
+            KEY created_at (created_at)
+        ) {$charset_collate};";
+        dbDelta( $sql_thinking );
+
         // Store database version
         update_option( 'creator_core_db_version', CREATOR_CORE_VERSION );
     }
