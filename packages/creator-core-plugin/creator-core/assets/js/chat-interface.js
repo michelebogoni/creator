@@ -1260,6 +1260,7 @@
 
         /**
          * Handle connection loss - recover missed logs from REST API
+         * Uses exponential backoff (1s, 2s, 4s) and request timeout
          */
         handleConnectionLoss: function() {
             const self = this;
@@ -1267,35 +1268,66 @@
             // Don't retry too many times
             if (this.recoveryAttempts >= this.maxRecoveryAttempts) {
                 console.warn('[CreatorThinking] Max recovery attempts reached');
+                this.showRecoveryError();
                 return;
             }
 
             this.recoveryAttempts++;
-            console.log('[CreatorThinking] Attempting to recover logs (attempt ' + this.recoveryAttempts + ')');
+            const backoffDelay = Math.pow(2, this.recoveryAttempts - 1) * 1000; // 1s, 2s, 4s
 
-            // Fetch logs from REST API
-            $.ajax({
-                url: creatorChat.restUrl + 'thinking/' + this.chatId,
-                type: 'GET',
-                headers: {
-                    'X-WP-Nonce': creatorChat.restNonce
-                },
-                success: function(response) {
-                    if (response.success && response.thinking && response.thinking.length > 0) {
-                        // Add logs that we didn't receive via SSE
-                        const existingCount = self.logs.length;
-                        response.thinking.forEach(function(log, index) {
-                            if (index >= existingCount) {
-                                self.addLog(log);
-                            }
-                        });
-                        console.log('[CreatorThinking] Recovered ' + (response.thinking.length - existingCount) + ' missed logs');
+            console.log('[CreatorThinking] Attempting to recover logs (attempt ' + this.recoveryAttempts + ') after ' + backoffDelay + 'ms');
+
+            // Use exponential backoff delay
+            setTimeout(function() {
+                // Fetch logs from REST API with timeout
+                $.ajax({
+                    url: creatorChat.restUrl + 'thinking/' + self.chatId,
+                    type: 'GET',
+                    timeout: 5000, // 5 second timeout
+                    headers: {
+                        'X-WP-Nonce': creatorChat.restNonce
+                    },
+                    success: function(response) {
+                        // Reset recovery attempts on success
+                        self.recoveryAttempts = 0;
+
+                        if (response.success && response.thinking && response.thinking.length > 0) {
+                            // Add logs that we didn't receive via SSE
+                            const existingCount = self.logs.length;
+                            response.thinking.forEach(function(log, index) {
+                                if (index >= existingCount) {
+                                    self.addLog(log);
+                                }
+                            });
+                            console.log('[CreatorThinking] Recovered ' + (response.thinking.length - existingCount) + ' missed logs');
+                        }
+                    },
+                    error: function(xhr, status) {
+                        console.error('[CreatorThinking] Failed to recover logs (status: ' + status + '):', xhr.responseText);
+
+                        // Retry with backoff if attempts remaining
+                        if (self.recoveryAttempts < self.maxRecoveryAttempts) {
+                            self.handleConnectionLoss();
+                        } else {
+                            self.showRecoveryError();
+                        }
                     }
-                },
-                error: function(xhr) {
-                    console.error('[CreatorThinking] Failed to recover logs:', xhr.responseText);
-                }
-            });
+                });
+            }, backoffDelay);
+        },
+
+        /**
+         * Show recovery error message to user
+         */
+        showRecoveryError: function() {
+            if (this.logContainer && this.logContainer.length) {
+                const errorHtml = `
+                    <div class="creator-thinking-log-item level-warning">
+                        <span class="creator-thinking-log-message">Connection lost. Refresh page to retry.</span>
+                    </div>
+                `;
+                this.logContainer.append(errorHtml);
+            }
         },
 
         /**

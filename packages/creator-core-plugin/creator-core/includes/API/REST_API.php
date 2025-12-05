@@ -1465,30 +1465,65 @@ class REST_API {
             'version'     => $elementor_integration->get_version() ?? 'N/A',
             'widgets'     => [],
             'templates'   => [
-                'default'               => 'Default Template',
-                'elementor_canvas'      => 'Elementor Canvas (Full Width)',
+                'default'                 => 'Default Template',
+                'elementor_canvas'        => 'Elementor Canvas (Full Width)',
                 'elementor_header_footer' => 'Elementor Header & Footer',
             ],
             'section_types' => [
                 'hero'     => 'Hero section with heading, subheading, and CTA',
                 'features' => 'Feature grid with icon boxes',
                 'cta'      => 'Call to action section',
-                'custom'   => 'Custom section with columns and widgets',
+                'custom'   => 'Custom freeform section with any layout',
             ],
             'widget_types' => [
-                'heading'  => 'Title/heading (h1-h6)',
-                'text'     => 'Text/paragraph content',
-                'button'   => 'CTA button with link',
-                'image'    => 'Responsive image',
-                'spacer'   => 'Vertical spacing',
-                'divider'  => 'Horizontal line',
-                'icon'     => 'FontAwesome icon',
-                'icon_box' => 'Icon with title and description',
+                'heading'   => 'Title/heading (h1-h6)',
+                'text'      => 'Text/paragraph content',
+                'button'    => 'CTA button with link',
+                'image'     => 'Responsive image',
+                'spacer'    => 'Vertical spacing',
+                'divider'   => 'Horizontal line',
+                'icon'      => 'FontAwesome icon',
+                'icon_box'  => 'Icon with title and description',
+                'video'     => 'YouTube/Vimeo embed',
+                'html'      => 'Custom HTML code',
+                'shortcode' => 'WordPress shortcode',
             ],
+            'widget_aliases' => [
+                'title'       => 'heading',
+                'h1'          => 'heading',
+                'h2'          => 'heading',
+                'h3'          => 'heading',
+                'paragraph'   => 'text',
+                'content'     => 'text',
+                'cta'         => 'button',
+                'img'         => 'image',
+                'photo'       => 'image',
+                'space'       => 'spacer',
+                'separator'   => 'divider',
+                'feature'     => 'icon_box',
+                'feature-box' => 'icon_box',
+            ],
+            'breakpoints'   => [],
+            'seo_providers' => [],
+            'freeform_mode' => true,
+            'max_sections'  => 20,
         ];
 
-        // Add available widgets if Elementor is active
+        // Add detailed status from ElementorPageBuilder if available
         if ( $status['available'] ) {
+            try {
+                $builder = new \CreatorCore\Integrations\ElementorPageBuilder();
+                $builder_status = $builder->get_status();
+
+                $status['breakpoints']      = $builder_status['breakpoints'] ?? [];
+                $status['seo_providers']    = $builder_status['seo_providers'] ?? [];
+                $status['supported_widgets'] = $builder_status['supported_widgets'] ?? [];
+            } catch ( \Exception $e ) {
+                // Builder initialization failed, keep basic status
+                $status['builder_error'] = $e->getMessage();
+            }
+
+            // Add native widgets from Elementor
             $widgets = $elementor_integration->get_widget_types();
             $status['widgets'] = array_keys( $widgets );
         }
