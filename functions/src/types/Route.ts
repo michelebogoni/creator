@@ -40,8 +40,8 @@ export interface RouteRequest {
 
   /**
    * Selected AI model
-   * - 'gemini': Gemini 3 Pro (Google)
-   * - 'claude': Claude Sonnet 4 (Anthropic)
+   * - 'claude': Claude Opus 4 (Anthropic) - Primary
+   * - 'gemini': Gemini Pro (Google) - Fallback
    * Each model falls back to the other if unavailable
    */
   model?: "gemini" | "claude";
@@ -172,37 +172,36 @@ export interface TaskRouteConfig {
 export type RoutingMatrix = Record<TaskType, TaskRouteConfig>;
 
 /**
- * Default routing matrix as per roadmap specifications
+ * Default routing matrix
  *
  * @description
- * TEXT_GEN: Gemini 2.5 Flash (fast/cheap) → OpenAI GPT-4o-mini → Claude
- * CODE_GEN: Claude (best code) → OpenAI GPT-4o → Gemini Pro
- * DESIGN_GEN: Gemini Pro (large context) → OpenAI GPT-4o → Claude
- * ECOMMERCE_GEN: Gemini Pro (large context) → OpenAI GPT-4o → Claude
+ * All task types use the same two-provider configuration:
+ * - Primary: Claude Opus 4 (highest quality)
+ * - Fallback: Gemini Pro (backup when Claude is unavailable)
  *
- * Note: This routing matrix is used as fallback when performance tiers are not specified.
- * The new tier-based routing (FLOW/CRAFT) should be preferred.
+ * This simplified routing ensures consistent quality across all task types
+ * while maintaining reliability through automatic fallback.
  */
 export const DEFAULT_ROUTING_MATRIX: RoutingMatrix = {
   TEXT_GEN: {
-    primary: { provider: "gemini", model: "gemini-2.5-flash-preview-05-20" },
-    fallback1: { provider: "openai", model: "gpt-4o-mini" },
-    fallback2: { provider: "claude", model: "claude-sonnet-4-20250514" },
+    primary: { provider: "claude", model: "claude-opus-4-5-20251101" },
+    fallback1: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
+    fallback2: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
   },
   CODE_GEN: {
-    primary: { provider: "claude", model: "claude-sonnet-4-20250514" },
-    fallback1: { provider: "openai", model: "gpt-4o" },
+    primary: { provider: "claude", model: "claude-opus-4-5-20251101" },
+    fallback1: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
     fallback2: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
   },
   DESIGN_GEN: {
-    primary: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
-    fallback1: { provider: "openai", model: "gpt-4o" },
-    fallback2: { provider: "claude", model: "claude-sonnet-4-20250514" },
+    primary: { provider: "claude", model: "claude-opus-4-5-20251101" },
+    fallback1: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
+    fallback2: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
   },
   ECOMMERCE_GEN: {
-    primary: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
-    fallback1: { provider: "openai", model: "gpt-4o" },
-    fallback2: { provider: "claude", model: "claude-sonnet-4-20250514" },
+    primary: { provider: "claude", model: "claude-opus-4-5-20251101" },
+    fallback1: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
+    fallback2: { provider: "gemini", model: "gemini-2.5-pro-preview-05-06" },
   },
 };
 

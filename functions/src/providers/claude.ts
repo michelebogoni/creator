@@ -24,9 +24,9 @@ import {
 import { Logger } from "../lib/logger";
 
 /**
- * Default model for Claude
+ * Default model for Claude - Opus 4 (highest quality)
  */
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = "claude-opus-4-5-20251101";
 
 /**
  * Claude Provider implementation
@@ -59,7 +59,7 @@ export class ClaudeProvider implements IAIProvider {
    * Creates a Claude provider instance
    *
    * @param {string} apiKey - Anthropic API key from Firebase Secrets
-   * @param {string} model - Model to use (defaults to claude-3-5-sonnet-20241022)
+   * @param {string} model - Model to use (defaults to claude-opus-4-5-20251101)
    * @param {RetryConfig} retryConfig - Retry configuration
    *
    * @throws {AIProviderError} If API key is missing or invalid

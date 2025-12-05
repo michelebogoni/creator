@@ -28,9 +28,9 @@ import {
 import { Logger } from "../lib/logger";
 
 /**
- * Default model for Gemini
+ * Default model for Gemini - Pro (fallback provider)
  */
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-2.5-pro-preview-05-06";
 
 /**
  * Safety settings to allow most content (business use case)
@@ -85,7 +85,7 @@ export class GeminiProvider implements IAIProvider {
    * Creates a Gemini provider instance
    *
    * @param {string} apiKey - Gemini API key from Firebase Secrets
-   * @param {string} model - Model to use (defaults to gemini-1.5-flash)
+   * @param {string} model - Model to use (defaults to gemini-2.5-pro-preview-05-06)
    * @param {RetryConfig} retryConfig - Retry configuration
    *
    * @throws {AIProviderError} If API key is missing or invalid
