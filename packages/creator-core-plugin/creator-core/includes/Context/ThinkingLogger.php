@@ -527,13 +527,27 @@ class ThinkingLogger {
 	}
 
 	/**
+	 * Maximum logs to store in transient
+	 */
+	const MAX_TRANSIENT_LOGS = 100;
+
+	/**
 	 * Update transient for real-time access
+	 *
+	 * Limits stored logs to prevent oversized transients with long sessions.
 	 *
 	 * @return void
 	 */
 	private function update_transient(): void {
-		$key = "creator_thinking_{$this->chat_id}";
-		set_transient( $key, $this->logs, 300 ); // 5 minutes
+		$key  = "creator_thinking_{$this->chat_id}";
+		$logs = $this->logs;
+
+		// Limit to last MAX_TRANSIENT_LOGS to prevent oversized transients
+		if ( count( $logs ) > self::MAX_TRANSIENT_LOGS ) {
+			$logs = array_slice( $logs, -self::MAX_TRANSIENT_LOGS );
+		}
+
+		set_transient( $key, $logs, 300 ); // 5 minutes
 	}
 
 	/**
