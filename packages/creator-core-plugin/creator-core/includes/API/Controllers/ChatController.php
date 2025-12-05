@@ -5,7 +5,7 @@
  * Handles all chat-related REST API endpoints:
  * - CRUD operations for chats
  * - Message sending and retrieval
- * - Undo/rollback operations
+ * - Chat backup/export for debugging
  *
  * @package CreatorCore
  * @since 1.0.0
@@ -16,7 +16,7 @@ namespace CreatorCore\API\Controllers;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Chat\ChatInterface;
-use CreatorCore\Backup\Rollback;
+use CreatorCore\Chat\ChatBackup;
 
 /**
  * Class ChatController
@@ -101,18 +101,35 @@ class ChatController extends BaseController {
 			],
 		]);
 
-		// Undo message
-		register_rest_route( self::NAMESPACE, '/chats/(?P<chat_id>\d+)/messages/(?P<message_id>\d+)/undo', [
-			'methods'             => \WP_REST_Server::CREATABLE,
-			'callback'            => [ $this, 'undo_message' ],
-			'permission_callback' => [ $this, 'check_permission' ],
+		// Chat backup/logs for debugging
+		register_rest_route( self::NAMESPACE, '/chats/(?P<chat_id>\d+)/logs', [
+			'methods'             => \WP_REST_Server::READABLE,
+			'callback'            => [ $this, 'get_chat_logs' ],
+			'permission_callback' => [ $this, 'check_admin_permission' ],
+			'args'                => [
+				'limit' => [
+					'type'    => 'integer',
+					'default' => 50,
+				],
+				'offset' => [
+					'type'    => 'integer',
+					'default' => 0,
+				],
+			],
 		]);
 
-		// Undo status
-		register_rest_route( self::NAMESPACE, '/messages/(?P<message_id>\d+)/undo-status', [
+		// Export chat backup
+		register_rest_route( self::NAMESPACE, '/chats/(?P<chat_id>\d+)/export', [
 			'methods'             => \WP_REST_Server::READABLE,
-			'callback'            => [ $this, 'get_undo_status' ],
-			'permission_callback' => [ $this, 'check_permission' ],
+			'callback'            => [ $this, 'export_chat' ],
+			'permission_callback' => [ $this, 'check_admin_permission' ],
+		]);
+
+		// Chat backup stats (admin only)
+		register_rest_route( self::NAMESPACE, '/chats/backup-stats', [
+			'methods'             => \WP_REST_Server::READABLE,
+			'callback'            => [ $this, 'get_backup_stats' ],
+			'permission_callback' => [ $this, 'check_admin_permission' ],
 		]);
 	}
 
@@ -265,6 +282,9 @@ class ChatController extends BaseController {
 			);
 		}
 
+		// Also delete chat backup logs
+		ChatBackup::delete_chat_backup( $chat_id );
+
 		$this->log( 'chat_deleted', [ 'chat_id' => $chat_id ] );
 
 		return $this->success( [ 'success' => true ] );
@@ -305,6 +325,11 @@ class ChatController extends BaseController {
 			$result = $this->chat_interface->send_message( $chat_id, $content );
 
 			if ( ! $result['success'] ) {
+				// Log error to chat backup
+				ChatBackup::log_error( $chat_id, 'message_failed', $result['error'] ?? 'Unknown error', [
+					'user_content' => $content,
+				] );
+
 				return $this->error(
 					'message_failed',
 					$result['error'] ?? __( 'Failed to send message', 'creator-core' ),
@@ -314,8 +339,14 @@ class ChatController extends BaseController {
 
 			return $this->success( $result );
 		} catch ( \Throwable $e ) {
+			// Log exception to chat backup
+			ChatBackup::log_error( $chat_id, 'message_exception', $e->getMessage(), [
+				'user_content' => $content,
+				'file'         => $e->getFile(),
+				'line'         => $e->getLine(),
+			] );
+
 			error_log( 'Creator send_message error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
-			error_log( 'Creator send_message trace: ' . $e->getTraceAsString() );
 
 			return $this->error(
 				'message_exception',
@@ -326,57 +357,48 @@ class ChatController extends BaseController {
 	}
 
 	/**
-	 * Undo a message's actions
-	 *
-	 * @param \WP_REST_Request $request Request object.
-	 * @return \WP_REST_Response|\WP_Error
-	 */
-	public function undo_message( \WP_REST_Request $request ) {
-		$chat_id    = (int) $request->get_param( 'chat_id' );
-		$message_id = (int) $request->get_param( 'message_id' );
-
-		$result = $this->chat_interface->handle_undo( $chat_id, $message_id );
-
-		if ( ! $result['success'] ) {
-			$error_code  = $result['code'] ?? 'undo_failed';
-			$status_code = 500;
-
-			// Map error codes to HTTP status codes
-			if ( $error_code === 'chat_not_found' || $error_code === 'snapshot_not_found' ) {
-				$status_code = 404;
-			} elseif ( $error_code === 'access_denied' ) {
-				$status_code = 403;
-			} elseif ( $error_code === 'snapshot_expired' ) {
-				$status_code = 410; // Gone
-			}
-
-			return $this->error(
-				$error_code,
-				$result['error'] ?? __( 'Undo failed', 'creator-core' ),
-				$status_code,
-				[ 'suggestion' => $result['suggestion'] ?? null ]
-			);
-		}
-
-		$this->log( 'message_undone', [
-			'chat_id'    => $chat_id,
-			'message_id' => $message_id,
-		] );
-
-		return $this->success( $result );
-	}
-
-	/**
-	 * Get undo status for a message
+	 * Get chat logs for debugging
 	 *
 	 * @param \WP_REST_Request $request Request object.
 	 * @return \WP_REST_Response
 	 */
-	public function get_undo_status( \WP_REST_Request $request ): \WP_REST_Response {
-		$message_id = (int) $request->get_param( 'message_id' );
+	public function get_chat_logs( \WP_REST_Request $request ): \WP_REST_Response {
+		$chat_id = (int) $request->get_param( 'chat_id' );
+		$limit   = (int) $request->get_param( 'limit' );
+		$offset  = (int) $request->get_param( 'offset' );
 
-		$status = $this->chat_interface->check_undo_availability( $message_id );
+		$logs = ChatBackup::get_chat_logs( $chat_id, $limit, $offset );
 
-		return $this->success( $status );
+		return $this->success( [
+			'chat_id' => $chat_id,
+			'logs'    => $logs,
+			'count'   => count( $logs ),
+		] );
+	}
+
+	/**
+	 * Export chat backup as JSON
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response
+	 */
+	public function export_chat( \WP_REST_Request $request ): \WP_REST_Response {
+		$chat_id = (int) $request->get_param( 'chat_id' );
+
+		$export = ChatBackup::export_chat_backup( $chat_id );
+
+		return $this->success( $export );
+	}
+
+	/**
+	 * Get backup statistics
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response
+	 */
+	public function get_backup_stats( \WP_REST_Request $request ): \WP_REST_Response {
+		$stats = ChatBackup::get_stats();
+
+		return $this->success( $stats );
 	}
 }

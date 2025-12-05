@@ -4,7 +4,6 @@
  *
  * Handles action-related REST API endpoints:
  * - Execute action (context request or code execution)
- * - Rollback action
  *
  * @package CreatorCore
  * @since 1.0.0
@@ -15,7 +14,6 @@ namespace CreatorCore\API\Controllers;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Chat\ChatInterface;
-use CreatorCore\Backup\Rollback;
 use CreatorCore\Context\ContextLoader;
 
 /**
@@ -62,13 +60,6 @@ class ActionController extends BaseController {
 					'type'     => 'integer',
 				],
 			],
-		]);
-
-		// Rollback action
-		register_rest_route( self::NAMESPACE, '/actions/(?P<action_id>\d+)/rollback', [
-			'methods'             => \WP_REST_Server::CREATABLE,
-			'callback'            => [ $this, 'rollback_action' ],
-			'permission_callback' => [ $this, 'check_permission' ],
 		]);
 	}
 
@@ -141,28 +132,5 @@ class ActionController extends BaseController {
 			sprintf( __( 'Unknown action type: %s', 'creator-core' ), $type ),
 			400
 		);
-	}
-
-	/**
-	 * Rollback an action
-	 *
-	 * @param \WP_REST_Request $request Request object.
-	 * @return \WP_REST_Response|\WP_Error
-	 */
-	public function rollback_action( \WP_REST_Request $request ) {
-		$action_id = (int) $request->get_param( 'action_id' );
-
-		$rollback = new Rollback();
-		$result   = $rollback->rollback_action( $action_id );
-
-		if ( ! $result['success'] ) {
-			return $this->error(
-				'rollback_failed',
-				$result['error'] ?? __( 'Rollback failed', 'creator-core' ),
-				500
-			);
-		}
-
-		return $this->success( $result );
 	}
 }
