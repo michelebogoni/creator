@@ -47,7 +47,7 @@ export interface FileAttachment {
 export interface GenerateOptions {
   /**
    * Specific model to use (overrides provider default)
-   * @example "gpt-4o", "gemini-1.5-pro", "claude-3-5-sonnet-20241022"
+   * @example "claude-opus-4-5-20251101", "gemini-2.5-pro-preview-05-06"
    */
   model?: string;
 
@@ -290,59 +290,32 @@ export interface ProviderPricing {
 
 /**
  * Provider pricing constants
- * Updated as of December 2024
+ * Updated as of December 2025
+ *
+ * Active models:
+ * - Claude Opus 4 (primary)
+ * - Gemini Pro (fallback)
  */
 export const PROVIDER_PRICING: Record<ProviderName, Record<string, ProviderPricing>> = {
   openai: {
+    // OpenAI kept for future compatibility but not actively used
     "gpt-4o": {
       input_cost_per_1k: 0.005,
       output_cost_per_1k: 0.015,
     },
-    "gpt-4o-mini": {
-      input_cost_per_1k: 0.00015,
-      output_cost_per_1k: 0.0006,
-    },
   },
   gemini: {
-    // Gemini 2.5 Flash (latest)
-    "gemini-2.5-flash-preview-05-20": {
-      input_cost_per_1k: 0.00015,
-      output_cost_per_1k: 0.0006,
-    },
-    // Gemini 2.5 Pro (latest)
+    // Gemini Pro - Primary fallback model
     "gemini-2.5-pro-preview-05-06": {
       input_cost_per_1k: 0.00125,
       output_cost_per_1k: 0.01,
     },
-    // Legacy models
-    "gemini-2.0-flash-exp": {
-      input_cost_per_1k: 0.0001,
-      output_cost_per_1k: 0.0004,
-    },
-    "gemini-1.5-flash": {
-      input_cost_per_1k: 0.000075,
-      output_cost_per_1k: 0.0003,
-    },
-    "gemini-1.5-pro": {
-      input_cost_per_1k: 0.00125,
-      output_cost_per_1k: 0.005,
-    },
   },
   claude: {
-    // Claude 4.5 Opus (highest quality)
+    // Claude Opus 4 - Primary model
     "claude-opus-4-5-20251101": {
       input_cost_per_1k: 0.015,
       output_cost_per_1k: 0.075,
-    },
-    // Claude 4 Sonnet (balanced)
-    "claude-sonnet-4-20250514": {
-      input_cost_per_1k: 0.003,
-      output_cost_per_1k: 0.015,
-    },
-    // Legacy
-    "claude-3-5-sonnet-20241022": {
-      input_cost_per_1k: 0.003,
-      output_cost_per_1k: 0.015,
     },
   },
 };

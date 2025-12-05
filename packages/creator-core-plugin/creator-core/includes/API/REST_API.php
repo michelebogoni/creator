@@ -17,6 +17,7 @@ use CreatorCore\Development\FileSystemManager;
 use CreatorCore\Development\PluginGenerator;
 use CreatorCore\Development\CodeAnalyzer;
 use CreatorCore\Development\DatabaseManager;
+use CreatorCore\API\RateLimiter;
 
 /**
  * Class REST_API
@@ -52,6 +53,13 @@ class REST_API {
     private AuditLogger $logger;
 
     /**
+     * Rate limiter instance
+     *
+     * @var RateLimiter
+     */
+    private RateLimiter $rate_limiter;
+
+    /**
      * Constructor
      *
      * @param ChatInterface     $chat_interface     Chat interface instance.
@@ -66,6 +74,10 @@ class REST_API {
         $this->chat_interface     = $chat_interface;
         $this->capability_checker = $capability_checker;
         $this->logger             = $logger;
+        $this->rate_limiter       = new RateLimiter();
+
+        // Add rate limit headers to all responses
+        add_filter( 'rest_post_dispatch', [ $this, 'add_rate_limit_headers' ], 10, 3 );
     }
 
     /**
@@ -116,7 +128,7 @@ class REST_API {
             [
                 'methods'             => \WP_REST_Server::CREATABLE,
                 'callback'            => [ $this, 'send_message' ],
-                'permission_callback' => [ $this, 'check_permission' ],
+                'permission_callback' => [ $this, 'check_ai_permission' ], // AI rate limit
                 'args'                => [
                     'content' => [
                         'required'          => true,
@@ -406,7 +418,97 @@ class REST_API {
             );
         }
 
+        // Check rate limit (unless exempt)
+        if ( ! $this->rate_limiter->is_exempt() ) {
+            $rate_check = $this->rate_limiter->check_rate_limit( 'default' );
+            if ( is_wp_error( $rate_check ) ) {
+                return $rate_check;
+            }
+        }
+
         return true;
+    }
+
+    /**
+     * Check permission for AI endpoints (stricter rate limiting)
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return bool|\WP_Error
+     */
+    public function check_ai_permission( \WP_REST_Request $request ) {
+        // First check standard permission
+        $standard_check = $this->check_permission_without_rate_limit( $request );
+        if ( is_wp_error( $standard_check ) ) {
+            return $standard_check;
+        }
+
+        // Apply AI-specific rate limiting (stricter)
+        if ( ! $this->rate_limiter->is_exempt() ) {
+            $rate_check = $this->rate_limiter->check_rate_limit( 'ai' );
+            if ( is_wp_error( $rate_check ) ) {
+                return $rate_check;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Check permission without rate limiting (for internal use)
+     *
+     * @param \WP_REST_Request $request Request object.
+     * @return bool|\WP_Error
+     */
+    private function check_permission_without_rate_limit( \WP_REST_Request $request ) {
+        if ( ! is_user_logged_in() ) {
+            return new \WP_Error(
+                'rest_forbidden',
+                __( 'You must be logged in to use Creator API.', 'creator-core' ),
+                [ 'status' => 401 ]
+            );
+        }
+
+        if ( ! $this->capability_checker->can_use_creator() ) {
+            return new \WP_Error(
+                'rest_forbidden',
+                __( 'You do not have permission to use Creator.', 'creator-core' ),
+                [ 'status' => 403 ]
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Add rate limit headers to REST API responses
+     *
+     * @param \WP_REST_Response $response Response object.
+     * @param \WP_REST_Server   $server   Server object.
+     * @param \WP_REST_Request  $request  Request object.
+     * @return \WP_REST_Response
+     */
+    public function add_rate_limit_headers( \WP_REST_Response $response, \WP_REST_Server $server, \WP_REST_Request $request ): \WP_REST_Response {
+        // Only add headers for our namespace
+        $route = $request->get_route();
+        if ( strpos( $route, '/' . self::NAMESPACE ) !== 0 ) {
+            return $response;
+        }
+
+        // Determine endpoint type based on route
+        $endpoint_type = 'default';
+        if ( strpos( $route, '/messages' ) !== false || strpos( $route, '/elementor/pages' ) !== false ) {
+            $endpoint_type = 'ai';
+        } elseif ( strpos( $route, '/files/' ) !== false || strpos( $route, '/plugins/' ) !== false ) {
+            $endpoint_type = 'dev';
+        }
+
+        // Add rate limit headers
+        $headers = $this->rate_limiter->get_rate_limit_headers( $endpoint_type );
+        foreach ( $headers as $header => $value ) {
+            $response->header( $header, $value );
+        }
+
+        return $response;
     }
 
     /**
