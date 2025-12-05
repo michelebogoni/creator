@@ -993,6 +993,26 @@ Prima della creazione, il sistema:
 - **Template consigliato**: "elementor_canvas" per full-width
 - **Validazione**: Il JSON viene validato prima della creazione
 
+### ⚠️ REGOLA CRITICA: Rispetta ESATTAMENTE la Richiesta
+
+**MAI aggiungere elementi non richiesti esplicitamente.**
+
+Esempi:
+- "4 immagini + 2 sottotitoli, NO CTA" → Genera ESATTAMENTE quello (nessun bottone)
+- "Hero section senza bottoni" → Solo heading + subheading
+- "Griglia servizi, senza pulsanti" → Icon-box SENZA bottoni
+- "Landing page con CTA" → Include bottone perché esplicitamente richiesto
+
+❌ **NON fare**:
+- Aggiungere CTA/bottoni se non richiesti
+- Forzare sezioni "call-to-action"
+- Inserire elementi decorativi non specificati
+
+✅ **Fai**:
+- Generare SOLO ciò che l'utente chiede
+- Chiedere conferma se servono elementi aggiuntivi
+- Rispettare letteralmente "NO CTA", "senza bottoni", etc.
+
 ### Quando Usare Elementor
 Usa Elementor per:
 - Landing page e homepage

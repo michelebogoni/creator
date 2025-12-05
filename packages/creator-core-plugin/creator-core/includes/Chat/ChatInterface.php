@@ -1348,6 +1348,17 @@ class ChatInterface {
                 $parsed['context_data'] = $this->handle_context_requests( $parsed['actions'] );
             }
 
+            // Handle Elementor page creation actions
+            $elementor_result = $this->handle_elementor_actions( $parsed );
+            if ( $elementor_result ) {
+                $parsed['elementor'] = $elementor_result;
+                if ( $elementor_result['success'] ) {
+                    $this->thinking_logger->success(
+                        'Elementor page created: ' . ( $elementor_result['url'] ?? 'unknown' )
+                    );
+                }
+            }
+
             // Handle code execution if in execution phase
             if ( $parsed['phase'] === PhaseDetector::PHASE_EXECUTION && ! empty( $parsed['code'] ) ) {
                 $execution_result = $this->handle_code_execution( $parsed['code'] );
@@ -1545,6 +1556,33 @@ class ChatInterface {
         }
 
         return $context_data;
+    }
+
+    /**
+     * Handle Elementor page creation actions
+     *
+     * Checks if AI response contains an Elementor page creation request
+     * and executes it if found.
+     *
+     * @param array $parsed_response Parsed AI response.
+     * @return array|null Result if page was created, null if not applicable.
+     */
+    private function handle_elementor_actions( array $parsed_response ): ?array {
+        // Only handle if Elementor is available.
+        if ( ! class_exists( '\Elementor\Plugin' ) ) {
+            return null;
+        }
+
+        try {
+            $handler = new \CreatorCore\Integrations\ElementorActionHandler( $this->thinking_logger );
+            return $handler->handle_response( $parsed_response );
+        } catch ( \Throwable $e ) {
+            error_log( 'Creator: Elementor action error: ' . $e->getMessage() );
+            return [
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ];
+        }
     }
 
     /**

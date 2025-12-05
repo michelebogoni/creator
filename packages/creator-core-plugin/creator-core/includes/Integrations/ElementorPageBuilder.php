@@ -86,6 +86,20 @@ class ElementorPageBuilder {
 	];
 
 	/**
+	 * Count of widgets that fell back to text-editor
+	 *
+	 * @var int
+	 */
+	private int $fallback_count = 0;
+
+	/**
+	 * List of unknown widget types encountered
+	 *
+	 * @var array
+	 */
+	private array $unknown_widget_types = [];
+
+	/**
 	 * Constructor
 	 *
 	 * @param ThinkingLogger|null $logger Optional thinking logger.
@@ -157,6 +171,9 @@ class ElementorPageBuilder {
 	public function generate_page_from_freeform_spec( array $spec ): array {
 		$this->log( 'Starting freeform page generation...', 'info' );
 
+		// Reset fallback tracking for this generation.
+		$this->reset_fallback_tracking();
+
 		// Validate basic requirements.
 		$this->validate_freeform_spec( $spec );
 		$this->log( 'Freeform specification validated', 'debug' );
@@ -165,6 +182,9 @@ class ElementorPageBuilder {
 		$this->log( 'Converting freeform spec to Elementor structure...', 'info' );
 		$elementor_sections = $this->convert_freeform_to_elementor( $spec );
 		$this->log( count( $elementor_sections ) . ' section(s) converted', 'debug' );
+
+		// Log fallback summary if any unknown widgets were encountered.
+		$this->log_fallback_summary();
 
 		// Validate the generated Elementor JSON.
 		$this->log( 'Validating Elementor JSON structure...', 'info' );
@@ -391,9 +411,13 @@ class ElementorPageBuilder {
 		// Map to supported widget type.
 		$mapped_type = $this->supported_widgets[ $type ] ?? null;
 
-		// Fallback for unknown types.
+		// Fallback for unknown types - track for summary.
 		if ( ! $mapped_type ) {
-			$this->log( "Unknown widget type '{$type}', falling back to text-editor", 'warning' );
+			$this->fallback_count++;
+			if ( ! in_array( $type, $this->unknown_widget_types, true ) ) {
+				$this->unknown_widget_types[] = $type;
+			}
+			$this->log( "Fallback #{$this->fallback_count}: Unknown widget type '{$type}' → text-editor", 'warning' );
 			$mapped_type = 'text-editor';
 		}
 
@@ -689,14 +713,23 @@ class ElementorPageBuilder {
 	/**
 	 * Validate freeform specification
 	 *
+	 * Validates the AI-generated specification BEFORE any conversion.
+	 * Catches errors early to provide meaningful feedback.
+	 *
 	 * @param array $spec Page specification.
 	 * @throws \Exception On validation failure.
 	 */
 	private function validate_freeform_spec( array $spec ): void {
-		if ( empty( $spec['title'] ) ) {
-			throw new \Exception( 'Page title is required' );
+		// Title validation.
+		if ( empty( $spec['title'] ) || ! is_string( $spec['title'] ) ) {
+			throw new \Exception( 'Page title is required and must be a string' );
 		}
 
+		if ( strlen( $spec['title'] ) > 200 ) {
+			throw new \Exception( 'Page title is too long (max 200 characters)' );
+		}
+
+		// Sections validation.
 		$sections = $spec['sections'] ?? $spec['layout'] ?? $spec['content'] ?? [];
 		if ( empty( $sections ) || ! is_array( $sections ) ) {
 			throw new \Exception( 'At least one section is required' );
@@ -704,6 +737,84 @@ class ElementorPageBuilder {
 
 		if ( count( $sections ) > 20 ) {
 			throw new \Exception( 'Maximum 20 sections allowed per page for performance' );
+		}
+
+		// Warn for many sections (performance).
+		if ( count( $sections ) > 5 ) {
+			$this->log( 'Performance warning: ' . count( $sections ) . ' sections may slow page load', 'warning' );
+		}
+
+		// Validate each section has content.
+		foreach ( $sections as $idx => $section ) {
+			if ( ! is_array( $section ) ) {
+				throw new \Exception( "Section {$idx}: must be an array" );
+			}
+
+			// Check section has some content (columns, elements, widgets, or is a typed section).
+			$has_content = ! empty( $section['columns'] ) ||
+			               ! empty( $section['elements'] ) ||
+			               ! empty( $section['widgets'] ) ||
+			               ! empty( $section['content'] ) ||
+			               ! empty( $section['type'] ); // typed sections (hero, features, cta) are self-contained
+
+			if ( ! $has_content ) {
+				throw new \Exception( "Section {$idx}: must have columns, elements, widgets, or a type (hero/features/cta)" );
+			}
+
+			// Validate typed sections have required fields.
+			if ( ! empty( $section['type'] ) ) {
+				$this->validate_typed_section( $section, $idx );
+			}
+		}
+
+		// Validate SEO if provided.
+		if ( ! empty( $spec['seo'] ) && ! is_array( $spec['seo'] ) ) {
+			throw new \Exception( 'SEO configuration must be an array' );
+		}
+	}
+
+	/**
+	 * Validate typed section (hero, features, cta)
+	 *
+	 * @param array $section Section specification.
+	 * @param int   $idx     Section index.
+	 * @throws \Exception On validation failure.
+	 */
+	private function validate_typed_section( array $section, int $idx ): void {
+		$type = strtolower( $section['type'] );
+
+		switch ( $type ) {
+			case 'hero':
+				// Hero should have at least a heading.
+				if ( empty( $section['heading'] ) && empty( $section['title'] ) ) {
+					$this->log( "Section {$idx} (hero): No heading provided, will use default", 'warning' );
+				}
+				break;
+
+			case 'features':
+			case 'feature-grid':
+			case 'services':
+				// Features should have features array.
+				if ( empty( $section['features'] ) && empty( $section['items'] ) ) {
+					$this->log( "Section {$idx} (features): No features array provided", 'warning' );
+				}
+				break;
+
+			case 'cta':
+			case 'call-to-action':
+				// CTA should have button text.
+				if ( empty( $section['cta_text'] ) && empty( $section['button_text'] ) ) {
+					$this->log( "Section {$idx} (cta): No button text provided", 'warning' );
+				}
+				break;
+
+			case 'custom':
+				// Custom sections validated by general content check.
+				break;
+
+			default:
+				// Unknown type - warn but don't fail (will be treated as custom).
+				$this->log( "Section {$idx}: Unknown type '{$type}', treating as custom", 'warning' );
 		}
 	}
 
@@ -1138,5 +1249,54 @@ class ElementorPageBuilder {
 		}
 
 		return $providers;
+	}
+
+	// =========================================================================
+	// FALLBACK TRACKING
+	// =========================================================================
+
+	/**
+	 * Reset fallback tracking for a new generation
+	 *
+	 * @return void
+	 */
+	private function reset_fallback_tracking(): void {
+		$this->fallback_count = 0;
+		$this->unknown_widget_types = [];
+	}
+
+	/**
+	 * Log fallback summary if any unknown widgets were encountered
+	 *
+	 * @return void
+	 */
+	private function log_fallback_summary(): void {
+		if ( $this->fallback_count === 0 ) {
+			return;
+		}
+
+		$types_list = implode( ', ', $this->unknown_widget_types );
+		$this->log(
+			"Widget fallback summary: {$this->fallback_count} widget(s) converted to text-editor. Unknown types: {$types_list}",
+			'warning'
+		);
+	}
+
+	/**
+	 * Get the number of fallbacks that occurred in the last generation
+	 *
+	 * @return int
+	 */
+	public function get_fallback_count(): int {
+		return $this->fallback_count;
+	}
+
+	/**
+	 * Get the list of unknown widget types encountered in the last generation
+	 *
+	 * @return array
+	 */
+	public function get_unknown_widget_types(): array {
+		return $this->unknown_widget_types;
 	}
 }
