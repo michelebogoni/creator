@@ -236,6 +236,26 @@ class ElementorPageBuilder {
 		// Clear Elementor cache.
 		$this->clear_elementor_cache();
 
+		// Check fallback ratio - reject if more than 50% of widgets are unsupported.
+		$total_widgets = $this->count_total_widgets( $elementor_sections );
+		if ( $total_widgets > 0 && $this->fallback_count > 0 ) {
+			$fallback_ratio = $this->fallback_count / $total_widgets;
+			if ( $fallback_ratio > 0.5 ) {
+				// Rollback: delete the created page.
+				wp_delete_post( $page_id, true );
+				$this->log(
+					'Page rejected: ' . round( $fallback_ratio * 100 ) . '% unsupported widgets',
+					'error'
+				);
+				throw new \Exception(
+					'Specification rejected: ' . round( $fallback_ratio * 100 ) .
+					'% unsupported widgets (max 50% allowed). Unknown types: ' .
+					implode( ', ', $this->unknown_widget_types ) .
+					'. Use supported widget types: heading, text, button, image, spacer, divider, icon, icon-box, video, html, shortcode.'
+				);
+			}
+		}
+
 		$result = [
 			'success'     => true,
 			'page_id'     => $page_id,
@@ -1298,5 +1318,47 @@ class ElementorPageBuilder {
 	 */
 	public function get_unknown_widget_types(): array {
 		return $this->unknown_widget_types;
+	}
+
+	/**
+	 * Count total widgets in Elementor sections
+	 *
+	 * Recursively counts all widgets in the structure.
+	 *
+	 * @param array $sections Elementor sections array.
+	 * @return int Total widget count.
+	 */
+	private function count_total_widgets( array $sections ): int {
+		$count = 0;
+
+		foreach ( $sections as $section ) {
+			$count += $this->count_widgets_in_element( $section );
+		}
+
+		return $count;
+	}
+
+	/**
+	 * Recursively count widgets in an element
+	 *
+	 * @param array $element Element to count widgets in.
+	 * @return int Widget count.
+	 */
+	private function count_widgets_in_element( array $element ): int {
+		$count = 0;
+
+		// If this is a widget, count it.
+		if ( ( $element['elType'] ?? '' ) === 'widget' ) {
+			$count++;
+		}
+
+		// Recursively count in child elements.
+		if ( ! empty( $element['elements'] ) && is_array( $element['elements'] ) ) {
+			foreach ( $element['elements'] as $child ) {
+				$count += $this->count_widgets_in_element( $child );
+			}
+		}
+
+		return $count;
 	}
 }
