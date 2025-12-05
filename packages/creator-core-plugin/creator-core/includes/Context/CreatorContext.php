@@ -21,19 +21,19 @@ use CreatorCore\User\UserProfile;
  *
  * Manages the Creator Context document lifecycle:
  * - Generation at plugin activation
- * - Storage in database
+ * - Two-level caching (transient + option) for performance
  * - Retrieval for chat sessions
  * - Auto-refresh when system changes
  */
 class CreatorContext {
 
 	/**
-	 * Option name for storing context document
+	 * Option name for storing context document (legacy, used as fallback)
 	 */
 	private const CONTEXT_OPTION = 'creator_context_document';
 
 	/**
-	 * Option name for context version/timestamp
+	 * Option name for context version/timestamp (legacy)
 	 */
 	private const VERSION_OPTION = 'creator_context_version';
 
@@ -66,23 +66,33 @@ class CreatorContext {
 	private SystemPrompts $system_prompts;
 
 	/**
+	 * Context cache instance
+	 *
+	 * @var ContextCache
+	 */
+	private ContextCache $cache;
+
+	/**
 	 * Constructor
 	 *
 	 * @param ContextCollector|null     $context_collector Context collector instance.
 	 * @param PluginDetector|null       $plugin_detector   Plugin detector instance.
 	 * @param PluginDocsRepository|null $docs_repository   Plugin docs repository instance.
 	 * @param SystemPrompts|null        $system_prompts    System prompts instance.
+	 * @param ContextCache|null         $cache             Context cache instance.
 	 */
 	public function __construct(
 		?ContextCollector $context_collector = null,
 		?PluginDetector $plugin_detector = null,
 		?PluginDocsRepository $docs_repository = null,
-		?SystemPrompts $system_prompts = null
+		?SystemPrompts $system_prompts = null,
+		?ContextCache $cache = null
 	) {
 		$this->context_collector = $context_collector ?? new ContextCollector();
 		$this->plugin_detector   = $plugin_detector ?? new PluginDetector();
 		$this->docs_repository   = $docs_repository ?? new PluginDocsRepository();
 		$this->system_prompts    = $system_prompts ?? new SystemPrompts();
+		$this->cache             = $cache ?? new ContextCache();
 	}
 
 	/**
@@ -132,22 +142,37 @@ class CreatorContext {
 	/**
 	 * Get context for AI chat (formatted for injection)
 	 *
+	 * Uses two-level caching for performance:
+	 * - Level 1: Transient (5 min TTL)
+	 * - Level 2: Persistent option
+	 *
 	 * @return array Context ready for AI consumption.
 	 */
 	public function get_context_for_chat(): array {
-		$context = $this->get_stored_context();
+		return $this->cache->get( fn() => $this->generate_fresh_context() );
+	}
 
-		// If no stored context, generate it
-		if ( ! $context ) {
-			$context = $this->generate( true );
-		}
-
-		// Check if context is stale
-		if ( $this->is_context_stale() ) {
-			$context = $this->generate( true );
-		}
-
-		return $context;
+	/**
+	 * Generate fresh context (used as cache generator)
+	 *
+	 * @return array Fresh context document.
+	 */
+	private function generate_fresh_context(): array {
+		return [
+			'meta'              => $this->generate_meta(),
+			'user_profile'      => $this->generate_user_profile(),
+			'system_info'       => $this->generate_system_info(),
+			'system_analysis'   => $this->generate_system_analysis(),
+			'plugins'           => $this->generate_plugins_info(),
+			'custom_post_types' => $this->generate_cpt_info(),
+			'taxonomies'        => $this->generate_taxonomies_info(),
+			'acf_fields'        => $this->generate_acf_info(),
+			'integrations'      => $this->generate_integrations_info(),
+			'sitemap'           => $this->generate_sitemap(),
+			'system_prompts'    => $this->generate_system_prompts(),
+			'ai_instructions'   => $this->generate_ai_instructions(),
+			'forbidden'         => $this->get_forbidden_functions(),
+		];
 	}
 
 	/**
@@ -155,10 +180,20 @@ class CreatorContext {
 	 *
 	 * ULTRA-COMPACT version: only essential data to stay under 10k chars.
 	 * Detailed info (plugin docs, ACF fields, etc.) can be loaded on-demand.
+	 * Uses separate prompt cache with shorter TTL (1 min).
 	 *
 	 * @return string
 	 */
 	public function get_context_as_prompt(): string {
+		return $this->cache->get_prompt( fn() => $this->build_prompt_string() );
+	}
+
+	/**
+	 * Build prompt string from context (used as prompt cache generator)
+	 *
+	 * @return string Prompt string.
+	 */
+	private function build_prompt_string(): string {
 		$context = $this->get_context_for_chat();
 
 		if ( empty( $context ) ) {
@@ -193,6 +228,15 @@ class CreatorContext {
 		}
 
 		return $prompt;
+	}
+
+	/**
+	 * Get the context cache instance
+	 *
+	 * @return ContextCache
+	 */
+	public function get_cache(): ContextCache {
+		return $this->cache;
 	}
 
 	/**
@@ -656,10 +700,15 @@ class CreatorContext {
 	/**
 	 * Force refresh context
 	 *
+	 * Invalidates all cache levels and regenerates fresh context.
+	 *
 	 * @return array
 	 */
 	public function refresh(): array {
-		// Clear any cached context
+		// Invalidate both cache levels
+		$this->cache->invalidate();
+
+		// Also clear legacy transient
 		delete_transient( 'creator_site_context' );
 
 		return $this->generate( true );
