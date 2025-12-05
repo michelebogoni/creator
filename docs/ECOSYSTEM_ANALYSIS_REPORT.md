@@ -8,22 +8,99 @@
 
 ## Indice
 
-1. [Executive Summary](#executive-summary)
-2. [Panoramica dell'Architettura](#panoramica-dellarchitettura)
-3. [Modello Logico](#modello-logico)
-4. [Componenti del Sistema](#componenti-del-sistema)
+1. [Cos'è Creator - Introduzione e Visione](#cosè-creator---introduzione-e-visione)
+2. [Executive Summary](#executive-summary)
+3. [Panoramica dell'Architettura](#panoramica-dellarchitettura)
+4. [Modello Logico](#modello-logico)
+5. [Componenti del Sistema](#componenti-del-sistema)
    - [Backend Firebase Functions](#1-backend-firebase-functions)
    - [Plugin WordPress Creator Core](#2-plugin-wordpress-creator-core)
-5. [Mappa Dettagliata dei File](#mappa-dettagliata-dei-file)
-6. [Sistema AI e Providers](#sistema-ai-e-providers)
-7. [Sistema di Licensing e Autenticazione](#sistema-di-licensing-e-autenticazione)
-8. [Job Queue e Task Asincroni](#job-queue-e-task-asincroni)
-9. [Integrazioni Esterne](#integrazioni-esterne)
-10. [Flusso dei Dati](#flusso-dei-dati)
-11. [Punti Critici Identificati](#punti-critici-identificati)
-12. [Codice Obsoleto o Da Eliminare](#codice-obsoleto-o-da-eliminare)
-13. [Opportunità di Miglioramento](#opportunità-di-miglioramento)
-14. [Raccomandazioni](#raccomandazioni)
+6. [Mappa Dettagliata dei File](#mappa-dettagliata-dei-file)
+7. [Sistema AI e Providers](#sistema-ai-e-providers)
+8. [Sistema di Licensing e Autenticazione](#sistema-di-licensing-e-autenticazione)
+9. [Job Queue e Task Asincroni](#job-queue-e-task-asincroni)
+10. [Integrazioni Esterne](#integrazioni-esterne)
+11. [Flusso dei Dati](#flusso-dei-dati)
+12. [Punti Critici Identificati](#punti-critici-identificati)
+13. [Codice Obsoleto o Da Eliminare](#codice-obsoleto-o-da-eliminare)
+14. [Opportunità di Miglioramento](#opportunità-di-miglioramento)
+15. [Raccomandazioni](#raccomandazioni)
+
+---
+
+## Cos'è Creator - Introduzione e Visione
+
+### La Missione
+
+**Creator** è un plugin WordPress basato su intelligenza artificiale (Gemini e Claude) progettato con un obiettivo ambizioso: **sostituire un'intera agenzia di creazione siti web WordPress**.
+
+Non si tratta di un semplice assistente che risponde a domande o genera contenuti isolati. Creator è un sistema operativo AI completo, capace di comprendere richieste complesse, pianificare strategie di implementazione e **eseguire direttamente modifiche** sul sito WordPress dell'utente.
+
+### Caratteristica Chiave: Generazione Dinamica delle Azioni
+
+> **Elemento Critico**: Creator **non ha azioni hardcoded predefinite**.
+>
+> Le operazioni da compiere vengono strutturate dall'AI in modo **creativo e adattivo**, in base alla richiesta specifica dell'utente. Questo è il cuore tecnologico e la sfida principale del sistema.
+
+Quando un utente chiede "Crea una landing page per il mio prodotto con sezione hero, testimonianze e call-to-action", Creator non esegue una sequenza predefinita. Invece:
+
+1. **Analizza** la richiesta e il contesto del sito
+2. **Pianifica** una strategia personalizzata
+3. **Genera** le azioni necessarie (creazione pagina, struttura Elementor, contenuti, stili)
+4. **Esegue** le operazioni sul sito WordPress
+
+### Capacità Operative
+
+Creator può operare su molteplici aspetti di un sito WordPress:
+
+| Categoria | Operazioni Supportate |
+|-----------|----------------------|
+| **File System** | Scrittura/modifica di temi, child themes, `functions.php`, CSS personalizzati |
+| **Contenuti** | Creazione articoli, pagine, prodotti WooCommerce con contenuti completi |
+| **Page Building** | Generazione pagine code-based o Elementor-based con layout e design completi |
+| **Configurazione** | Setup plugin, impostazioni tema, configurazione ACF, RankMath SEO |
+| **Design** | Sviluppo completo dell'aspetto grafico tramite Elementor o CSS custom |
+
+### Come Funziona: Apprendimento Contestuale
+
+Creator non opera "al buio". Prima di ogni operazione:
+
+1. **Riceve informazioni sull'ecosistema attuale** del sito (tema attivo, plugin installati, struttura esistente)
+2. **Consulta la documentazione** dei plugin in un repository dedicato per capire come utilizzare gli strumenti disponibili
+3. **Si integra perfettamente** con l'ecosistema specifico dell'utente, senza basarsi su sistemi predefiniti
+
+Questo approccio permette a Creator di:
+- Lavorare con qualsiasi combinazione di plugin WordPress
+- Adattarsi a configurazioni custom esistenti
+- Rispettare convenzioni e stili già presenti nel sito
+
+### Il Flusso Operativo
+
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   Richiesta      │     │   Analisi        │     │   Strategia      │
+│   Utente         │────▶│   Contesto       │────▶│   Personalizzata │
+│   (Prompt)       │     │   (Ecosystem)    │     │   (AI Planning)  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+                                                           │
+                                                           ▼
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   Risultato      │     │   Esecuzione     │     │   Generazione    │
+│   Finale         │◀────│   Operazioni     │◀────│   Azioni         │
+│   (Sito Aggiorn.)│     │   (WordPress)    │     │   (AI Creative)  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+```
+
+### La Sfida Tecnologica
+
+Il cuore della complessità di Creator risiede nel **garantire che l'AI generi azioni coerenti e funzionanti**:
+
+- Le funzioni generate devono essere **sintatticamente corrette** (PHP, HTML, CSS, JSON)
+- Le operazioni devono essere **semanticamente valide** per WordPress e i plugin target
+- Il sistema deve **gestire errori** e situazioni impreviste gracefully
+- Le modifiche devono essere **reversibili** (sistema di snapshot)
+
+Questo documento analizza in dettaglio come l'architettura attuale affronta queste sfide e dove ci sono opportunità di miglioramento.
 
 ---
 
