@@ -1,1398 +1,1200 @@
-# CREATOR - MILESTONE 9 CRITICAL ISSUES & SOLUTIONS
-## Elementor Page Builder Integration - Complete Analysis
+# Creator Ecosystem - Report Completo di Analisi
 
-**Version:** 2.0  
-**Date:** December 4, 2025  
-**Status:** 10 Critical Issues Identified & Corrected
-
----
-
-## EXECUTIVE SUMMARY
-
-Original M9 implementation had a fundamental architectural flaw: it used **template-driven sections** that constrained AI to predefined parameters. This document provides the corrected **freeform, AI-first approach** where the AI generates any layout structure it wants, and the builder converts it to Elementor JSON.
-
-All 10 identified problems are addressed with production-ready solutions.
+**Data:** 5 Dicembre 2025
+**Versione:** 2.0.0
+**Autore:** Analisi Tecnica Automatica
 
 ---
 
+## Indice
+
+1. [Cos'è Creator - Introduzione e Visione](#cosè-creator---introduzione-e-visione)
+2. [Executive Summary](#executive-summary)
+3. [Panoramica dell'Architettura](#panoramica-dellarchitettura)
+4. [Modello Logico](#modello-logico)
+5. [Componenti del Sistema](#componenti-del-sistema)
+   - [Backend Firebase Functions](#1-backend-firebase-functions)
+   - [Plugin WordPress Creator Core](#2-plugin-wordpress-creator-core)
+6. [Mappa Dettagliata dei File](#mappa-dettagliata-dei-file)
+7. [Sistema AI e Providers](#sistema-ai-e-providers)
+8. [Sistema di Licensing e Autenticazione](#sistema-di-licensing-e-autenticazione)
+9. [Job Queue e Task Asincroni](#job-queue-e-task-asincroni)
+10. [Integrazioni Esterne](#integrazioni-esterne)
+11. [Flusso dei Dati](#flusso-dei-dati)
+12. [Punti Critici Identificati](#punti-critici-identificati)
+13. [Codice Obsoleto o Da Eliminare](#codice-obsoleto-o-da-eliminare)
+14. [Opportunità di Miglioramento](#opportunità-di-miglioramento)
+15. [Raccomandazioni](#raccomandazioni)
+
 ---
 
-## PROBLEM 1: SEZIONI PREDEFINITE NON GENERATIVE (CORRECTED)
+## Cos'è Creator - Introduzione e Visione
 
-### Original Problem
+### La Missione
 
-The first implementation confined AI to templates:
+**Creator** è un plugin WordPress basato su intelligenza artificiale (Gemini e Claude) progettato con un obiettivo ambizioso: **sostituire un'intera agenzia di creazione siti web WordPress**.
+
+Non si tratta di un semplice assistente che risponde a domande o genera contenuti isolati. Creator è un sistema operativo AI completo, capace di comprendere richieste complesse, pianificare strategie di implementazione e **eseguire direttamente modifiche** sul sito WordPress dell'utente.
+
+### Caratteristica Chiave: Generazione Dinamica delle Azioni
+
+> **Elemento Critico**: Creator **non ha azioni hardcoded predefinite**.
+>
+> Le operazioni da compiere vengono strutturate dall'AI in modo **creativo e adattivo**, in base alla richiesta specifica dell'utente. Questo è il cuore tecnologico e la sfida principale del sistema.
+
+Quando un utente chiede "Crea una landing page per il mio prodotto con sezione hero, testimonianze e call-to-action", Creator non esegue una sequenza predefinita. Invece:
+
+1. **Analizza** la richiesta e il contesto del sito
+2. **Pianifica** una strategia personalizzata
+3. **Genera** le azioni necessarie (creazione pagina, struttura Elementor, contenuti, stili)
+4. **Esegue** le operazioni sul sito WordPress
+
+### Capacità Operative
+
+Creator può operare su molteplici aspetti di un sito WordPress:
+
+| Categoria | Operazioni Supportate |
+|-----------|----------------------|
+| **File System** | Scrittura/modifica di temi, child themes, `functions.php`, CSS personalizzati |
+| **Contenuti** | Creazione articoli, pagine, prodotti WooCommerce con contenuti completi |
+| **Page Building** | Generazione pagine code-based o Elementor-based con layout e design completi |
+| **Configurazione** | Setup plugin, impostazioni tema, configurazione ACF, RankMath SEO |
+| **Design** | Sviluppo completo dell'aspetto grafico tramite Elementor o CSS custom |
+
+### Come Funziona: Apprendimento Contestuale
+
+Creator non opera "al buio". Prima di ogni operazione:
+
+1. **Riceve informazioni sull'ecosistema attuale** del sito (tema attivo, plugin installati, struttura esistente)
+2. **Consulta la documentazione** dei plugin in un repository dedicato per capire come utilizzare gli strumenti disponibili
+3. **Si integra perfettamente** con l'ecosistema specifico dell'utente, senza basarsi su sistemi predefiniti
+
+Questo approccio permette a Creator di:
+- Lavorare con qualsiasi combinazione di plugin WordPress
+- Adattarsi a configurazioni custom esistenti
+- Rispettare convenzioni e stili già presenti nel sito
+
+### Il Flusso Operativo
 
 ```
-generate_hero_section(
-    heading, subheading, background_color,
-    cta_text, cta_url, image_url, layout
-)
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   Richiesta      │     │   Analisi        │     │   Strategia      │
+│   Utente         │────▶│   Contesto       │────▶│   Personalizzata │
+│   (Prompt)       │     │   (Ecosystem)    │     │   (AI Planning)  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+                                                           │
+                                                           ▼
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   Risultato      │     │   Esecuzione     │     │   Generazione    │
+│   Finale         │◀────│   Operazioni     │◀────│   Azioni         │
+│   (Sito Aggiorn.)│     │   (WordPress)    │     │   (AI Creative)  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
 ```
 
-If user wanted: "4 immagini + 2 subheading, niente CTA"
-Result: Ignora immagini extra, ignora subheading extra, forza CTA (sbagliato)
+### La Sfida Tecnologica
 
-### Corrected Solution: Freeform AI Generation
+Il cuore della complessità di Creator risiede nel **garantire che l'AI generi azioni coerenti e funzionanti**:
 
-Instead of templates, **AI generates JSON specification describing ANY layout**. Builder converts it to Elementor.
+- Le funzioni generate devono essere **sintatticamente corrette** (PHP, HTML, CSS, JSON)
+- Le operazioni devono essere **semanticamente valide** per WordPress e i plugin target
+- Il sistema deve **gestire errori** e situazioni impreviste gracefully
+- Le modifiche devono essere **reversibili** (sistema di snapshot)
 
-AI generates this (completely freeform, no templates):
+Questo documento analizza in dettaglio come l'architettura attuale affronta queste sfide e dove ci sono opportunità di miglioramento.
 
+---
+
+## Executive Summary
+
+**Creator** è un ecosistema AI-powered per WordPress che permette di automatizzare lo sviluppo di siti web attraverso un'interfaccia chat conversazionale. Il sistema è composto da due componenti principali:
+
+1. **Backend AI Proxy** (Firebase Cloud Functions - TypeScript)
+2. **Plugin WordPress** (PHP - Creator Core)
+
+### Metriche Chiave
+
+| Metrica | Valore |
+|---------|--------|
+| Linguaggi Principali | TypeScript, PHP |
+| Provider AI Attivi | Google Gemini, Anthropic Claude |
+| Provider AI Backup | OpenAI (non attivo nel flusso principale) |
+| Integrazioni WordPress | Elementor, ACF, RankMath, WooCommerce, LiteSpeed |
+| API Endpoints | 6 (auth, ai, tasks, analytics, plugin-docs) |
+| Performance Tiers | 2 (Flow, Craft) |
+| Linee di Codice Stimate | ~20,000+ |
+| Complessità Architetturale | Alta |
+
+### Cambiamenti dalla Versione 1.0
+
+- **Nuovo sistema di licensing** con JWT authentication
+- **Performance Tiers** (Flow/Craft) per ottimizzazione costi/qualità
+- **Job Queue** per task asincroni (bulk articles, bulk products, design batch)
+- **Analytics endpoint** per monitoraggio costi e utilizzo
+- **Plugin Docs** sistema per ricerca documentazione plugin
+- **Rimozione routing matrix** - ora usa fallback semplice Gemini ↔ Claude
+- **Context Caching** (pianificato ma non ancora implementato)
+
+---
+
+## Panoramica dell'Architettura
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            WordPress Site                                    │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                      Creator Core Plugin                               │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │  │
+│  │  │    Chat     │  │   REST      │  │  Context    │  │  Elementor  │   │  │
+│  │  │  Interface  │→ │    API      │→ │   Loader    │→ │ PageBuilder │   │  │
+│  │  └─────────────┘  └──────┬──────┘  └─────────────┘  └─────────────┘   │  │
+│  │                          │                                             │  │
+│  │  ┌─────────────┐  ┌──────┴──────┐  ┌─────────────┐  ┌─────────────┐   │  │
+│  │  │  Snapshot   │  │   Proxy     │  │   Audit     │  │ Permission  │   │  │
+│  │  │  Manager    │  │   Client    │  │   Logger    │  │   Checker   │   │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │  │
+│  │                                                                        │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │  │
+│  │  │ WooCommerce │  │    ACF      │  │  RankMath   │  │  LiteSpeed  │   │  │
+│  │  │ Integration │  │ Integration │  │ Integration │  │ Integration │   │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                    ↕ HTTPS                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       Firebase Cloud Functions                               │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                          API Endpoints                                 │  │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐           │  │
+│  │  │ validate-      │  │ route-         │  │ submit-        │           │  │
+│  │  │ license        │  │ request        │  │ task           │           │  │
+│  │  └────────────────┘  └────────────────┘  └────────────────┘           │  │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐           │  │
+│  │  │ get-           │  │ analytics      │  │ plugin-        │           │  │
+│  │  │ status         │  │                │  │ docs           │           │  │
+│  │  └────────────────┘  └────────────────┘  └────────────────┘           │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                        Model Service                                   │  │
+│  │  ┌──────────────────┐         ┌──────────────────┐                    │  │
+│  │  │  Gemini Provider │ ←────→  │  Claude Provider │                    │  │
+│  │  │  (Primary/Fallback)        │  (Primary/Fallback)                   │  │
+│  │  └──────────────────┘         └──────────────────┘                    │  │
+│  │                    ↓                     ↓                             │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│  │  │              Automatic Fallback Routing                          │  │  │
+│  │  │         Gemini fails → try Claude │ Claude fails → try Gemini    │  │  │
+│  │  └─────────────────────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                        Tier Chain Service                              │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  FLOW Mode (0.5 credits)                                        │  │  │
+│  │  │  Gemini 2.5 Flash → Claude 4 Sonnet → Validation                │  │  │
+│  │  └─────────────────────────────────────────────────────────────────┘  │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  CRAFT Mode (2.0 credits)                                       │  │  │
+│  │  │  Gemini Flash → Gemini Pro → Claude Opus → Validation           │  │  │
+│  │  └─────────────────────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                          Firestore                                     │  │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐       │  │
+│  │  │  licenses  │  │  job_queue │  │ audit_logs │  │   cost_    │       │  │
+│  │  │            │  │            │  │            │  │  tracking  │       │  │
+│  │  └────────────┘  └────────────┘  └────────────┘  └────────────┘       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Modello Logico
+
+### Pattern Architetturale
+
+Il sistema segue un'architettura **Microservices + Plugin Modulare**:
+
+1. **Separation of Concerns**: Backend AI separato dal frontend WordPress
+2. **Provider Abstraction**: Interfaccia comune `IAIProvider` per tutti i provider AI
+3. **Simple Fallback**: Routing semplificato con fallback automatico Gemini ↔ Claude
+4. **Performance Tiers**: Due modalità (Flow/Craft) per bilanciare costi e qualità
+5. **JWT Authentication**: Token-based auth per sicurezza API
+6. **Event-Driven Jobs**: Firestore triggers per elaborazione asincrona
+7. **Audit Trail**: Sistema completo di logging per tracciabilità
+
+### Flusso di Esecuzione Principale
+
+```
+User Request → Chat Interface → REST API → License Validation
+                                                ↓
+                                    AI Proxy (Firebase Functions)
+                                                ↓
+                                    Rate Limit Check
+                                                ↓
+                                    Model Service / Tier Chain
+                                                ↓
+                                    Provider Selection (Gemini/Claude)
+                                                ↓
+                                    AI Response Generation
+                                                ↓
+                                    Token & Cost Tracking
+                                                ↓
+Action Execution ← Action Parser ← Response with Actions
+       ↓
+Snapshot Creation → Database + File System
+       ↓
+Response to User ← Result Processing
+```
+
+---
+
+## Componenti del Sistema
+
+### 1. Backend Firebase Functions
+
+**Percorso:** `/functions/`
+
+#### 1.1 Entry Point - `src/index.ts`
+
+**Funzione:** Punto di ingresso dell'applicazione Firebase Functions
+**Produce:** Export di tutti gli endpoint HTTP e trigger
+**Interazione:** Espone le API REST e i trigger Firestore
+
+```typescript
+// Endpoint esportati
+export { validateLicense } from "./api/auth/validateLicense";
+export { routeRequest } from "./api/ai/routeRequest";
+export { submitTask } from "./api/tasks/submitTask";
+export { getTaskStatus } from "./api/tasks/getStatus";
+export { getAnalytics } from "./api/analytics/getAnalytics";
+export { getPluginDocs, savePluginDocs, researchPluginDocs } from "./api/pluginDocs/*";
+export { processJobQueue } from "./triggers/jobQueueTrigger";
+```
+
+---
+
+#### 1.2 API Auth - `src/api/auth/validateLicense.ts`
+
+**Funzione:** Validazione licenze e generazione JWT
+**Produce:** Token JWT per autenticazione successive richieste
+**Endpoint:** `POST /api/auth/validate-license`
+
+**Request:**
 ```json
 {
-  "title": "Portfolio",
-  "sections": [
-    {
-      "structure": "free",
-      "background_color": "#1a1a2e",
-      "elements": [
-        {
-          "type": "heading",
-          "text": "Our Portfolio",
-          "level": "h1",
-          "color": "#ffffff"
-        },
-        {
-          "type": "paragraph",
-          "text": "Explore our latest works",
-          "color": "#ffffff"
-        },
-        {
-          "type": "grid",
-          "columns": 2,
-          "items": [
-            { "type": "image", "url": "image1.jpg", "alt": "Project 1" },
-            { "type": "image", "url": "image2.jpg", "alt": "Project 2" },
-            { "type": "image", "url": "image3.jpg", "alt": "Project 3" },
-            { "type": "image", "url": "image4.jpg", "alt": "Project 4" }
-          ]
-        }
-      ]
-    }
-  ]
+  "license_key": "CREATOR-2024-XXXXX-XXXXX",
+  "site_url": "https://example.com"
 }
 ```
 
-Note: NIENTE CTA button perchÃ© l'utente non lo ha chiesto.
-
-### System Prompt Enhancement
-
-File: `wp-content/plugins/creator/includes/SystemPrompts.php`
-
-Add new method:
-
-```php
-public static function get_elementor_freeform_capability() {
-    return <<<PROMPT
-# ELEMENTOR PAGE BUILDING - FREEFORM MODE
-
-You have TOTAL creative freedom. No templates. No constraints on layout.
-
-## Available Element Types:
-- heading (any level h1-h6)
-- paragraph (any text)
-- image (with alt text)
-- button (any text, URL, color)
-- spacer (any height)
-- divider (solid/dashed/dotted, any color)
-- icon (if Elementor Pro)
-- grid (NxM layout, any items)
-- column (wrapper for grouping)
-
-## Your Freedom:
-âœ… Decide ANY layout structure
-âœ… Decide ANY combination of elements
-âœ… Decide ANY styling (colors, sizes, spacing)
-âœ… Use multiple grids, multiple columns, nesting
-âœ… NO predetermined templates
-âœ… NO layout constraints
-âœ… NO forced elements
-
-## JSON Format You Generate:
-
+**Response:**
+```json
 {
-  "title": "Page Title",
-  "description": "Page description",
-  "seo": {
-    "title": "SEO Title",
-    "description": "SEO Description",
-    "focus_keyword": "keyword"
+  "success": true,
+  "user_id": "user_123",
+  "site_token": "eyJhbGciOiJIUzI1NiIs...",
+  "plan": "pro",
+  "tokens_limit": 50000000,
+  "tokens_remaining": 47654322,
+  "reset_date": "2025-12-01"
+}
+```
+
+**Caratteristiche:**
+- Rate limiting: 10 req/min per IP
+- CORS headers per WordPress
+- Validazione site_url
+- JWT con scadenza configurabile
+
+---
+
+#### 1.3 API AI Route - `src/api/ai/routeRequest.ts`
+
+**Funzione:** Routing richieste AI con fallback automatico
+**Produce:** Risposta AI con contenuto generato e metadati
+**Endpoint:** `POST /api/ai/route-request`
+
+**Request:**
+```json
+{
+  "task_type": "TEXT_GEN | CODE_GEN | DESIGN_GEN | ECOMMERCE_GEN",
+  "prompt": "string (max 10000 chars)",
+  "model": "gemini | claude",
+  "context": { /* site context */ },
+  "system_prompt": "optional custom system prompt",
+  "temperature": 0.7,
+  "max_tokens": 8000,
+  "files": [{ "name": "img.png", "type": "image/png", "base64": "..." }]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "content": "generated content",
+  "model": "gemini",
+  "model_id": "gemini-3-pro-preview",
+  "used_fallback": false,
+  "tokens_used": 1250,
+  "cost_usd": 0.0942,
+  "latency_ms": 2341
+}
+```
+
+**Caratteristiche:**
+- JWT authentication required
+- Rate limiting: 100 req/min per license
+- Quota checking
+- Automatic fallback on provider failure
+- Cost tracking in Firestore
+- Audit logging
+
+---
+
+#### 1.4 API Tasks - `src/api/tasks/submitTask.ts` & `getStatus.ts`
+
+**Funzione:** Gestione task asincroni per operazioni bulk
+**Produce:** Job ID per polling stato
+
+**Submit Task - `POST /api/tasks/submit`:**
+```json
+{
+  "task_type": "bulk_articles | bulk_products | design_batch",
+  "task_data": {
+    // Per bulk_articles:
+    "topics": ["topic1", "topic2"],
+    "tone": "professional",
+    "language": "en",
+    "word_count": 800
+
+    // Per bulk_products:
+    "products": [{ "name": "Product", "category": "Category" }]
+
+    // Per design_batch:
+    "sections": [{ "name": "Hero", "style": "modern" }]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "job_id": "job_f47ac10b-58cc-4372-...",
+  "status": "pending",
+  "estimated_wait_seconds": 45
+}
+```
+
+**Get Status - `GET /api/tasks/status/:job_id`:**
+```json
+{
+  "success": true,
+  "job_id": "job_...",
+  "status": "processing | completed | failed",
+  "progress": {
+    "progress_percent": 30,
+    "items_completed": 3,
+    "items_total": 10,
+    "current_item_title": "Generating article: WordPress Security"
   },
-  "sections": [
-    {
-      "id": "section_portfolio",
-      "structure": "free",
-      "background_color": "#1a1a2e",
-      "padding": { "top": 60, "bottom": 60 },
-      "elements": [
-        {
-          "type": "heading",
-          "text": "Our Portfolio",
-          "level": "h1",
-          "color": "#ffffff",
-          "alignment": "center"
-        },
-        {
-          "type": "paragraph",
-          "text": "Explore our latest works",
-          "color": "#ffffff",
-          "alignment": "center"
-        },
-        {
-          "type": "grid",
-          "columns": 2,
-          "gap": 20,
-          "items": [
-            { "type": "image", "url": "image1.jpg", "alt": "Project 1" },
-            { "type": "image", "url": "image2.jpg", "alt": "Project 2" },
-            { "type": "image", "url": "image3.jpg", "alt": "Project 3" },
-            { "type": "image", "url": "image4.jpg", "alt": "Project 4" }
-          ]
-        }
-      ]
-    }
-  ]
+  "result": { /* when completed */ }
+}
+```
+
+---
+
+#### 1.5 API Analytics - `src/api/analytics/getAnalytics.ts`
+
+**Funzione:** Dashboard analytics per costi e utilizzo
+**Produce:** Metriche aggregate per periodo
+**Endpoint:** `GET /api/analytics?period=2025-11&include_trend=true`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "period": "2025-11",
+    "license_id": "CREATOR-2024-XXXXX",
+    "total_requests": 342,
+    "total_tokens": 635000,
+    "total_cost": 2.345,
+    "breakdown_by_provider": {
+      "gemini": { "tokens": 390000, "cost": 0.758, "requests": 180 },
+      "claude": { "tokens": 245000, "cost": 1.587, "requests": 162 }
+    },
+    "breakdown_by_task": {
+      "TEXT_GEN": { "requests": 180, "tokens": 245000, "cost": 0.934 },
+      "CODE_GEN": { "requests": 98, "tokens": 234000, "cost": 0.856 }
+    },
+    "monthly_trend": [ /* 6 months history */ ],
+    "provider_stats": { /* efficiency metrics */ }
+  }
+}
+```
+
+---
+
+#### 1.6 Services
+
+##### `src/services/modelService.ts`
+
+**Funzione:** Orchestrazione chiamate AI con fallback
+**Produce:** `ModelResponse` con contenuto e metadati
+
+**Caratteristiche:**
+- Selezione primario: User choice (Gemini o Claude)
+- Fallback automatico al provider alternativo
+- System prompt di default per WordPress assistant
+- Supporto multimodale (immagini)
+
+```typescript
+// Flusso
+const result = await modelService.generate({
+  model: "gemini",  // o "claude"
+  prompt: "...",
+  context: {...}
+});
+
+// Se Gemini fallisce → prova Claude automaticamente
+// Se Claude fallisce → prova Gemini automaticamente
+```
+
+##### `src/services/tierChain.ts`
+
+**Funzione:** Chain multi-step per task complessi
+**Produce:** `TierChainResponse` con output e step details
+
+**FLOW Mode (0.5 credits):**
+```
+Step 1: Gemini 2.5 Flash → Context Analysis
+Step 2: Claude 4 Sonnet → Implementation
+Step 3: Syntactic Validation (no AI cost)
+```
+
+**CRAFT Mode (2.0 credits):**
+```
+Step 1: Gemini 2.5 Flash → Deep Context Analysis
+Step 2: Gemini 2.5 Pro → Strategy Generation
+Step 3: Claude 4.5 Opus → Implementation
+Step 4: Syntactic Validation + Optional AI Validation
+```
+
+##### `src/services/licensing.ts`
+
+**Funzione:** Validazione e gestione licenze
+**Produce:** `LicenseValidationResult` con token JWT
+
+**Flusso:**
+1. Lookup licenza in Firestore
+2. Verifica status (active/suspended/expired)
+3. Verifica site_url match
+4. Check quota disponibile
+5. Genera JWT token
+
+##### `src/services/costCalculator.ts`
+
+**Funzione:** Calcolo costi e analytics
+**Produce:** Metriche aggregate, comparazioni periodo
+
+##### `src/services/jobProcessor.ts`
+
+**Funzione:** Elaborazione job dalla queue
+**Produce:** Risultati task con progress tracking
+
+##### `src/services/aiRouter.ts`
+
+**Funzione:** Utilities per routing (sanitization, validation)
+**Produce:** Prompt sanitizzati, validazione
+
+---
+
+#### 1.7 Providers
+
+##### `src/providers/gemini.ts`
+
+**Funzione:** Client Google Gemini
+**Modello Default:** `gemini-2.5-pro-preview-05-06`
+
+**Caratteristiche:**
+- Retry con exponential backoff
+- Native token counting via `countTokens` API
+- Safety settings configurabili
+- Supporto multimodale (images, PDF)
+- Cost calculation automatico
+
+##### `src/providers/claude.ts`
+
+**Funzione:** Client Anthropic Claude
+**Modello Default:** `claude-opus-4-5-20251101`
+
+**Caratteristiche:**
+- Retry con exponential backoff
+- Token counting via tiktoken (cl100k_base)
+- Supporto multimodale (images)
+- Cost calculation automatico
+
+##### `src/providers/openai.ts`
+
+**Funzione:** Client OpenAI (backup/legacy)
+**Modello Default:** `gpt-4o`
+
+**Stato:** Definito ma non utilizzato nel flusso principale (solo per job processor come fallback)
+
+---
+
+#### 1.8 Middleware
+
+##### `src/middleware/auth.ts`
+
+**Funzione:** Autenticazione JWT
+**Produce:** `AuthResult` con claims validati
+
+```typescript
+interface AuthResult {
+  authenticated: boolean;
+  claims?: JWTClaims;
+  error?: string;
+  code?: string;
+}
+```
+
+**Validazioni:**
+- Estrazione Bearer token
+- Verifica firma JWT
+- Check licenza attiva in Firestore
+- Verifica site_url match
+
+##### `src/middleware/rateLimit.ts`
+
+**Funzione:** Rate limiting per IP/license
+**Produce:** Headers `X-RateLimit-*`
+
+```typescript
+interface RateLimitConfig {
+  maxRequests: number;     // Default: 10
+  windowSeconds?: number;  // Default: 60
+  endpoint: string;
+}
+```
+
+---
+
+#### 1.9 Triggers
+
+##### `src/triggers/jobQueueTrigger.ts`
+
+**Funzione:** Elaborazione automatica job dalla queue
+**Trigger:** `onDocumentCreated("job_queue/{jobId}")`
+
+**Configurazione:**
+- Timeout: 540 seconds (9 minutes)
+- Memory: 2GiB
+- Max instances: 50
+- Region: europe-west1
+
+---
+
+#### 1.10 Types
+
+| File | Contenuto |
+|------|-----------|
+| `AIProvider.ts` | Interface `IAIProvider`, `AIResponse`, pricing tables |
+| `Auth.ts` | `ValidateLicenseRequest`, error codes/status maps |
+| `JWTClaims.ts` | JWT payload structure |
+| `License.ts` | `License`, `LicensePlan` enums |
+| `Route.ts` | `RouteRequest`, task types, thresholds |
+| `Job.ts` | `Job`, task types, validation functions |
+| `Analytics.ts` | `AnalyticsResponse`, `ExtendedAnalytics` |
+| `ModelConfig.ts` | `AIModel`, `MODEL_IDS`, `ModelRequest` |
+| `PerformanceTier.ts` | `PerformanceTier`, `TIER_CONFIGS`, `TIER_MODELS` |
+| `PluginDocs.ts` | Plugin documentation cache types |
+| `APIResponse.ts` | Standard API response wrapper |
+
+---
+
+#### 1.11 Library
+
+| File | Funzione |
+|------|----------|
+| `firestore.ts` | Wrapper Firestore con funzioni CRUD per licenses, jobs, audit, cost tracking |
+| `jwt.ts` | Sign/verify JWT, extract Bearer token |
+| `logger.ts` | Structured logging con child loggers |
+| `secrets.ts` | Firebase Secrets Manager (API keys) |
+
+---
+
+### 2. Plugin WordPress Creator Core
+
+**Percorso:** `/packages/creator-core-plugin/creator-core/`
+
+#### 2.1 Struttura Directory
+
+```
+creator-core/
+├── creator-core.php              # Main plugin file
+├── composer.json                 # PHP dependencies
+├── includes/
+│   ├── Loader.php               # Component orchestrator
+│   ├── Activator.php            # Activation hooks
+│   ├── Deactivator.php          # Deactivation hooks
+│   ├── API/
+│   │   └── REST_API.php         # REST endpoints
+│   ├── Admin/
+│   │   ├── Dashboard.php        # Admin dashboard
+│   │   ├── Settings.php         # Plugin settings
+│   │   └── SetupWizard.php      # Setup wizard
+│   ├── Chat/
+│   │   └── ChatInterface.php    # Chat management
+│   ├── Context/
+│   │   ├── ContextLoader.php    # WP context collection
+│   │   └── ThinkingLogger.php   # AI reasoning log
+│   ├── Backup/
+│   │   ├── SnapshotManager.php  # Snapshot management
+│   │   ├── DeltaBackup.php      # Delta backups
+│   │   └── Rollback.php         # Rollback execution
+│   ├── Permission/
+│   │   ├── CapabilityChecker.php # Permission control
+│   │   └── RoleMapper.php       # Role mapping
+│   ├── Audit/
+│   │   ├── AuditLogger.php      # Audit logging
+│   │   └── OperationTracker.php # Operation tracking
+│   ├── Executor/
+│   │   ├── CodeExecutor.php     # Code execution
+│   │   ├── ExecutionVerifier.php # Execution verification
+│   │   ├── OperationFactory.php # Operation factory
+│   │   ├── CustomFileManager.php # Custom file management
+│   │   ├── CustomCodeLoader.php # Custom code loading
+│   │   └── ErrorHandler.php     # Error handling
+│   ├── Integrations/
+│   │   ├── ProxyClient.php      # AI Proxy client
+│   │   ├── ElementorPageBuilder.php    # Elementor builder
+│   │   ├── ElementorSchemaLearner.php  # Elementor templates
+│   │   ├── ElementorIntegration.php    # Elementor base
+│   │   ├── ElementorActionHandler.php  # Elementor actions
+│   │   ├── ACFIntegration.php   # ACF integration
+│   │   ├── RankMathIntegration.php # RankMath SEO
+│   │   ├── WooCommerceIntegration.php # WooCommerce
+│   │   ├── WPCodeIntegration.php # WPCode snippets
+│   │   ├── LiteSpeedIntegration.php # LiteSpeed cache
+│   │   └── PluginDetector.php   # Plugin detection
+│   └── Development/
+│       ├── FileSystemManager.php # File operations
+│       ├── PluginGenerator.php  # Plugin generator
+│       ├── CodeAnalyzer.php     # Code analysis
+│       └── DatabaseManager.php  # Database operations
+├── assets/
+│   ├── js/
+│   └── css/
+└── views/
+```
+
+---
+
+## Sistema AI e Providers
+
+### Provider Matrix
+
+| Provider | SDK | Modelli Supportati | Stato |
+|----------|-----|-------------------|-------|
+| **Anthropic Claude** | `@anthropic-ai/sdk` | claude-opus-4-5-20251101, claude-sonnet-4-20250514 | ✅ Attivo |
+| **Google Gemini** | `@google/generative-ai` | gemini-2.5-pro-preview-05-06, gemini-2.5-flash, gemini-3-pro-preview | ✅ Attivo |
+| **OpenAI** | `openai` | gpt-4o, gpt-4o-mini | ⚠️ Solo backup |
+
+### Pricing Configuration
+
+```typescript
+// Gemini
+"gemini-2.5-flash-preview-05-20": { input: 0.00015, output: 0.0006 }
+"gemini-2.5-pro-preview-05-06": { input: 0.00125, output: 0.005 }
+
+// Claude
+"claude-sonnet-4-20250514": { input: 0.003, output: 0.015 }
+"claude-opus-4-5-20251101": { input: 0.015, output: 0.075 }
+
+// OpenAI (backup)
+"gpt-4o": { input: 0.005, output: 0.015 }
+"gpt-4o-mini": { input: 0.00015, output: 0.0006 }
+```
+
+### Performance Tiers
+
+| Tier | Credits | Chain | Use Case |
+|------|---------|-------|----------|
+| **Flow** | 0.5 | Flash → Sonnet → Validation | Iterative work, CSS, snippets |
+| **Craft** | 2.0 | Flash → Pro → Opus → Validation | Complex tasks, templates |
+
+---
+
+## Sistema di Licensing e Autenticazione
+
+### License Plans
+
+| Piano | Tokens/Mese | Features |
+|-------|-------------|----------|
+| `free` | 1,000,000 | Basic AI features |
+| `starter` | 5,000,000 | + Priority support |
+| `pro` | 50,000,000 | + Bulk operations |
+| `enterprise` | 500,000,000 | + Custom models |
+
+### JWT Claims Structure
+
+```typescript
+interface JWTClaims {
+  license_id: string;    // CREATOR-2024-XXXXX
+  user_id: string;
+  site_url: string;
+  plan: LicensePlan;
+  iat: number;           // Issued at
+  exp: number;           // Expiration
+}
+```
+
+### Firestore Collections
+
+| Collection | Descrizione |
+|------------|-------------|
+| `licenses` | Licenze con quota, status, site_url |
+| `job_queue` | Job asincroni pendenti/completati |
+| `audit_logs` | Log di tutte le operazioni |
+| `cost_tracking` | Tracking costi mensili per provider |
+| `rate_limits` | Contatori rate limiting |
+| `plugin_docs_cache` | Cache documentazione plugin |
+
+---
+
+## Job Queue e Task Asincroni
+
+### Task Types
+
+| Task | Items | Estimated Time |
+|------|-------|----------------|
+| `bulk_articles` | Topics array | 30s × item |
+| `bulk_products` | Products array | 20s × item |
+| `design_batch` | Sections array | 45s × item |
+
+### Job States
+
+```
+pending → processing → completed
+                    ↘ failed
+```
+
+### Progress Tracking
+
+```typescript
+interface JobProgress {
+  progress_percent: number;
+  items_completed: number;
+  items_total: number;
+  current_item_index: number;
+  current_item_title: string;
+  eta_seconds: number;
+}
+```
+
+---
+
+## Integrazioni Esterne
+
+### WordPress Plugins
+
+| Plugin | Integrazione | File |
+|--------|--------------|------|
+| **Elementor** | Page builder, widgets, sections | `ElementorPageBuilder.php` |
+| **ACF** | Custom fields, field groups | `ACFIntegration.php` |
+| **RankMath** | SEO metadata | `RankMathIntegration.php` |
+| **WooCommerce** | Products, orders | `WooCommerceIntegration.php` |
+| **LiteSpeed** | Cache purging | `LiteSpeedIntegration.php` |
+| **WPCode** | Snippets management | `WPCodeIntegration.php` |
+
+### Firebase Services
+
+| Servizio | Utilizzo |
+|----------|----------|
+| **Cloud Functions** | API endpoints |
+| **Firestore** | Data persistence |
+| **Secrets Manager** | API keys storage |
+
+---
+
+## Flusso dei Dati
+
+### 1. Flusso License Validation
+
+```
+WordPress Plugin          Firebase Functions
+      │                         │
+      │  POST /validate-license │
+      │ ─────────────────────── │
+      │  license_key, site_url  │
+      │                         ├─→ Check Firestore licenses
+      │                         ├─→ Verify status = active
+      │                         ├─→ Verify site_url match
+      │                         ├─→ Generate JWT
+      │  ← ─────────────────────│
+      │  site_token, plan, quota│
+      │                         │
+```
+
+### 2. Flusso AI Request
+
+```
+WordPress Plugin          Firebase Functions          AI Provider
+      │                         │                         │
+      │  POST /route-request    │                         │
+      │  Authorization: Bearer  │                         │
+      │ ─────────────────────── │                         │
+      │                         ├─→ Verify JWT            │
+      │                         ├─→ Check rate limit      │
+      │                         ├─→ Check quota           │
+      │                         │                         │
+      │                         │  Generate request       │
+      │                         │ ─────────────────────── │
+      │                         │                         ├─→ Process
+      │                         │  ← ───────────────────  │
+      │                         │  AI Response            │
+      │                         │                         │
+      │                         ├─→ Update tokens_used    │
+      │                         ├─→ Update cost_tracking  │
+      │                         ├─→ Create audit_log      │
+      │  ← ─────────────────────│                         │
+      │  content, tokens, cost  │                         │
+```
+
+### 3. Flusso Async Task
+
+```
+WordPress               Firebase API            Firestore Trigger
+    │                        │                        │
+    │ POST /tasks/submit     │                        │
+    │ ────────────────────── │                        │
+    │                        ├─→ Create job_queue doc │
+    │ ← ──────────────────── │                        │
+    │ job_id                 │                        │
+    │                        │                        │
+    │                        │        onDocumentCreated
+    │                        │ ←─────────────────────│
+    │                        │                        │
+    │                        │        processJob()    │
+    │                        │        update progress │
+    │                        │        store result    │
+    │                        │                        │
+    │ GET /tasks/status      │                        │
+    │ ────────────────────── │                        │
+    │                        ├─→ Read job_queue doc   │
+    │ ← ──────────────────── │                        │
+    │ status, progress       │                        │
+```
+
+---
+
+## Punti Critici Identificati
+
+### 1. **Inconsistenza Modelli AI** ⚠️ ALTO
+
+**File multipli con configurazioni diverse:**
+
+| File | Modello Gemini | Modello Claude |
+|------|----------------|----------------|
+| `ModelConfig.ts` | `gemini-3-pro-preview` | `claude-sonnet-4-20250514` |
+| `PerformanceTier.ts` | `gemini-2.5-flash`, `gemini-2.5-pro` | `claude-sonnet-4-20250514`, `claude-opus-4-5-20251101` |
+| `providers/gemini.ts` | `gemini-2.5-pro-preview-05-06` | - |
+| `providers/claude.ts` | - | `claude-opus-4-5-20251101` |
+
+**Rischio:** Errori runtime per modelli non esistenti
+**Azione:** Unificare configurazione modelli in un unico file source-of-truth
+
+---
+
+### 2. **OpenAI Provider Non Utilizzato** ⚠️ MEDIO
+
+**File:** `providers/openai.ts`, `types/AIProvider.ts`
+**Problema:** Provider definito ma non attivamente utilizzato nel flusso principale
+**Impatto:** Codice morto, confusione, manutenzione inutile
+**Azione:** Decidere se rimuovere o reintegrare
+
+---
+
+### 3. **Context Caching Non Implementato** ⚠️ MEDIO
+
+**File:** `src/services/contextCache.ts` (non esiste)
+**Problema:** Riferimenti a context caching nei commenti ma file non presente
+**Impatto:** Performance non ottimizzata su richieste ripetute
+**Azione:** Implementare o rimuovere riferimenti
+
+---
+
+### 4. **REST Controller Mancante** ⚠️ BASSO
+
+**File:** `src/api/rest/restController.ts` (non esiste)
+**Problema:** Riferimento in index.ts ma file non presente
+**Azione:** Verificare se necessario o rimuovere riferimento
+
+---
+
+### 5. **Rate Limiting su Firestore** ⚠️ MEDIO
+
+**File:** `lib/firestore.ts`
+**Problema:** Rate limiting basato su documenti Firestore (costo, latenza)
+**Impatto:** Costi Firestore elevati con alto traffico
+**Soluzione:** Considerare Redis/Memcached per rate limiting
+
+---
+
+### 6. **Mancanza Test Automatizzati** ⚠️ ALTO
+
+**Problema:** Nessun file di test identificato nel progetto
+**Impatto:** Rischio regressioni, difficoltà refactoring
+**Azione:** Implementare test suite (Jest per TypeScript, PHPUnit per PHP)
+
+---
+
+## Codice Obsoleto o Da Eliminare
+
+### 1. **Modelli AI Legacy** 🗑️
+
+**File:** `functions/src/types/AIProvider.ts`
+
+```typescript
+// DA RIMUOVERE - Modelli obsoleti
+"claude-3-5-sonnet-20241022"
+"gemini-1.5-flash"
+"gemini-1.5-pro"
+"gemini-2.0-flash-exp"
+```
+
+**Azione:** Rimuovere dopo verifica utilizzo zero in production
+
+---
+
+### 2. **ModelConfig vs PerformanceTier Duplicazione** 🗑️
+
+**File:** `types/ModelConfig.ts` e `types/PerformanceTier.ts`
+
+Entrambi definiscono modelli ma con valori diversi. Consolidare in un unico file.
+
+---
+
+### 3. **OpenAI Integration (se non utilizzata)** 🗑️
+
+Se OpenAI non è più nel flusso principale:
+- `providers/openai.ts` → Rimuovere o marcare come deprecated
+- Pricing OpenAI in `AIProvider.ts` → Rimuovere
+
+---
+
+### 4. **Gemini 3 Pro Preview** 🗑️
+
+**File:** `types/ModelConfig.ts`
+
+```typescript
+MODEL_IDS = {
+  gemini: "gemini-3-pro-preview",  // Non esiste questo modello
+```
+
+**Azione:** Verificare e correggere con modello valido
+
+---
+
+## Opportunità di Miglioramento
+
+### 1. **Unificazione Configurazione Modelli** 📈
+
+Creare un singolo file `config/models.ts`:
+
+```typescript
+export const AI_MODELS = {
+  gemini: {
+    default: "gemini-2.5-pro-preview-05-06",
+    flash: "gemini-2.5-flash-preview-05-20",
+    pro: "gemini-2.5-pro-preview-05-06",
+  },
+  claude: {
+    default: "claude-sonnet-4-20250514",
+    sonnet: "claude-sonnet-4-20250514",
+    opus: "claude-opus-4-5-20251101",
+  },
+};
+```
+
+---
+
+### 2. **Implementare Context Caching** 🚀
+
+```typescript
+// services/contextCache.ts
+import { createHash } from "crypto";
+
+interface CachedContext {
+  hash: string;
+  context: Record<string, unknown>;
+  cachedAt: number;
+  ttl: number;
 }
 
-## Examples You Can Generate:
+class ContextCache {
+  private cache: Map<string, CachedContext> = new Map();
 
-### Example 1: 4 images + 2 subheadings, NO CTA
-{
-  "sections": [{
-    "structure": "free",
-    "elements": [
-      { "type": "heading", "text": "Main Title", "level": "h1" },
-      { "type": "paragraph", "text": "Subtitle 1" },
-      { "type": "paragraph", "text": "Subtitle 2" },
-      {
-        "type": "grid",
-        "columns": 2,
-        "items": [
-          { "type": "image", "url": "..." },
-          { "type": "image", "url": "..." },
-          { "type": "image", "url": "..." },
-          { "type": "image", "url": "..." }
-        ]
+  async get(licenseId: string, contextKeys: string[]): Promise<CachedContext | null> {
+    const hash = this.hashContext(contextKeys);
+    const cached = this.cache.get(`${licenseId}:${hash}`);
+
+    if (cached && Date.now() < cached.cachedAt + cached.ttl) {
+      return cached;
+    }
+    return null;
+  }
+
+  set(licenseId: string, context: Record<string, unknown>, ttl = 300000): void {
+    const hash = this.hashContext(Object.keys(context));
+    this.cache.set(`${licenseId}:${hash}`, {
+      hash,
+      context,
+      cachedAt: Date.now(),
+      ttl,
+    });
+  }
+}
+```
+
+---
+
+### 3. **Test Suite** 🧪
+
+```
+functions/
+├── src/
+└── tests/
+    ├── unit/
+    │   ├── providers/
+    │   │   ├── gemini.test.ts
+    │   │   └── claude.test.ts
+    │   ├── services/
+    │   │   ├── modelService.test.ts
+    │   │   └── licensing.test.ts
+    │   └── middleware/
+    │       ├── auth.test.ts
+    │       └── rateLimit.test.ts
+    └── integration/
+        ├── api.test.ts
+        └── jobs.test.ts
+```
+
+---
+
+### 4. **Monitoring & Alerting** 📊
+
+Implementare metriche per:
+- Error rate per provider
+- Latenza media per endpoint
+- Costi giornalieri/settimanali
+- Rate limit hits
+- Job queue depth
+
+---
+
+### 5. **Circuit Breaker Pattern** 🔌
+
+```typescript
+class ProviderCircuitBreaker {
+  private failures: Map<string, number> = new Map();
+  private lastFailure: Map<string, number> = new Map();
+  private readonly threshold = 5;
+  private readonly resetTime = 60000; // 1 min
+
+  isOpen(provider: string): boolean {
+    const failures = this.failures.get(provider) || 0;
+    const lastFail = this.lastFailure.get(provider) || 0;
+
+    if (failures >= this.threshold) {
+      if (Date.now() - lastFail > this.resetTime) {
+        this.failures.set(provider, 0);
+        return false;
       }
-    ]
-  }]
-}
+      return true;
+    }
+    return false;
+  }
 
-### Example 2: 3-column testimonials
-{
-  "sections": [{
-    "structure": "columns",
-    "columns": [
-      { "elements": [
-        { "type": "icon", "icon": "fas fa-star", "size": 32 },
-        { "type": "heading", "text": "Testimonial 1", "level": "h3" },
-        { "type": "paragraph", "text": "Quote..." }
-      ]},
-      { "elements": [...] },
-      { "elements": [...] }
-    ]
-  }]
-}
-
-### Example 3: Mixed layout
-{
-  "sections": [{
-    "structure": "free",
-    "elements": [
-      { "type": "heading", "text": "Services", "level": "h1" },
-      { "type": "spacer", "height": 40 },
-      { "type": "divider", "style": "solid", "color": "#cccccc" },
-      { "type": "spacer", "height": 40 },
-      { "type": "grid", "columns": 3, "items": [...] },
-      { "type": "spacer", "height": 60 },
-      { "type": "button", "text": "Learn More", "url": "#contact" }
-    ]
-  }]
-}
-
-## When User Says:
-- "4 images + 2 subheading, no CTA" â†’ Generate EXACTLY that
-- "Hero with testimonials in 3 columns below" â†’ 2 sections: hero + 3-column grid
-- "Services section with icons and descriptions" â†’ Free layout with mixed elements
-
-## DO NOT:
-âŒ Use predetermined templates
-âŒ Add elements the user didn't ask for
-âŒ Force CTA buttons if not requested
-âŒ Ignore parts of the specification
-âŒ Simplify the layout to fit templates
-
-## DO:
-âœ… Generate exactly what user requests
-âœ… Use creative freedom
-âœ… Combine elements freely
-âœ… Use nesting and complex layouts
-âœ… Match user's vision precisely
-
-Your creativity IS your power here. No constraints.
-PROMPT;
-}
-```
-
-### Backend: Freeform Converter
-
-File: `wp-content/plugins/creator/includes/ElementorPageBuilder.php` - Rewrite `generate_page` method:
-
-```php
-public function generate_page_from_freeform_spec( $spec ) {
-    $this->log( 'ðŸŽ¨ Processing freeform specification...' );
-    
-    // Step 1: Validate BEFORE any creation
-    $this->validate_freeform_spec( $spec );
-    $this->log( 'âœ“ Specification validated' );
-    
-    // Step 2: Convert to Elementor JSON BEFORE any creation
-    $this->log( 'ðŸ”§ Converting to Elementor JSON...' );
-    $elementor_data = [];
-    
-    foreach ( $spec['sections'] as $index => $section_spec ) {
-        $this->log( 
-            'ðŸ—ï¸ Converting section ' . ( $index + 1 ) . ' of ' . count( $spec['sections'] ),
-            'debug'
-        );
-        
-        $elementor_section = $this->convert_freeform_section_to_elementor( $section_spec );
-        $elementor_data[] = $elementor_section;
-    }
-    
-    // Step 3: Validate Elementor JSON BEFORE creation
-    $this->log( 'ðŸ“¦ Validating Elementor JSON...' );
-    $this->validate_elementor_json( $elementor_data );
-    $this->log( 'âœ… Elementor JSON validated' );
-    
-    // Step 4: ONLY NOW create page (everything proven good)
-    $this->log( 'ðŸ“ Creating WordPress page...' );
-    $page_id = $this->create_page( $spec, $elementor_data );
-    
-    // Step 5: Add metadata
-    $this->log( 'ðŸ” Adding SEO metadata...' );
-    $this->add_seo_metadata( $page_id, $spec );
-    
-    // Step 6: Create snapshot for undo
-    $this->log( 'ðŸ’¾ Creating undo snapshot...' );
-    $snapshot_id = $this->create_snapshot_for_page( $page_id );
-    
-    return [
-        'page_id' => $page_id,
-        'url' => get_permalink( $page_id ),
-        'edit_url' => get_edit_post_link( $page_id, 'raw' ),
-        'snapshot_id' => $snapshot_id,
-    ];
-}
-
-private function convert_freeform_section_to_elementor( $section_spec ) {
-    
-    $section = ElementorSchemaLearner::get_section_template();
-    $section['id'] = $section_spec['id'] ?? 'section_' . uniqid();
-    
-    // Set section styling
-    if ( isset( $section_spec['background_color'] ) ) {
-        $section['settings']['background_color'] = 
-            $this->validate_hex_color( $section_spec['background_color'] );
-    }
-    
-    if ( isset( $section_spec['padding'] ) ) {
-        $section['settings']['padding'] = [
-            'unit' => 'px',
-            'top' => absint( $section_spec['padding']['top'] ?? 50 ),
-            'right' => absint( $section_spec['padding']['right'] ?? 50 ),
-            'bottom' => absint( $section_spec['padding']['bottom'] ?? 50 ),
-            'left' => absint( $section_spec['padding']['left'] ?? 50 ),
-        ];
-    }
-    
-    // Route: Determine structure type
-    if ( $section_spec['structure'] === 'free' ) {
-        $section['elements'] = $this->convert_free_elements( $section_spec['elements'] ?? [] );
-    }
-    elseif ( isset( $section_spec['grid'] ) ) {
-        $section['elements'] = $this->convert_grid_layout_to_elementor( $section_spec );
-    }
-    elseif ( isset( $section_spec['columns'] ) ) {
-        $section['elements'] = $this->convert_columns_layout_to_elementor( $section_spec['columns'] );
-    }
-    
-    return $section;
-}
-
-private function convert_free_elements( $elements ) {
-    $elementor_elements = [];
-    
-    foreach ( $elements as $element ) {
-        $converted = $this->convert_single_element( $element );
-        if ( $converted ) {
-            $elementor_elements[] = $converted;
-        }
-    }
-    
-    return $elementor_elements;
-}
-
-private function convert_single_element( $element ) {
-    
-    $type = $element['type'] ?? 'unknown';
-    
-    // CONTAINERS (have children)
-    if ( $type === 'column' || $type === 'wrapper' ) {
-        $column = ElementorSchemaLearner::get_column_template( $element['width'] ?? '100' );
-        if ( isset( $element['children'] ) || isset( $element['elements'] ) ) {
-            $children = $element['children'] ?? $element['elements'] ?? [];
-            $column['elements'] = $this->convert_free_elements( $children );
-        }
-        return $column;
-    }
-    
-    // WIDGETS
-    if ( $type === 'heading' ) {
-        return ElementorSchemaLearner::get_heading_widget(
-            $element['text'] ?? '',
-            $element['level'] ?? 'h2',
-            $this->validate_hex_color( $element['color'] ?? '#000000' )
-        );
-    }
-    
-    if ( $type === 'paragraph' || $type === 'text' ) {
-        return ElementorSchemaLearner::get_paragraph_widget(
-            $element['text'] ?? '',
-            $this->validate_hex_color( $element['color'] ?? '#666666' )
-        );
-    }
-    
-    if ( $type === 'image' ) {
-        return ElementorSchemaLearner::get_image_widget(
-            $this->validate_url( $element['url'] ?? '' ),
-            $element['alt'] ?? ''
-        );
-    }
-    
-    if ( $type === 'button' ) {
-        return ElementorSchemaLearner::get_button_widget(
-            $element['text'] ?? '',
-            $this->validate_url( $element['url'] ?? '#' ),
-            $this->validate_hex_color( $element['bg_color'] ?? '#2563EB' )
-        );
-    }
-    
-    if ( $type === 'spacer' ) {
-        return [
-            'id' => 'widget_spacer_' . uniqid(),
-            'elType' => 'widget',
-            'widgetType' => 'spacer',
-            'settings' => [
-                'space' => [
-                    'unit' => 'px',
-                    'size' => absint( $element['height'] ?? 30 ),
-                ],
-            ],
-        ];
-    }
-    
-    if ( $type === 'divider' ) {
-        return [
-            'id' => 'widget_divider_' . uniqid(),
-            'elType' => 'widget',
-            'widgetType' => 'divider',
-            'settings' => [
-                'divider_type' => in_array( $element['style'] ?? 'solid', 
-                    [ 'solid', 'dashed', 'dotted' ] ) ? $element['style'] : 'solid',
-                'divider_weight' => [
-                    'unit' => 'px',
-                    'size' => absint( $element['weight'] ?? 1 ),
-                ],
-                'divider_color' => $this->validate_hex_color( $element['color'] ?? '#cccccc' ),
-            ],
-        ];
-    }
-    
-    if ( $type === 'icon' && $this->is_elementor_pro ) {
-        return [
-            'id' => 'widget_icon_' . uniqid(),
-            'elType' => 'widget',
-            'widgetType' => 'icon',
-            'settings' => [
-                'icon' => $element['icon'] ?? 'fas fa-star',
-                'icon_color' => $this->validate_hex_color( $element['color'] ?? '#000000' ),
-                'icon_size' => [ 'unit' => 'px', 'size' => absint( $element['size'] ?? 24 ) ],
-            ],
-        ];
-    }
-    
-    if ( $type === 'grid' ) {
-        return $this->convert_grid_to_columns( $element );
-    }
-    
-    // UNKNOWN TYPE: FALLBACK
-    $this->log( 'âš ï¸ Unknown widget type: ' . $type . ' â†’ using text-editor fallback', 'warning' );
-    
-    return ElementorSchemaLearner::get_paragraph_widget(
-        '[Unsupported widget type: ' . $type . ']',
-        '#ff0000'
-    );
-}
-
-private function convert_grid_to_columns( $grid_spec ) {
-    
-    $columns_count = absint( $grid_spec['columns'] ?? 3 );
-    $items = $grid_spec['items'] ?? [];
-    $column_width = floor( 100 / $columns_count );
-    
-    $this->log( "ðŸ“Š Converting grid: {$columns_count} columns ({$columns_count} items)", 'debug' );
-    
-    $columns = [];
-    
-    foreach ( $items as $item ) {
-        $column = ElementorSchemaLearner::get_column_template( $column_width . '' );
-        $converted_item = $this->convert_single_element( $item );
-        if ( $converted_item ) {
-            $column['elements'] = [ $converted_item ];
-        }
-        $columns[] = $column;
-    }
-    
-    return $columns;
-}
-
-private function convert_grid_layout_to_elementor( $section_spec ) {
-    
-    $grid = $section_spec['grid'] ?? [];
-    $columns_count = absint( $grid['columns'] ?? 3 );
-    $items = $grid['items'] ?? [];
-    $column_width = floor( 100 / $columns_count );
-    $columns = [];
-    
-    foreach ( $items as $item ) {
-        $column = ElementorSchemaLearner::get_column_template( $column_width . '' );
-        $converted = $this->convert_single_element( $item );
-        if ( $converted ) {
-            $column['elements'] = [ $converted ];
-        }
-        $columns[] = $column;
-    }
-    
-    return $columns;
-}
-
-private function convert_columns_layout_to_elementor( $columns_spec ) {
-    
-    $columns_count = count( $columns_spec );
-    $column_width = floor( 100 / $columns_count );
-    $columns = [];
-    
-    foreach ( $columns_spec as $col_spec ) {
-        $column = ElementorSchemaLearner::get_column_template( $column_width . '' );
-        if ( isset( $col_spec['elements'] ) ) {
-            $column['elements'] = $this->convert_free_elements( $col_spec['elements'] );
-        }
-        $columns[] = $column;
-    }
-    
-    return $columns;
-}
-
-private function validate_freeform_spec( $spec ) {
-    
-    if ( empty( $spec['title'] ) ) {
-        throw new Exception( 'Specification missing title' );
-    }
-    
-    if ( empty( $spec['sections'] ) || ! is_array( $spec['sections'] ) ) {
-        throw new Exception( 'Specification must have sections array' );
-    }
-    
-    if ( count( $spec['sections'] ) > 5 ) {
-        $this->log( 'âš ï¸ More than 5 sections detected, may impact performance', 'warning' );
-    }
-    
-    return true;
-}
-
-private function validate_hex_color( $color ) {
-    if ( ! preg_match( '/^#[0-9A-F]{6}$/i', $color ) ) {
-        $this->log( "âš ï¸ Invalid color '$color', using default #000000", 'warning' );
-        return '#000000';
-    }
-    return $color;
-}
-
-private function validate_url( $url ) {
-    if ( empty( $url ) ) {
-        return '#';
-    }
-    if ( ! filter_var( $url, FILTER_VALIDATE_URL ) && $url !== '#' ) {
-        $this->log( "âš ï¸ Invalid URL '$url', using '#'", 'warning' );
-        return '#';
-    }
-    return $url;
+  recordFailure(provider: string): void {
+    const failures = (this.failures.get(provider) || 0) + 1;
+    this.failures.set(provider, failures);
+    this.lastFailure.set(provider, Date.now());
+  }
 }
 ```
 
 ---
 
----
+## Raccomandazioni
 
-## PROBLEM 2: MISSING JSON SCHEMA VALIDATION
+### Priorità Alta (Immediato)
 
-### Problem
+| # | Azione | File/Area | Impatto |
+|---|--------|-----------|---------|
+| 1 | Unificare configurazione modelli AI | `types/ModelConfig.ts`, `types/PerformanceTier.ts` | Elimina errori runtime |
+| 2 | Correggere `gemini-3-pro-preview` | `types/ModelConfig.ts` | Fix critical bug |
+| 3 | Decidere su OpenAI provider | `providers/openai.ts` | Riduce codice morto |
+| 4 | Aggiungere test unitari base | Nuovo `tests/` | Previene regressioni |
 
-No validation of generated Elementor JSON. Invalid structure = silent failure.
+### Priorità Media (2-4 settimane)
 
-### Solution
+| # | Azione | File/Area | Impatto |
+|---|--------|-----------|---------|
+| 5 | Implementare context caching | Nuovo `services/contextCache.ts` | Performance +30% |
+| 6 | Migrare rate limiting a Redis | `middleware/rateLimit.ts` | Costi Firestore -50% |
+| 7 | Rimuovere modelli AI legacy | `types/AIProvider.ts` | Pulizia codebase |
+| 8 | Aggiungere monitoring/alerting | Nuovo infra | Proactive issue detection |
 
-Add validation method to ElementorPageBuilder.php:
+### Priorità Bassa (Backlog)
 
-```php
-private $allowed_widget_types = [
-    'heading',
-    'paragraph',
-    'image',
-    'button',
-    'spacer',
-    'divider',
-    'icon',
-    'icon-box'
-];
-
-private function validate_elementor_json( $elementor_data ) {
-    
-    if ( ! is_array( $elementor_data ) ) {
-        throw new Exception( 'Elementor data must be array' );
-    }
-    
-    foreach ( $elementor_data as $element ) {
-        $this->validate_elementor_element( $element );
-    }
-    
-    $this->log( 'âœ… Elementor JSON passed validation', 'debug' );
-    return true;
-}
-
-private function validate_elementor_element( $element ) {
-    
-    if ( ! isset( $element['id'], $element['elType'] ) ) {
-        throw new Exception( 'Element missing required fields (id, elType)' );
-    }
-    
-    // Validate section
-    if ( $element['elType'] === 'section' ) {
-        if ( ! isset( $element['settings'], $element['elements'] ) ) {
-            throw new Exception( 'Section missing settings or elements' );
-        }
-        
-        foreach ( $element['elements'] as $child ) {
-            $this->validate_elementor_element( $child );
-        }
-    }
-    
-    // Validate column
-    elseif ( $element['elType'] === 'column' ) {
-        if ( ! isset( $element['settings'], $element['elements'] ) ) {
-            throw new Exception( 'Column missing settings or elements' );
-        }
-        
-        foreach ( $element['elements'] as $child ) {
-            $this->validate_elementor_element( $child );
-        }
-    }
-    
-    // Validate widget
-    elseif ( $element['elType'] === 'widget' ) {
-        $widget_type = $element['widgetType'] ?? null;
-        
-        if ( ! in_array( $widget_type, $this->allowed_widget_types ) ) {
-            throw new Exception( "Widget type '$widget_type' not in whitelist" );
-        }
-        
-        if ( ! isset( $element['settings'] ) ) {
-            throw new Exception( "Widget '$widget_type' missing settings" );
-        }
-    }
-}
-```
-
-This validation happens BEFORE page creation, so invalid JSON never creates broken pages.
+| # | Azione | File/Area | Impatto |
+|---|--------|-----------|---------|
+| 9 | Implementare circuit breaker | `services/modelService.ts` | Resilienza |
+| 10 | Generare OpenAPI spec | Nuovo `docs/api/` | Developer experience |
+| 11 | Documentazione architettura | `docs/ARCHITECTURE.md` | Onboarding |
 
 ---
 
----
+## Conclusioni
 
-## PROBLEM 3: RESPONSIVE BREAKPOINTS NOT MANAGED
+L'ecosistema Creator v2.0 rappresenta un'evoluzione significativa con:
 
-### Problem
+### Punti di Forza ✅
 
-Hardcoded breakpoints might not match Elementor version. Elementor 3.20 might use different breakpoints than 3.15.
+- **Architettura pulita** con separazione backend/frontend
+- **Sistema di licensing robusto** con JWT authentication
+- **Fallback automatico** tra provider AI
+- **Performance Tiers** per ottimizzazione costi/qualità
+- **Job Queue** per operazioni asincrone
+- **Analytics completo** per monitoraggio costi
+- **Audit trail** dettagliato
 
-### Solution
+### Aree di Miglioramento ⚠️
 
-Add breakpoint detection in ElementorPageBuilder.php:
+- **Inconsistenza configurazione modelli** tra file diversi
+- **OpenAI provider** non utilizzato ma presente
+- **Context caching** promesso ma non implementato
+- **Mancanza test automatizzati**
+- **Rate limiting costoso** su Firestore
 
-```php
-private $breakpoints = [];
+### Raccomandazione Strategica
 
-public function __construct( ThinkingLogger $logger = null ) {
-    $this->logger = $logger;
-    $this->detect_elementor_setup();
-    $this->detect_breakpoints();
-}
-
-private function detect_breakpoints() {
-    
-    try {
-        if ( class_exists( '\Elementor\Core\Responsive\Responsive' ) ) {
-            $responsive = new \Elementor\Core\Responsive\Responsive();
-            $this->breakpoints = array_keys( $responsive->get_breakpoints() );
-            
-            $this->log(
-                'âœ“ Detected ' . count( $this->breakpoints ) . ' breakpoints: ' .
-                implode( ', ', $this->breakpoints ),
-                'debug'
-            );
-        } else {
-            $this->breakpoints = [ 'desktop', 'tablet', 'mobile' ];
-            $this->log( 'âš ï¸ Using default breakpoints (Elementor API not available)', 'warning' );
-        }
-    } catch ( Exception $e ) {
-        $this->breakpoints = [ 'desktop', 'tablet', 'mobile' ];
-        $this->log( 'âš ï¸ Breakpoint detection failed: ' . $e->getMessage(), 'warning' );
-    }
-}
-
-public function get_breakpoints() {
-    return $this->breakpoints;
-}
-```
-
-Use detected breakpoints in section generation:
-
-```php
-private function convert_freeform_section_to_elementor( $section_spec ) {
-    
-    $section = ElementorSchemaLearner::get_section_template();
-    
-    // Build responsive settings from detected breakpoints
-    if ( count( $this->breakpoints ) > 1 ) {
-        $section['settings']['responsive'] = [];
-        
-        foreach ( $this->breakpoints as $breakpoint ) {
-            if ( $breakpoint !== 'desktop' ) {
-                $section['settings']['responsive'][ $breakpoint ] = [
-                    'min_height' => [
-                        'unit' => 'px',
-                        'size' => absint( $section_spec['responsive'][ $breakpoint ]['height'] ?? 150 )
-                    ]
-                ];
-            }
-        }
-    }
-    
-    return $section;
-}
-```
+Concentrarsi sulla **stabilizzazione** prima di nuove feature:
+1. Unificare configurazioni modelli
+2. Implementare test suite base
+3. Aggiungere monitoring
+4. Poi procedere con ottimizzazioni (caching, circuit breaker)
 
 ---
 
----
-
-## PROBLEM 4: NO FALLBACK FOR UNSUPPORTED WIDGETS
-
-### Problem
-
-If AI generated unsupported widget, it was silently ignored (widget never added to page).
-
-### Solution
-
-In convert_single_element(), add fallback:
-
-```php
-private $fallback_count = 0;
-
-private function convert_single_element( $element ) {
-    
-    $type = $element['type'] ?? 'unknown';
-    
-    // ... all known types ...
-    
-    // UNKNOWN TYPE: SMART FALLBACK
-    
-    $this->fallback_count++;
-    
-    $this->log(
-        'âš ï¸ Fallback #' . $this->fallback_count . ': Unknown widget type "' . $type . '" â†’ converting to text-editor',
-        'warning'
-    );
-    
-    // Convert to text widget with warning message and red color
-    return ElementorSchemaLearner::get_paragraph_widget(
-        '[Unsupported widget type: ' . sanitize_text_field( $type ) . 
-        '. Content: ' . sanitize_text_field( $element['text'] ?? '' ) . ']',
-        '#ff6b6b' // Red color to highlight issue
-    );
-}
-
-public function get_fallback_count() {
-    return $this->fallback_count;
-}
-```
-
-Log fallback usage in summary:
-
-```php
-public function generate_page_from_freeform_spec( $spec ) {
-    
-    // ... convert sections ...
-    
-    if ( $this->fallback_count > 0 ) {
-        $this->log(
-            'âš ï¸ ' . $this->fallback_count . ' unsupported widgets converted to text',
-            'warning'
-        );
-    }
-    
-    // ... rest of code ...
-}
-```
-
----
-
----
-
-## PROBLEM 5: GET STATUS ENDPOINT NOT IMPLEMENTED
-
-### Problem
-
-GET /creator/v1/elementor/status declared but not implemented. AI doesn't know what it can do.
-
-### Solution
-
-File: `wp-content/plugins/creator/includes/REST_API.php`
-
-Add to register_routes():
-
-```php
-// Elementor status and capabilities
-$this->server->register_route( 'creator/v1', '/elementor/status', [
-    'methods'             => 'GET',
-    'callback'            => [ $this, 'get_elementor_status' ],
-    'permission_callback' => [ $this, 'check_permissions' ],
-] );
-```
-
-Add method:
-
-```php
-public function get_elementor_status( WP_REST_Request $request ) {
-    
-    if ( ! $this->check_permissions( $request ) ) {
-        return new WP_Error( 'forbidden', 'Access denied', [ 'status' => 403 ] );
-    }
-    
-    // Check if Elementor installed
-    if ( ! class_exists( '\Elementor\Plugin' ) ) {
-        return new WP_REST_Response( [
-            'installed' => false,
-            'message' => 'Elementor not installed. Please install Elementor to use page generation.',
-            'supported_widgets' => [],
-            'supported_structures' => [],
-        ], 200 );
-    }
-    
-    // Get version and capabilities
-    $version = defined( 'ELEMENTOR_VERSION' ) ? ELEMENTOR_VERSION : 'unknown';
-    $has_pro = defined( 'ELEMENTOR_PRO_VERSION' );
-    
-    try {
-        $builder = new ElementorPageBuilder();
-        $breakpoints = $builder->get_breakpoints();
-    } catch ( Exception $e ) {
-        $breakpoints = [ 'desktop', 'tablet', 'mobile' ];
-    }
-    
-    return new WP_REST_Response( [
-        'installed' => true,
-        'version' => $version,
-        'pro_active' => $has_pro,
-        'supported_widgets' => [
-            'heading' => 'Headings (h1-h6)',
-            'paragraph' => 'Text paragraphs',
-            'image' => 'Images with alt text',
-            'button' => 'Call-to-action buttons',
-            'spacer' => 'Vertical spacing',
-            'divider' => 'Dividers (solid, dashed, dotted)',
-            'icon' => 'Icons (Elementor Pro)',
-            'icon-box' => 'Icon boxes (Elementor Pro)',
-        ],
-        'supported_structures' => [
-            'free' => 'Free layout with mixed elements',
-            'grid' => 'Grid layout (NxM)',
-            'columns' => 'Standard columns (1-6 cols)',
-        ],
-        'max_sections' => 5,
-        'max_elements_per_section' => 50,
-        'breakpoints' => $breakpoints,
-        'color_format' => 'hex (#RRGGBB)',
-        'capabilities' => [
-            'create_pages' => true,
-            'responsive_design' => true,
-            'seo_metadata' => true,
-            'undo_support' => true,
-        ],
-    ], 200 );
-}
-```
-
-Update system prompt:
-
-```php
-// Before generating a page, check /wp-json/creator/v1/elementor/status
-// This tells you what widgets are available and if Elementor is installed
-```
-
----
-
----
-
-## PROBLEM 6: NO RECOVERY FROM JSON ERRORS
-
-### Problem
-
-If JSON generation failed partway, page was created but empty/broken.
-
-### Solution
-
-Validate and convert BEFORE any creation:
-
-```php
-public function generate_page_from_freeform_spec( $spec ) {
-    
-    $this->log( 'ðŸŽ¨ Processing freeform specification...' );
-    
-    // Step 1: Validate BEFORE any creation
-    $this->validate_freeform_spec( $spec );
-    $this->log( 'âœ“ Specification validated' );
-    
-    // Step 2: Convert to Elementor JSON BEFORE any creation
-    $this->log( 'ðŸ”§ Converting to Elementor JSON...' );
-    $elementor_data = [];
-    
-    try {
-        foreach ( $spec['sections'] as $index => $section_spec ) {
-            $elementor_section = $this->convert_freeform_section_to_elementor( $section_spec );
-            $elementor_data[] = $elementor_section;
-        }
-    } catch ( Exception $e ) {
-        throw new Exception( 'Conversion failed: ' . $e->getMessage() );
-    }
-    
-    // Step 3: Validate JSON BEFORE creation
-    $this->log( 'âœ… Validating Elementor JSON...' );
-    try {
-        $this->validate_elementor_json( $elementor_data );
-    } catch ( Exception $e ) {
-        throw new Exception( 'Validation failed: ' . $e->getMessage() );
-    }
-    
-    // Step 4: ONLY NOW create page (everything proven good)
-    $this->log( 'ðŸ“ Creating WordPress page...' );
-    $page_id = $this->create_page( $spec, $elementor_data );
-    
-    if ( is_wp_error( $page_id ) ) {
-        throw new Exception( 'Page creation failed: ' . $page_id->get_error_message() );
-    }
-    
-    // ... rest continues ...
-}
-```
-
-Wrap execution in ChatInterface:
-
-```php
-if ( $this->should_create_elementor_page( $ai_response ) ) {
-    $logger->log( 'ðŸŽ¨ Starting Elementor page creation...', 'info' );
-    
-    $page_spec = $this->extract_page_spec_from_response( $ai_response );
-    
-    try {
-        $builder = new ElementorPageBuilder( $logger );
-        $result = $builder->generate_page_from_freeform_spec( $page_spec );
-        
-        $logger->log( 
-            'âœ… Page created successfully: ' . $result['url'],
-            'info'
-        );
-        
-        return [
-            'success' => true,
-            'page_id' => $result['page_id'],
-            'url' => $result['url'],
-        ];
-        
-    } catch ( Exception $e ) {
-        $logger->log( 
-            'âŒ Page creation failed: ' . $e->getMessage(),
-            'error',
-            [ 'error' => $e->getMessage() ]
-        );
-        
-        return [
-            'success' => false,
-            'error' => $e->getMessage(),
-            'suggestion' => 'Check the specification format or simplify the layout.'
-        ];
-    }
-}
-```
-
----
-
----
-
-## PROBLEM 7: TESTING NOT IMPLEMENTED
-
-### Problem
-
-No tests for freeform conversion, validation, edge cases.
-
-### Solution
-
-File: `tests/Unit/TestElementorFreeformBuilder.php`
-
-```php
-<?php
-class Test_Elementor_Freeform_Builder extends WP_UnitTestCase {
-    
-    private $builder;
-    private $logger;
-    
-    public function setUp(): void {
-        parent::setUp();
-        $this->logger = new ThinkingLogger( 1 );
-        $this->builder = new ElementorPageBuilder( $this->logger );
-    }
-    
-    // CONVERSION TESTS
-    
-    public function test_convert_free_heading_element() {
-        $element = [
-            'type' => 'heading',
-            'text' => 'Test Heading',
-            'level' => 'h1',
-            'color' => '#000000'
-        ];
-        
-        $result = $this->builder->convert_single_element( $element );
-        
-        $this->assertEquals( 'heading', $result['widgetType'] );
-        $this->assertEquals( 'Test Heading', $result['settings']['title'] );
-        $this->assertEquals( 'h1', $result['settings']['header_size'] );
-    }
-    
-    public function test_convert_4images_2subheadings_no_cta() {
-        $spec = [
-            'title' => 'Portfolio',
-            'sections' => [
-                [
-                    'structure' => 'free',
-                    'background_color' => '#ffffff',
-                    'elements' => [
-                        [ 'type' => 'heading', 'text' => 'Our Portfolio', 'level' => 'h1' ],
-                        [ 'type' => 'paragraph', 'text' => 'See our work' ],
-                        [
-                            'type' => 'grid',
-                            'columns' => 2,
-                            'items' => [
-                                [ 'type' => 'image', 'url' => 'img1.jpg' ],
-                                [ 'type' => 'image', 'url' => 'img2.jpg' ],
-                                [ 'type' => 'image', 'url' => 'img3.jpg' ],
-                                [ 'type' => 'image', 'url' => 'img4.jpg' ],
-                            ]
-                        }
-                    ]
-                }
-            ]
-        ];
-        
-        $result = $this->builder->generate_page_from_freeform_spec( $spec );
-        
-        $this->assertIsInt( $result['page_id'] );
-        $this->assertGreaterThan( 0, $result['page_id'] );
-        
-        // Verify NO CTA was added
-        $page_meta = get_post_meta( $result['page_id'], '_elementor_data', true );
-        $page_data = json_decode( $page_meta, true );
-        
-        $this->assertFalse( $this->contains_button_widget( $page_data ) );
-    }
-    
-    // VALIDATION TESTS
-    
-    public function test_validate_valid_elementor_json() {
-        $data = [
-            [
-                'id' => 'section_1',
-                'elType' => 'section',
-                'settings' => [],
-                'elements' => [
-                    [
-                        'id' => 'col_1',
-                        'elType' => 'column',
-                        'settings' => [],
-                        'elements' => []
-                    ]
-                ]
-            ]
-        ];
-        
-        $this->assertTrue( $this->builder->validate_elementor_json( $data ) );
-    }
-    
-    public function test_validate_rejects_invalid_widget_type() {
-        $data = [
-            [
-                'id' => 'widget_1',
-                'elType' => 'widget',
-                'widgetType' => 'unknown_widget_xyz',
-                'settings' => []
-            ]
-        ];
-        
-        $this->expectException( Exception::class );
-        $this->builder->validate_elementor_json( $data );
-    }
-    
-    // COLOR VALIDATION TESTS
-    
-    public function test_validate_hex_color_valid() {
-        $color = $this->builder->validate_hex_color( '#FF00FF' );
-        $this->assertEquals( '#FF00FF', $color );
-    }
-    
-    public function test_validate_hex_color_invalid_returns_default() {
-        $color = $this->builder->validate_hex_color( 'red' );
-        $this->assertEquals( '#000000', $color );
-    }
-    
-    // HELPER METHODS
-    
-    private function contains_button_widget( $elementor_data ) {
-        foreach ( $elementor_data as $section ) {
-            if ( $this->search_for_widget( $section, 'button' ) ) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    private function search_for_widget( $element, $widget_type ) {
-        if ( isset( $element['widgetType'] ) && $element['widgetType'] === $widget_type ) {
-            return true;
-        }
-        
-        if ( isset( $element['elements'] ) ) {
-            foreach ( $element['elements'] as $child ) {
-                if ( $this->search_for_widget( $child, $widget_type ) ) {
-                    return true;
-                }
-            }
-        }
-        
-        return false;
-    }
-}
-```
-
----
-
----
-
-## PROBLEM 8: AI INTEGRATION NOT FULLY SPECIFIED
-
-### Problem
-
-How does AI know WHEN to create a page? What triggers it?
-
-### Solution
-
-File: `wp-content/plugins/creator/includes/ElementorExecutionDetector.php` (NEW)
-
-```php
-<?php
-class ElementorExecutionDetector {
-    
-    public static function should_create_page( $ai_response ) {
-        
-        $text = strtolower( $ai_response );
-        
-        $triggers = [
-            'create.*elementor.*page',
-            'generate.*page',
-            'build.*website.*page',
-            'make.*landing.*page',
-            'design.*page.*elementor',
-            'page.*layout',
-            'elementor.*page',
-        ];
-        
-        foreach ( $triggers as $trigger ) {
-            if ( preg_match( '/' . $trigger . '/i', $text ) ) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-    
-    public static function extract_specification( $ai_response ) {
-        
-        // Look for JSON block
-        if ( preg_match( '/```json\s*(.*?)\s*```/s', $ai_response, $matches ) ) {
-            $json = $matches[1];
-            return json_decode( $json, true );
-        }
-        
-        // Look for JSON marker
-        if ( preg_match( '/\{[\s\S]*"title"[\s\S]*"sections"[\s\S]*\}/i', $ai_response, $matches ) ) {
-            return json_decode( $matches[0], true );
-        }
-        
-        return null;
-    }
-}
-```
-
-Integration in ChatInterface:
-
-```php
-if ( ElementorExecutionDetector::should_create_page( $ai_response ) ) {
-    
-    $spec = ElementorExecutionDetector::extract_specification( $ai_response );
-    
-    if ( ! $spec ) {
-        $logger->log( 
-            'âš ï¸ Page creation requested but no valid specification found',
-            'warning'
-        );
-        return [
-            'success' => false,
-            'error' => 'No valid page specification found in response'
-        ];
-    }
-    
-    try {
-        $builder = new ElementorPageBuilder( $logger );
-        $result = $builder->generate_page_from_freeform_spec( $spec );
-        // ...
-    } catch ( Exception $e ) {
-        // ...
-    }
-}
-```
-
----
-
----
-
-## PROBLEM 9: SEO METADATA - ONLY RANKMATH
-
-### Problem
-
-Only RankMath supported. Yoast users got nothing.
-
-### Solution
-
-Add cascade fallback in ElementorPageBuilder.php:
-
-```php
-private function add_seo_metadata( $page_id, $spec ) {
-    
-    $seo = $spec['seo'] ?? [];
-    
-    // Try RankMath
-    if ( function_exists( 'rankmath' ) ) {
-        $this->add_rankmath_metadata( $page_id, $seo );
-        $this->log( 'âœ“ RankMath metadata added', 'info' );
-    }
-    // Try Yoast
-    elseif ( class_exists( 'WPSEO_Meta' ) ) {
-        $this->add_yoast_metadata( $page_id, $seo );
-        $this->log( 'âœ“ Yoast metadata added', 'info' );
-    }
-    // Fallback: basic meta tags
-    else {
-        $this->add_basic_metadata( $page_id, $seo );
-        $this->log( 'âœ“ Basic metadata added', 'info' );
-    }
-}
-
-private function add_rankmath_metadata( $page_id, $seo ) {
-    
-    if ( ! empty( $seo['title'] ) ) {
-        update_post_meta( $page_id, 'rank_math_title', 
-            sanitize_text_field( $seo['title'] ) );
-    }
-    
-    if ( ! empty( $seo['description'] ) ) {
-        update_post_meta( $page_id, 'rank_math_description',
-            sanitize_textarea_field( $seo['description'] ) );
-    }
-    
-    if ( ! empty( $seo['focus_keyword'] ) ) {
-        update_post_meta( $page_id, 'rank_math_focus_keyword',
-            sanitize_text_field( $seo['focus_keyword'] ) );
-    }
-}
-
-private function add_yoast_metadata( $page_id, $seo ) {
-    
-    if ( ! empty( $seo['title'] ) ) {
-        update_post_meta( $page_id, '_yoast_wpseo_title',
-            sanitize_text_field( $seo['title'] ) );
-    }
-    
-    if ( ! empty( $seo['description'] ) ) {
-        update_post_meta( $page_id, '_yoast_wpseo_metadesc',
-            sanitize_textarea_field( $seo['description'] ) );
-    }
-    
-    if ( ! empty( $seo['focus_keyword'] ) ) {
-        update_post_meta( $page_id, '_yoast_wpseo_focuskw',
-            sanitize_text_field( $seo['focus_keyword'] ) );
-    }
-}
-
-private function add_basic_metadata( $page_id, $seo ) {
-    
-    if ( ! empty( $seo['description'] ) ) {
-        update_post_meta( $page_id, '_meta_description',
-            sanitize_textarea_field( $seo['description'] ) );
-    }
-    
-    if ( ! empty( $seo['focus_keyword'] ) ) {
-        update_post_meta( $page_id, '_meta_keywords',
-            sanitize_text_field( $seo['focus_keyword'] ) );
-    }
-}
-```
-
----
-
----
-
-## PROBLEM 10: NO UNDO FOR ELEMENTOR PAGES
-
-### Problem
-
-Pages created but no way to undo them.
-
-### Solution
-
-Integrate with M4 Snapshot System in ElementorPageBuilder.php:
-
-```php
-private function create_snapshot_for_page( $page_id ) {
-    
-    $this->log( 'ðŸ’¾ Creating undo snapshot...' );
-    
-    // Create snapshot (M4 system)
-    $snapshot_id = $this->create_snapshot();
-    
-    // Store page ID for rollback
-    update_post_meta( $snapshot_id, 'elementor_page_id', $page_id );
-    update_post_meta( $snapshot_id, 'elementor_page_url', get_permalink( $page_id ) );
-    update_post_meta( $snapshot_id, 'action_type', 'elementor_page_creation' );
-    update_post_meta( $snapshot_id, 'created_at', current_time( 'mysql' ) );
-    
-    $this->log( 'âœ“ Snapshot created (ID: ' . $snapshot_id . ')' );
-    
-    return $snapshot_id;
-}
-
-public function rollback_elementor_page( $snapshot_id ) {
-    
-    $page_id = get_post_meta( $snapshot_id, 'elementor_page_id', true );
-    
-    if ( ! $page_id ) {
-        throw new Exception( 'No page associated with this snapshot' );
-    }
-    
-    // Delete the created page
-    $result = wp_delete_post( $page_id, true );
-    
-    if ( ! $result ) {
-        throw new Exception( 'Failed to delete page' );
-    }
-    
-    // Mark snapshot as rolled back
-    update_post_meta( $snapshot_id, 'rolled_back', true );
-    update_post_meta( $snapshot_id, 'rolled_back_at', current_time( 'mysql' ) );
-    
-    $this->log( 'âœ“ Page rollback complete', 'info' );
-    
-    return true;
-}
-
-private function create_snapshot() {
-    // This method calls the M4 snapshot system
-    // For now, return dummy ID
-    return uniqid( 'snapshot_' );
-}
-```
-
----
-
----
-
-## IMPLEMENTATION CHECKLIST
-
-### CRITICAL (Must implement first):
-- [ ] Rewrite ElementorPageBuilder.php with freeform approach
-- [ ] Add validate_elementor_json() method
-- [ ] Add detect_breakpoints() method
-- [ ] Add fallback logic for unknown widgets
-- [ ] Implement GET /elementor/status endpoint
-- [ ] Add validation-before-creation pattern
-
-### IMPORTANT (Before testing):
-- [ ] Create unit tests in TestElementorFreeformBuilder.php
-- [ ] Create ElementorExecutionDetector.php
-- [ ] Verify SEO metadata cascade (RankMath â†’ Yoast â†’ Basic)
-- [ ] Implement snapshot integration for undo
-
-### VERIFICATION:
-- [ ] Test: 4 images + 2 subheadings, NO CTA
-- [ ] Test: Unknown widget types get text fallback
-- [ ] Test: JSON validation catches errors before page creation
-- [ ] Test: Breakpoint detection works for current Elementor
-- [ ] Test: SEO metadata for all 3 systems
-- [ ] Test: Undo works via snapshots
-- [ ] Test: Freeform layout with mixed elements
-- [ ] Test: Grid layout (2x2, 3x3, etc.)
-- [ ] Test: Column layout (1-6 columns)
-
----
-
----
-
-## FILE STRUCTURE
-
-```
-wp-content/plugins/creator/includes/
-â”œâ”€â”€ ElementorSchemaLearner.php (existing - no changes)
-â”œâ”€â”€ ElementorPageBuilder.php (COMPLETELY REWRITTEN)
-â”œâ”€â”€ ElementorExecutionDetector.php (NEW)
-â”œâ”€â”€ SystemPrompts.php (ENHANCED with freeform prompt)
-â””â”€â”€ REST_API.php (ENHANCED with GET /elementor/status)
-
-tests/Unit/
-â””â”€â”€ TestElementorFreeformBuilder.php (NEW comprehensive tests)
-```
-
----
-
-**END OF DOCUMENT**
-
-This document contains ALL 10 problems and production-ready solutions, ready to copy-paste into implementation.
+*Report generato automaticamente - Versione 2.0.0*
+*Data: 5 Dicembre 2025*
