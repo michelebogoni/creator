@@ -35,7 +35,7 @@ class ProxyClient {
 
 	/**
 	 * Request timeout in seconds
-	 * CRAFT chain can take up to 60 seconds, so we use 120 for safety
+	 * AI requests can take up to 60 seconds, so we use 120 for safety
 	 *
 	 * @var int
 	 */

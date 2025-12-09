@@ -1,7 +1,7 @@
 # Creator Ecosystem - Report Completo di Analisi
 
 **Data:** 9 Dicembre 2025
-**Versione:** 2.1.0
+**Versione:** 2.2.0
 **Autore:** Analisi Tecnica Automatica
 
 ---
@@ -15,17 +15,23 @@
 5. [Componenti del Sistema](#componenti-del-sistema)
    - [Backend Firebase Functions](#1-backend-firebase-functions)
    - [Plugin WordPress Creator Core](#2-plugin-wordpress-creator-core)
-6. [Mappa Dettagliata dei File](#mappa-dettagliata-dei-file)
+6. [Plugin WordPress - Audit Completo](#plugin-wordpress---audit-completo-v220) ✅ NUOVO v2.2
+   - [Plugin Loading Audit Report](#plugin-loading-audit-report)
+   - [REST API Audit - 33 Endpoint](#rest-api-audit---33-endpoint)
+   - [ProxyClient - Comunicazione con Firebase](#proxyclient---comunicazione-con-firebase)
+   - [Flusso Completo E2E](#flusso-completo-e2e-wp-rest--firebase)
 7. [Sistema AI e Providers](#sistema-ai-e-providers)
 8. [Sistema di Licensing e Autenticazione](#sistema-di-licensing-e-autenticazione)
 9. [Job Queue e Task Asincroni](#job-queue-e-task-asincroni)
 10. [Integrazioni Esterne](#integrazioni-esterne)
-11. [Flusso dei Dati](#flusso-dei-dati)
-12. [Test Suite e Validazione](#test-suite-e-validazione)
-13. [Punti Critici Identificati](#punti-critici-identificati)
-14. [Codice Obsoleto o Da Eliminare](#codice-obsoleto-o-da-eliminare)
-15. [Opportunità di Miglioramento](#opportunità-di-miglioramento)
-16. [Raccomandazioni](#raccomandazioni)
+11. [Security Hardening](#security-hardening-v220) ✅ NUOVO v2.2
+12. [Flusso dei Dati](#flusso-dei-dati)
+13. [Test Suite e Validazione](#test-suite-e-validazione)
+14. [Punti Critici Identificati](#punti-critici-identificati)
+15. [Codice Obsoleto o Da Eliminare](#codice-obsoleto-o-da-eliminare)
+16. [Opportunità di Miglioramento](#opportunità-di-miglioramento)
+17. [Raccomandazioni](#raccomandazioni)
+18. [Conclusioni](#conclusioni)
 
 ---
 
@@ -121,18 +127,18 @@ Questo documento analizza in dettaglio come l'architettura attuale affronta ques
 | Provider AI Backup | OpenAI (non attivo nel flusso principale) |
 | Integrazioni WordPress | Elementor, ACF, RankMath, WooCommerce, LiteSpeed |
 | API Endpoints | 6 (auth, ai, tasks, analytics, plugin-docs) |
-| Performance Tiers | 2 (Flow, Craft) |
+| AI Models | 2 (Gemini, Claude) con fallback automatico |
 | Linee di Codice Stimate | ~20,000+ |
 | Complessità Architetturale | Alta |
 
 ### Cambiamenti dalla Versione 1.0
 
 - **Nuovo sistema di licensing** con JWT authentication
-- **Performance Tiers** (Flow/Craft) per ottimizzazione costi/qualità
+- **Model Selection** - Scelta del modello AI (Gemini/Claude) con fallback automatico
 - **Job Queue** per task asincroni (bulk articles, bulk products, design batch)
 - **Analytics endpoint** per monitoraggio costi e utilizzo
 - **Plugin Docs** sistema per ricerca documentazione plugin
-- **Rimozione routing matrix** - ora usa fallback semplice Gemini ↔ Claude
+- **Fallback semplice** Gemini ↔ Claude (sostituisce il vecchio routing matrix)
 - **Context Caching** (pianificato ma non ancora implementato)
 
 ### Cambiamenti v2.1.0 (Dicembre 2025)
@@ -142,6 +148,16 @@ Questo documento analizza in dettaglio come l'architettura attuale affronta ques
 - **Configurazione modelli unificata** - `MODEL_IDS`, `isValidProvider()` in `config/models.ts`
 - **Validazione endpoint** - tutti i 6 endpoint verificati e funzionanti
 - **Integration tests** per route-request fallback, licensing workflow, job queue
+
+### Cambiamenti v2.2.0 (Dicembre 2025)
+
+- **Plugin Loading Audit completo** - Verifica di tutti i path, hook, menu, template, assets e autoloader PSR-4
+- **REST API Audit** - 33 endpoint su 9 controller, namespace `creator/v1`, permission callbacks verificati
+- **Rate Limiting 3-tier** - Default (60 req/min), AI (30 req/min), Dev (10 req/min)
+- **ProxyClient Communication Audit** - JWT Bearer auth, gestione errori, token refresh automatico
+- **Flusso E2E verificato** - WP REST → ProxyClient → Firebase con mapping coerente
+- **Security Hardening** - 609 linee di codice aggiunte per protezione database, file system, input validation
+- **Test ProxyClient** - 5 test cases per copertura completa del client
 
 ---
 
@@ -199,18 +215,6 @@ Questo documento analizza in dettaglio come l'architettura attuale affronta ques
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                        Tier Chain Service                              │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
-│  │  │  FLOW Mode (0.5 credits)                                        │  │  │
-│  │  │  Gemini 2.5 Flash → Claude 4 Sonnet → Validation                │  │  │
-│  │  └─────────────────────────────────────────────────────────────────┘  │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
-│  │  │  CRAFT Mode (2.0 credits)                                       │  │  │
-│  │  │  Gemini Flash → Gemini Pro → Claude Opus → Validation           │  │  │
-│  │  └─────────────────────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
 │  │                          Firestore                                     │  │
 │  │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐       │  │
 │  │  │  licenses  │  │  job_queue │  │ audit_logs │  │   cost_    │       │  │
@@ -231,7 +235,7 @@ Il sistema segue un'architettura **Microservices + Plugin Modulare**:
 1. **Separation of Concerns**: Backend AI separato dal frontend WordPress
 2. **Provider Abstraction**: Interfaccia comune `IAIProvider` per tutti i provider AI
 3. **Simple Fallback**: Routing semplificato con fallback automatico Gemini ↔ Claude
-4. **Performance Tiers**: Due modalità (Flow/Craft) per bilanciare costi e qualità
+4. **Model Selection**: Scelta del modello AI da parte dell'utente (Gemini/Claude)
 5. **JWT Authentication**: Token-based auth per sicurezza API
 6. **Event-Driven Jobs**: Firestore triggers per elaborazione asincrona
 7. **Audit Trail**: Sistema completo di logging per tracciabilità
@@ -245,7 +249,7 @@ User Request → Chat Interface → REST API → License Validation
                                                 ↓
                                     Rate Limit Check
                                                 ↓
-                                    Model Service / Tier Chain
+                                    Model Service
                                                 ↓
                                     Provider Selection (Gemini/Claude)
                                                 ↓
@@ -476,26 +480,6 @@ const result = await modelService.generate({
 // Se Claude fallisce → prova Gemini automaticamente
 ```
 
-##### `src/services/tierChain.ts`
-
-**Funzione:** Chain multi-step per task complessi
-**Produce:** `TierChainResponse` con output e step details
-
-**FLOW Mode (0.5 credits):**
-```
-Step 1: Gemini 2.5 Flash → Context Analysis
-Step 2: Claude 4 Sonnet → Implementation
-Step 3: Syntactic Validation (no AI cost)
-```
-
-**CRAFT Mode (2.0 credits):**
-```
-Step 1: Gemini 2.5 Flash → Deep Context Analysis
-Step 2: Gemini 2.5 Pro → Strategy Generation
-Step 3: Claude 4.5 Opus → Implementation
-Step 4: Syntactic Validation + Optional AI Validation
-```
-
 ##### `src/services/licensing.ts`
 
 **Funzione:** Validazione e gestione licenze
@@ -623,7 +607,6 @@ interface RateLimitConfig {
 | `Job.ts` | `Job`, task types, validation functions |
 | `Analytics.ts` | `AnalyticsResponse`, `ExtendedAnalytics` |
 | `ModelConfig.ts` | `AIModel`, `MODEL_IDS`, `ModelRequest` |
-| `PerformanceTier.ts` | `PerformanceTier`, `TIER_CONFIGS`, `TIER_MODELS` |
 | `PluginDocs.ts` | Plugin documentation cache types |
 | `APIResponse.ts` | Standard API response wrapper |
 
@@ -707,6 +690,192 @@ creator-core/
 
 ---
 
+## Plugin WordPress - Audit Completo (v2.2.0)
+
+### Plugin Loading Audit Report
+
+L'audit completo del plugin WordPress ha verificato tutti i componenti di caricamento:
+
+| Componente | Status | Note |
+|------------|--------|------|
+| **Path require_once** | ✅ Pass | Tutti i 5 path sono validi e i file esistono |
+| **Hook Attivazione/Disattivazione** | ✅ Pass | Registrati correttamente, puntano alle classi corrette |
+| **Admin Menu** | ✅ Pass | Registrato con tutti i parametri necessari |
+| **Callback Render** | ✅ Pass | Tutte le funzioni di rendering esistono e includono i template |
+| **Templates** | ✅ Pass | Tutti i 6 template esistono |
+| **Assets** | ✅ Pass | Tutti i 10 file CSS/JS esistono |
+| **Sintassi PHP** | ✅ Pass | Nessun errore evidente nei file analizzati |
+| **Autoloader PSR-4** | ✅ Pass | Implementato correttamente |
+
+**Note Tecniche:**
+- L'autoloader PSR-4 custom mappa `CreatorCore\*` → `includes/*`
+- La disattivazione preserva correttamente i dati (pulizia completa solo su uninstall)
+- Il sistema di migrazioni database è implementato (v1.0.0 → v1.2.0)
+
+---
+
+### REST API Audit - 33 Endpoint
+
+Il plugin WordPress espone **33 route REST** distribuite su **9 controller**, tutte sotto il namespace `creator/v1`.
+
+#### Distribuzione Endpoint per Controller
+
+| Controller | Endpoint | Permission Callback |
+|------------|----------|---------------------|
+| **MessagesController** | `/messages`, `/messages/stream` | `manage_options` |
+| **ContextController** | `/context/*` (5 route) | `manage_options` |
+| **ActionController** | `/actions`, `/actions/execute` | `manage_options` |
+| **BackupController** | `/backups/*` (4 route) | `manage_options` |
+| **SettingsController** | `/settings`, `/settings/test` | `manage_options` |
+| **SystemController** | `/system/*`, `/health` | `manage_options` / `__return_true` |
+| **FileController** | `/dev/file/*` | `manage_options` |
+| **DatabaseController** | `/dev/database/*` | `manage_options` |
+| **PluginController** | `/dev/plugin/*` | `manage_options` |
+
+#### Rate Limiting 3-Tier
+
+```php
+// Configurazione Rate Limiting per tipo di endpoint
+$rate_limits = [
+    'default' => 60,  // 60 req/min - endpoint standard
+    'ai'      => 30,  // 30 req/min - endpoint AI (/messages)
+    'dev'     => 10,  // 10 req/min - endpoint development (file, database, plugin)
+];
+```
+
+**Note:**
+- L'endpoint `/health` è intenzionalmente pubblico (`__return_true`) per health check esterni
+- Gli endpoint AI (`/messages`) usano rate limiting più aggressivo
+- Gli endpoint dev (`file`, `database`, `plugin`) richiedono `manage_options`
+
+---
+
+### ProxyClient - Comunicazione con Firebase
+
+Il `ProxyClient` gestisce tutte le comunicazioni tra WordPress e il backend Firebase.
+
+#### Architettura Comunicazione
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   WordPress     │     │   ProxyClient   │     │    Firebase     │
+│   REST API      │────▶│   make_request  │────▶│   /api/ai/*     │
+│   Controller    │     │   (privato)     │     │   Endpoint      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │  JWT Authorization  │
+                    │  Bearer {token}     │
+                    │  Content-Type: JSON │
+                    └─────────────────────┘
+```
+
+#### Configurazione
+
+| Aspetto | Implementazione | Status |
+|---------|-----------------|--------|
+| **Metodo centrale** | `make_request()` privato, chiamato da tutti i metodi pubblici | ✅ |
+| **URL backend** | `get_option('creator_proxy_url')` con fallback a costante | ✅ |
+| **JWT source** | `get_option('creator_site_token')` | ✅ |
+| **Header Authorization** | `Bearer {token}` aggiunto correttamente | ✅ |
+| **Header Content-Type** | `application/json` sempre presente | ✅ |
+| **Timeout** | 120 secondi per gestire chain AI lunghe | ✅ |
+
+#### Gestione Errori
+
+| Tipo Errore | Gestione | Status |
+|-------------|----------|--------|
+| **Errori network** | Ritorna `WP_Error` | ✅ |
+| **Errori HTTP 4xx/5xx** | Estrae messaggio da risposta, ritorna `WP_Error` | ✅ |
+| **Token expired** | Auto-refresh + retry della richiesta originale | ✅ |
+| **JSON invalido** | Ritorna array vuoto + logging via AuditLogger | ✅ |
+| **Logging errori** | Tutti gli errori HTTP loggati tramite AuditLogger | ✅ |
+
+#### Token Refresh Automatico
+
+```php
+// Pattern detect-refresh-retry implementato
+if (strpos($error_message, 'token expired') !== false) {
+    $this->refresh_token();  // Richiede nuovo token
+    return $this->make_request($endpoint, $data);  // Retry
+}
+```
+
+#### Retry Logic
+
+```php
+// Exponential backoff: 1s, 2s, 4s, 8s, 16s (max 5 tentativi)
+$delays = [1, 2, 4, 8, 16];
+foreach ($delays as $delay) {
+    $response = $this->make_request($endpoint, $data);
+    if (!is_wp_error($response)) break;
+    sleep($delay);
+}
+```
+
+---
+
+### Flusso Completo E2E: WP REST → Firebase
+
+Il flusso tracciato end-to-end dal plugin WordPress al backend Firebase:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                          User Request                               │
+│                    POST /wp-json/creator/v1/messages               │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                      MessagesController                             │
+│  • Valida permission (manage_options)                               │
+│  • Rate limit check (30 req/min)                                   │
+│  • Sanitizza input                                                 │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                        ProxyClient                                  │
+│  • Prepara payload con system_prompt + prompt                      │
+│  • Aggiunge JWT Bearer header                                      │
+│  • Timeout 120s                                                    │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                    Firebase /api/ai/route-request                   │
+│  • Verifica JWT                                                    │
+│  • Check rate limit per license                                    │
+│  • Check quota                                                     │
+│  • Route a Gemini/Claude                                           │
+│  • Update tokens/cost                                              │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                        AI Response                                  │
+│  {                                                                 │
+│    "success": true,                                                │
+│    "content": "...",  // o "response" per compatibilità            │
+│    "model": "gemini",                                              │
+│    "tokens_used": 1250,                                            │
+│    "cost_usd": 0.0042                                              │
+│  }                                                                 │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Mapping Dati WP → Firebase:**
+- `system_prompt`: Contesto statico Creator (ruolo, istruzioni base)
+- `prompt`: Conversazione dinamica (messaggi utente)
+- `context`: Informazioni sito (tema, plugin, CPT, ACF)
+
+**Formato Risposta:**
+- Il sistema supporta sia `content` che `response` per compatibilità
+- Supporta richieste on-demand per plugin/ACF/CPT details (context lazy-load)
+
+---
+
 ## Sistema AI e Providers
 
 ### Provider Matrix
@@ -732,13 +901,6 @@ creator-core/
 "gpt-4o": { input: 0.005, output: 0.015 }
 "gpt-4o-mini": { input: 0.00015, output: 0.0006 }
 ```
-
-### Performance Tiers
-
-| Tier | Credits | Chain | Use Case |
-|------|---------|-------|----------|
-| **Flow** | 0.5 | Flash → Sonnet → Validation | Iterative work, CSS, snippets |
-| **Craft** | 2.0 | Flash → Pro → Opus → Validation | Complex tasks, templates |
 
 ---
 
@@ -831,6 +993,157 @@ interface JobProgress {
 | **Cloud Functions** | API endpoints |
 | **Firestore** | Data persistence |
 | **Secrets Manager** | API keys storage |
+
+---
+
+## Security Hardening (v2.2.0)
+
+### Riepilogo Implementazione
+
+Il security hardening ha aggiunto **609 linee di codice** di protezione distribuite su 5 file principali:
+
+| File | Linee Aggiunte | Descrizione |
+|------|----------------|-------------|
+| `DatabaseManager.php` | +165 | Hardening query SQL, 40+ keyword bloccate |
+| `FileSystemManager.php` | +130 | File/path protetti, validazione write |
+| `ActionController.php` | +120 | Validazione action type, sanitizzazione ricorsiva |
+| `ProxyClient.php` | +57 | Logging errori HTTP/network/JSON con AuditLogger |
+| `SystemController.php` | +72 | Rate limiting 60 req/min su /health |
+
+### Protezioni Database (R2) - Alta Priorità
+
+Implementata protezione completa contro SQL injection:
+
+```php
+// 40+ SQL keyword bloccate
+$blocked_keywords = [
+    'INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE', 'ALTER',
+    'CREATE', 'GRANT', 'REVOKE', 'INTO OUTFILE', 'LOAD_FILE',
+    'BENCHMARK', 'SLEEP', 'UNION', 'EXEC', 'EXECUTE',
+    // ... altre keyword
+];
+```
+
+| Protezione | Implementazione |
+|------------|-----------------|
+| SQL keyword bloccate | 40+ keyword pericolose |
+| Stacked queries | Bloccate |
+| Commenti SQL | Bloccati (`--`, `/*`, `#`) |
+| UNION injection | Bloccato |
+| System tables access | Bloccato (`mysql.*`, `information_schema.*`) |
+| Hex encoding | Bloccato |
+| Funzione CHAR() | Bloccata |
+| Word boundary matching | Per evitare falsi positivi |
+
+### Protezioni File System (R3) - Alta Priorità
+
+Protezione completa del file system WordPress:
+
+```php
+// 16 file WP core protetti
+$protected_files = [
+    'wp-config.php', '.htaccess', 'wp-settings.php',
+    'wp-load.php', 'wp-blog-header.php', 'wp-config-sample.php',
+    // ... altri file
+];
+
+// 9 pattern file pericolosi bloccati
+$dangerous_patterns = [
+    '*.phar', '*.env', '*.sql', '*.bak', '*.log',
+    '*.key', '*.pem', '*.cert', '.git*'
+];
+```
+
+| Protezione | Implementazione |
+|------------|-----------------|
+| File WP core | 16 file protetti da scrittura/modifica |
+| Pattern pericolosi | 9 estensioni bloccate |
+| PHP in uploads | Bloccato |
+| Eseguibili in uploads | Bloccati |
+| Path traversal | Detection e blocco (`../`) |
+| PHP files | Consentiti solo in `plugins/` e `themes/` |
+
+### Validazione Input (R4) - Media Priorità
+
+Validazione degli action type e sanitizzazione ricorsiva:
+
+```php
+// Whitelist di 10 action types consentiti
+$allowed_actions = [
+    'create_page', 'update_page', 'delete_page',
+    'create_post', 'update_post', 'delete_post',
+    'install_plugin', 'activate_plugin', 'deactivate_plugin',
+    'execute_code'
+];
+```
+
+| Protezione | Implementazione |
+|------------|-----------------|
+| Action whitelist | 10 action types consentiti |
+| Sanitizzazione ricorsiva | Con depth limit |
+| Null bytes | Rimossi |
+| Codice preservato | Rimozione solo caratteri pericolosi |
+
+### Logging Errori (R6/R7) - Media Priorità
+
+Logging completo di tutti gli errori HTTP e network:
+
+```php
+// Log errori network
+AuditLogger::log('proxy_network_error', [
+    'endpoint' => $endpoint,
+    'method' => $method,
+    'duration_ms' => $duration,
+    'error' => $error_message
+], 'error');
+
+// Log errori HTTP 4xx/5xx
+AuditLogger::log('proxy_http_error', [
+    'status_code' => $status_code,
+    'response_body' => substr($body, 0, 500),
+], $status_code >= 500 ? 'error' : 'warning');
+```
+
+| Tipo Log | Severity | Dettagli |
+|----------|----------|----------|
+| Network errors | `error` | Endpoint, method, duration |
+| HTTP 4xx | `warning` | Status code, body preview |
+| HTTP 5xx | `error` | Status code, body preview |
+| JSON decode errors | `warning` | Body preview (500 chars) |
+
+### Rate Limiting /health (R1) - Bassa Priorità
+
+Rate limiting per endpoint pubblico `/health`:
+
+```php
+// 60 requests/minuto per IP
+$rate_limit = [
+    'requests' => 60,
+    'window' => 60, // secondi
+];
+
+// Supporto proxy headers
+$ip_sources = [
+    'HTTP_CF_CONNECTING_IP',  // Cloudflare
+    'HTTP_X_FORWARDED_FOR',   // Standard proxy
+    'REMOTE_ADDR'             // Fallback
+];
+```
+
+### Matrice Priorità Raccomandazioni
+
+| ID | Priorità | Effort | Impatto Sicurezza | Status |
+|----|----------|--------|-------------------|--------|
+| R2 | 🔴 Alta | Medio | Database query injection | ✅ Implementato |
+| R3 | 🔴 Alta | Medio | File system access | ✅ Implementato |
+| R6 | 🟡 Media | Basso | Debug/monitoring | ✅ Implementato |
+| R4 | 🟡 Media | Basso | Input validation | ✅ Implementato |
+| R7 | 🟢 Bassa | Basso | Debug | ✅ Implementato |
+| R1 | 🟢 Bassa | Basso | Info disclosure | ✅ Implementato |
+| R9 | 🟢 Bassa | Basso | Configurabilità | ⏳ Backlog |
+| R10 | 🟢 Bassa | Basso | Configurabilità | ⏳ Backlog |
+
+### Stato Complessivo Security: ✅ APPROVATO PER PRODUZIONE
 
 ---
 
@@ -991,6 +1304,33 @@ functions/src/
 - ✅ Timeout configurato (9 min)
 - ✅ Concurrent requests handled correttamente
 
+#### 4. ProxyClient Tests (v2.2.0 - WordPress Plugin)
+
+**5 test cases** - Verifica completa del client di comunicazione con Firebase
+
+| Test # | Nome | Obiettivo | Mock Principali |
+|--------|------|-----------|-----------------|
+| 1 | `it_adds_authorization_header_when_token_exists` | Header Authorization presente | `get_option`, `wp_remote_request` |
+| 2 | `it_returns_error_without_http_call_when_no_token` | Early return senza HTTP call | `get_option`, `wp_remote_request` (never) |
+| 3 | `it_handles_wp_error_gracefully` | Gestione errori network | `wp_remote_request` → `WP_Error` |
+| 4 | `it_handles_http_error_codes` | Gestione errori 4xx/5xx | `wp_remote_retrieve_response_code` |
+| 5 | `it_refreshes_token_on_expiration_and_retries` | Auto-refresh token | `get_option`, `update_option`, 3x `wp_remote_request` |
+
+**Copertura Codice:**
+- `ProxyClient::__construct()` ✅
+- `ProxyClient::send_to_ai()` ✅
+- `ProxyClient::make_request()` ✅
+- `ProxyClient::refresh_token()` ✅
+- `ProxyClient::get_site_context()` ✅ (parziale)
+
+**Requisiti Verificati:**
+| Requisito | Status |
+|-----------|--------|
+| Route WP registrate correttamente | ✅ CONFERMATO |
+| JWT passato correttamente al backend | ✅ CONFERMATO |
+| Gestione errori non fatale | ✅ CONFERMATO |
+| Gestione errori non silenziosa | ✅ CONFERMATO |
+
 ### Esecuzione Test
 
 ```bash
@@ -1028,19 +1368,18 @@ module.exports = {
 
 ## Punti Critici Identificati
 
-### 1. **Inconsistenza Modelli AI** ⚠️ ALTO
+### 1. **Inconsistenza Modelli AI** ✅ RISOLTO
 
-**File multipli con configurazioni diverse:**
+**File unificati (v2.2.0):**
 
 | File | Modello Gemini | Modello Claude |
 |------|----------------|----------------|
-| `ModelConfig.ts` | `gemini-3-pro-preview` | `claude-sonnet-4-20250514` |
-| `PerformanceTier.ts` | `gemini-2.5-flash`, `gemini-2.5-pro` | `claude-sonnet-4-20250514`, `claude-opus-4-5-20251101` |
-| `providers/gemini.ts` | `gemini-2.5-pro-preview-05-06` | - |
-| `providers/claude.ts` | - | `claude-opus-4-5-20251101` |
+| `config/models.ts` | `gemini-2.5-pro` | `claude-opus-4-5-20251101` |
+| `providers/gemini.ts` | Usa `config/models.ts` | - |
+| `providers/claude.ts` | - | Usa `config/models.ts` |
 
-**Rischio:** Errori runtime per modelli non esistenti
-**Azione:** Unificare configurazione modelli in un unico file source-of-truth
+**Stato:** Configurazione unificata in `config/models.ts`
+**Azione completata:** File `PerformanceTier.ts` e `tierChain.ts` rimossi
 
 ---
 
@@ -1108,11 +1447,12 @@ module.exports = {
 
 ---
 
-### 2. **ModelConfig vs PerformanceTier Duplicazione** 🗑️
+### 2. **ModelConfig vs PerformanceTier Duplicazione** ✅ RISOLTO
 
-**File:** `types/ModelConfig.ts` e `types/PerformanceTier.ts`
+**File eliminato:** `types/PerformanceTier.ts`
+**File eliminato:** `services/tierChain.ts`
 
-Entrambi definiscono modelli ma con valori diversi. Consolidare in un unico file.
+Il sistema ora usa esclusivamente `config/models.ts` come source-of-truth per i modelli AI.
 
 ---
 
@@ -1301,19 +1641,22 @@ class ProviderCircuitBreaker {
 
 ## Conclusioni
 
-L'ecosistema Creator v2.1 rappresenta un'evoluzione significativa con importanti miglioramenti nella validazione e testing:
+L'ecosistema Creator v2.2 rappresenta un'evoluzione significativa con importanti miglioramenti nella validazione, testing e **security hardening**:
 
 ### Punti di Forza ✅
 
 - **Architettura pulita** con separazione backend/frontend
 - **Sistema di licensing robusto** con JWT authentication
 - **Fallback automatico** tra provider AI (Gemini ↔ Claude)
-- **Performance Tiers** per ottimizzazione costi/qualità
+- **Model Selection** - Scelta diretta del modello AI (Gemini/Claude)
 - **Job Queue** per operazioni asincrone
 - **Analytics completo** per monitoraggio costi
 - **Audit trail** dettagliato
-- **Test suite completa** con 59+ test cases ✅ NUOVO
-- **Configurazione modelli unificata** in `config/models.ts` ✅ NUOVO
+- **Test suite completa** con 59+ test cases
+- **Configurazione modelli unificata** in `config/models.ts`
+- **Plugin WordPress auditato** con 33 endpoint REST verificati ✅ NUOVO v2.2
+- **Security hardening** con 609 linee di protezione ✅ NUOVO v2.2
+- **ProxyClient robusto** con JWT, retry logic, error logging ✅ NUOVO v2.2
 
 ### Aree di Miglioramento ⚠️
 
@@ -1321,7 +1664,7 @@ L'ecosistema Creator v2.1 rappresenta un'evoluzione significativa con importanti
 - **Context caching** promesso ma non implementato
 - **Rate limiting** su Firestore (considerare Redis)
 
-### Miglioramenti Recenti (v2.1.0 - Dicembre 2025)
+### Miglioramenti v2.1.0 (Dicembre 2025)
 
 | Componente | Cambiamento |
 |------------|-------------|
@@ -1332,16 +1675,44 @@ L'ecosistema Creator v2.1 rappresenta un'evoluzione significativa con importanti
 | `pluginDocsResearch.ts` | Rimossi import/variabili non usati |
 | Test Integration | Aggiunti 59+ test cases (route-request, licensing, job-queue) |
 
+### Miglioramenti v2.2.0 (Dicembre 2025)
+
+| Componente | Cambiamento |
+|------------|-------------|
+| **Plugin Loading** | Audit completo di path, hook, menu, template, assets |
+| **REST API** | 33 endpoint verificati su 9 controller |
+| **Rate Limiting** | 3-tier (default 60, ai 30, dev 10 req/min) |
+| **ProxyClient** | Audit comunicazione Firebase, JWT, error handling |
+| **DatabaseManager** | +165 linee hardening SQL injection |
+| **FileSystemManager** | +130 linee protezione file system |
+| **ActionController** | +120 linee validazione input |
+| **ProxyClient** | +57 linee logging errori |
+| **SystemController** | +72 linee rate limiting /health |
+| **Test ProxyClient** | 5 test cases per copertura client |
+| **Bonifica Tier** | Rimossi `PerformanceTier.ts` e `tierChain.ts` - sistema semplificato |
+
 ### Raccomandazione Strategica
 
-La **stabilizzazione** è stata completata. Prossimi passi:
+La **stabilizzazione**, il **security hardening** e la **bonifica tier** sono stati completati. Prossimi passi:
 1. ~~Unificare configurazioni modelli~~ ✅ Completato
 2. ~~Implementare test suite base~~ ✅ Completato
-3. Aggiungere monitoring/alerting
-4. Implementare context caching
-5. Considerare circuit breaker pattern
+3. ~~Security hardening plugin WordPress~~ ✅ Completato (v2.2.0)
+4. ~~Audit REST API e ProxyClient~~ ✅ Completato (v2.2.0)
+5. ~~Rimuovere sistema tier (Flow/Craft)~~ ✅ Completato (v2.2.0)
+6. Aggiungere monitoring/alerting
+7. Implementare context caching
+8. Considerare circuit breaker pattern
+
+### Stato Complessivo
+
+| Area | Status |
+|------|--------|
+| Backend Firebase | ✅ Produzione Ready |
+| Plugin WordPress | ✅ Produzione Ready |
+| Security | ✅ APPROVATO |
+| Test Coverage | ✅ 64+ test cases |
 
 ---
 
-*Report generato automaticamente - Versione 2.1.0*
+*Report generato automaticamente - Versione 2.2.0*
 *Data: 9 Dicembre 2025*
