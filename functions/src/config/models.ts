@@ -6,11 +6,15 @@
  * This file is the ONLY source of truth for AI model configurations in Creator.
  * All other files MUST import from here. DO NOT define model IDs elsewhere.
  *
+ * Creator supports exactly 2 AI providers:
+ * - Gemini (Google)
+ * - Claude (Anthropic)
+ *
  * Last updated: December 2025
  */
 
 // ============================================================================
-// MODEL DEFINITIONS
+// TYPES
 // ============================================================================
 
 /**
@@ -19,268 +23,61 @@
 export type AIProvider = "gemini" | "claude";
 
 /**
- * Model pricing per 1000 tokens (USD)
+ * Model pricing per 1k tokens (USD)
  */
 export interface ModelPricing {
-  /** Cost per 1000 input tokens */
+  /** Cost per 1k input tokens */
   input: number;
-  /** Cost per 1000 output tokens */
+  /** Cost per 1k output tokens */
   output: number;
 }
 
 /**
- * Complete model configuration
+ * Model configuration
  */
 export interface ModelConfig {
   /** Official API model identifier */
   id: string;
-  /** Human-readable display name */
-  displayName: string;
-  /** Short description */
-  description: string;
-  /** Provider name */
-  provider: AIProvider;
-  /** Pricing per 1000 tokens */
+  /** Pricing per 1k tokens */
   pricing: ModelPricing;
-  /** Maximum context window (tokens) */
-  contextWindow: number;
-  /** Maximum output tokens */
-  maxOutputTokens: number;
-  /** Whether this model supports multimodal (images) */
-  supportsMultimodal: boolean;
-  /** Whether this model is currently available/active */
-  isActive: boolean;
 }
 
 // ============================================================================
-// GEMINI MODELS
+// AI_MODELS - SINGLE SOURCE OF TRUTH
 // ============================================================================
 
 /**
- * Google Gemini model configurations
+ * AI_MODELS - The only source of truth for AI models in Creator
  *
  * @description
- * Gemini models for various use cases:
- * - Flash: Fast, cost-effective for simple tasks
- * - Pro: Balanced performance for complex reasoning
- */
-export const GEMINI_MODELS = {
-  /**
-   * Gemini 2.5 Flash - Fast and cost-effective
-   * Best for: Quick iterations, CSS, simple snippets
-   */
-  FLASH: {
-    id: "gemini-2.5-flash-preview-05-20",
-    displayName: "Gemini 2.5 Flash",
-    description: "Fast and cost-effective for iterative tasks",
-    provider: "gemini" as const,
-    pricing: {
-      input: 0.00015,
-      output: 0.0006,
-    },
-    contextWindow: 1000000,
-    maxOutputTokens: 8192,
-    supportsMultimodal: true,
-    isActive: true,
-  },
-
-  /**
-   * Gemini 2.5 Pro - Balanced performance
-   * Best for: Complex reasoning, strategy generation
-   */
-  PRO: {
-    id: "gemini-2.5-pro-preview-05-06",
-    displayName: "Gemini 2.5 Pro",
-    description: "Advanced reasoning and complex task handling",
-    provider: "gemini" as const,
-    pricing: {
-      input: 0.00125,
-      output: 0.005,
-    },
-    contextWindow: 1000000,
-    maxOutputTokens: 8192,
-    supportsMultimodal: true,
-    isActive: true,
-  },
-} as const;
-
-// ============================================================================
-// CLAUDE MODELS
-// ============================================================================
-
-/**
- * Anthropic Claude model configurations
+ * Creator uses exactly 2 models:
+ * - Gemini 2.5 Pro for Google AI
+ * - Claude Opus 4.5 for Anthropic AI
  *
- * @description
- * Claude models for various use cases:
- * - Sonnet: Balanced cost/quality for most tasks
- * - Opus: Highest quality for critical code generation
- */
-export const CLAUDE_MODELS = {
-  /**
-   * Claude Sonnet 4 - Balanced performance
-   * Best for: Standard code generation, content creation
-   */
-  SONNET: {
-    id: "claude-sonnet-4-20250514",
-    displayName: "Claude Sonnet 4",
-    description: "Balanced model for coding and creative tasks",
-    provider: "claude" as const,
-    pricing: {
-      input: 0.003,
-      output: 0.015,
-    },
-    contextWindow: 200000,
-    maxOutputTokens: 8192,
-    supportsMultimodal: true,
-    isActive: true,
-  },
-
-  /**
-   * Claude Opus 4.5 - Highest quality
-   * Best for: Complex implementations, critical code
-   */
-  OPUS: {
-    id: "claude-opus-4-5-20251101",
-    displayName: "Claude Opus 4.5",
-    description: "Highest quality for complex, critical tasks",
-    provider: "claude" as const,
-    pricing: {
-      input: 0.015,
-      output: 0.075,
-    },
-    contextWindow: 200000,
-    maxOutputTokens: 8192,
-    supportsMultimodal: true,
-    isActive: true,
-  },
-} as const;
-
-// ============================================================================
-// UNIFIED MODEL REGISTRY
-// ============================================================================
-
-/**
- * AI_MODELS - The single source of truth for all AI models
- *
- * @description
- * Import this constant to access any model configuration.
- * Use AI_MODELS.GEMINI.FLASH, AI_MODELS.CLAUDE.OPUS, etc.
+ * Pricing is in USD per 1k tokens.
  *
  * @example
  * ```typescript
  * import { AI_MODELS } from '../config/models';
  *
- * const modelId = AI_MODELS.GEMINI.PRO.id;
- * const price = AI_MODELS.CLAUDE.OPUS.pricing;
+ * const geminiId = AI_MODELS.gemini.id;
+ * const claudePricing = AI_MODELS.claude.pricing;
  * ```
  */
-export const AI_MODELS = {
-  GEMINI: GEMINI_MODELS,
-  CLAUDE: CLAUDE_MODELS,
-} as const;
-
-/**
- * All model configurations as a flat array
- * Useful for iteration and validation
- */
-export const ALL_MODELS: ModelConfig[] = [
-  GEMINI_MODELS.FLASH,
-  GEMINI_MODELS.PRO,
-  CLAUDE_MODELS.SONNET,
-  CLAUDE_MODELS.OPUS,
-];
-
-/**
- * Map of model ID to configuration for quick lookup
- */
-export const MODEL_BY_ID: Record<string, ModelConfig> = ALL_MODELS.reduce(
-  (acc, model) => {
-    acc[model.id] = model;
-    return acc;
+export const AI_MODELS: Record<AIProvider, ModelConfig> = {
+  gemini: {
+    id: "gemini-2.5-pro",
+    pricing: {
+      input: 0.00125,
+      output: 0.005,
+    },
   },
-  {} as Record<string, ModelConfig>
-);
-
-// ============================================================================
-// DEFAULT MODELS
-// ============================================================================
-
-/**
- * Default models for each provider
- * Used when no specific model is requested
- */
-export const DEFAULT_MODELS = {
-  gemini: GEMINI_MODELS.PRO,
-  claude: CLAUDE_MODELS.OPUS,
-} as const;
-
-// ============================================================================
-// TIER CONFIGURATION
-// ============================================================================
-
-/**
- * Performance tier types
- */
-export type PerformanceTier = "flow" | "craft";
-
-/**
- * Tier model chain configuration
- */
-export interface TierModelChain {
-  /** Tier identifier */
-  tier: PerformanceTier;
-  /** Credit cost for this tier */
-  credits: number;
-  /** Model for context analysis (first step) */
-  analyzer: ModelConfig;
-  /** Model for strategy generation (CRAFT only) */
-  strategist?: ModelConfig;
-  /** Model for implementation */
-  implementer: ModelConfig;
-  /** Model for validation (optional) */
-  validator?: ModelConfig;
-}
-
-/**
- * TIER_CONFIGURATION - Models used in each performance tier
- *
- * @description
- * Defines which models are used in the FLOW and CRAFT chains:
- *
- * FLOW (0.5 credits):
- * - Analyzer: Gemini Flash (fast context analysis)
- * - Implementer: Claude Sonnet (balanced code generation)
- *
- * CRAFT (2.0 credits):
- * - Analyzer: Gemini Flash (fast context analysis)
- * - Strategist: Gemini Pro (deep strategy planning)
- * - Implementer: Claude Opus (highest quality code)
- * - Validator: Claude Opus (optional AI validation)
- */
-export const TIER_CONFIGURATION: Record<PerformanceTier, TierModelChain> = {
-  /**
-   * FLOW Mode - Fast and cost-effective
-   * Best for: Iterative work, CSS modifications, quick snippets
-   */
-  flow: {
-    tier: "flow",
-    credits: 0.5,
-    analyzer: GEMINI_MODELS.FLASH,
-    implementer: CLAUDE_MODELS.SONNET,
-  },
-
-  /**
-   * CRAFT Mode - Maximum quality
-   * Best for: Complex templates, critical code, multi-plugin integrations
-   */
-  craft: {
-    tier: "craft",
-    credits: 2.0,
-    analyzer: GEMINI_MODELS.FLASH,
-    strategist: GEMINI_MODELS.PRO,
-    implementer: CLAUDE_MODELS.OPUS,
-    validator: CLAUDE_MODELS.OPUS,
+  claude: {
+    id: "claude-opus-4-5-20251101",
+    pricing: {
+      input: 0.015,
+      output: 0.075,
+    },
   },
 } as const;
 
@@ -289,173 +86,56 @@ export const TIER_CONFIGURATION: Record<PerformanceTier, TierModelChain> = {
 // ============================================================================
 
 /**
- * Checks if a model ID is valid and exists in the registry
+ * Checks if a model ID is valid (one of the supported models)
  *
- * @param {string} modelId - The model ID to validate
- * @returns {boolean} True if the model exists and is active
+ * @param {string} id - The model ID to validate
+ * @returns {boolean} True if the model ID matches one of the supported models
  *
  * @example
  * ```typescript
- * if (isValidModel("gemini-2.5-pro-preview-05-06")) {
- *   // Model is valid, proceed
- * }
+ * isValidModel("gemini-2.5-pro"); // true
+ * isValidModel("claude-opus-4-5-20251101"); // true
+ * isValidModel("gpt-4"); // false
  * ```
  */
-export function isValidModel(modelId: string): boolean {
-  const model = MODEL_BY_ID[modelId];
-  return model !== undefined && model.isActive;
+export function isValidModel(id: string): boolean {
+  return id === AI_MODELS.gemini.id || id === AI_MODELS.claude.id;
 }
 
 /**
- * Gets the pricing configuration for a model
+ * Gets the pricing for a model by its ID
  *
- * @param {string} modelId - The model ID to get pricing for
+ * @param {string} id - The model ID
  * @returns {ModelPricing | null} Pricing object or null if model not found
  *
  * @example
  * ```typescript
  * const pricing = getModelPricing("claude-opus-4-5-20251101");
- * if (pricing) {
- *   const inputCost = tokens * pricing.input / 1000;
- * }
+ * // { input: 0.015, output: 0.075 }
  * ```
  */
-export function getModelPricing(modelId: string): ModelPricing | null {
-  const model = MODEL_BY_ID[modelId];
-  return model?.pricing ?? null;
-}
-
-/**
- * Gets the full model configuration by ID
- *
- * @param {string} modelId - The model ID to look up
- * @returns {ModelConfig | null} Full model configuration or null
- *
- * @example
- * ```typescript
- * const model = getModelConfig("gemini-2.5-flash-preview-05-20");
- * console.log(model?.displayName); // "Gemini 2.5 Flash"
- * ```
- */
-export function getModelConfig(modelId: string): ModelConfig | null {
-  return MODEL_BY_ID[modelId] ?? null;
-}
-
-/**
- * Gets the default model for a provider
- *
- * @param {AIProvider} provider - The provider name
- * @returns {ModelConfig} Default model configuration
- *
- * @example
- * ```typescript
- * const defaultGemini = getDefaultModel("gemini");
- * console.log(defaultGemini.id); // "gemini-2.5-pro-preview-05-06"
- * ```
- */
-export function getDefaultModel(provider: AIProvider): ModelConfig {
-  return DEFAULT_MODELS[provider];
-}
-
-/**
- * Gets all active models for a provider
- *
- * @param {AIProvider} provider - The provider name
- * @returns {ModelConfig[]} Array of active models for the provider
- *
- * @example
- * ```typescript
- * const claudeModels = getProviderModels("claude");
- * // Returns [SONNET, OPUS]
- * ```
- */
-export function getProviderModels(provider: AIProvider): ModelConfig[] {
-  return ALL_MODELS.filter((m) => m.provider === provider && m.isActive);
-}
-
-/**
- * Calculates cost for a request based on token usage
- *
- * @param {string} modelId - The model ID used
- * @param {number} inputTokens - Number of input tokens
- * @param {number} outputTokens - Number of output tokens
- * @returns {number} Total cost in USD
- *
- * @example
- * ```typescript
- * const cost = calculateModelCost("claude-opus-4-5-20251101", 1000, 500);
- * // Returns: 0.0525 USD
- * ```
- */
-export function calculateModelCost(
-  modelId: string,
-  inputTokens: number,
-  outputTokens: number
-): number {
-  const pricing = getModelPricing(modelId);
-
-  if (!pricing) {
-    // Fallback to expensive pricing if model not found
-    console.warn(`Unknown model "${modelId}", using fallback pricing`);
-    return (inputTokens * 0.01 + outputTokens * 0.03) / 1000;
+export function getModelPricing(id: string): ModelPricing | null {
+  if (id === AI_MODELS.gemini.id) {
+    return AI_MODELS.gemini.pricing;
   }
-
-  const inputCost = (inputTokens * pricing.input) / 1000;
-  const outputCost = (outputTokens * pricing.output) / 1000;
-
-  return inputCost + outputCost;
+  if (id === AI_MODELS.claude.id) {
+    return AI_MODELS.claude.pricing;
+  }
+  return null;
 }
 
 /**
- * Gets the tier configuration
+ * Gets the primary model ID for a provider
  *
- * @param {PerformanceTier} tier - The tier name
- * @returns {TierModelChain} Tier configuration with models
+ * @param {AIProvider} provider - The provider name ("gemini" or "claude")
+ * @returns {string} The model ID for that provider
  *
  * @example
  * ```typescript
- * const craftConfig = getTierConfig("craft");
- * console.log(craftConfig.implementer.id); // "claude-opus-4-5-20251101"
+ * getPrimaryModel("gemini"); // "gemini-2.5-pro"
+ * getPrimaryModel("claude"); // "claude-opus-4-5-20251101"
  * ```
  */
-export function getTierConfig(tier: PerformanceTier): TierModelChain {
-  return TIER_CONFIGURATION[tier];
+export function getPrimaryModel(provider: AIProvider): string {
+  return AI_MODELS[provider].id;
 }
-
-/**
- * Checks if a tier name is valid
- *
- * @param {string} tier - The tier name to validate
- * @returns {tier is PerformanceTier} True if valid tier
- */
-export function isValidTier(tier: string): tier is PerformanceTier {
-  return tier === "flow" || tier === "craft";
-}
-
-// ============================================================================
-// EXPORTS SUMMARY
-// ============================================================================
-
-/**
- * Quick reference for imports:
- *
- * Models:
- * - AI_MODELS.GEMINI.FLASH / PRO
- * - AI_MODELS.CLAUDE.SONNET / OPUS
- * - ALL_MODELS (flat array)
- * - MODEL_BY_ID (lookup map)
- * - DEFAULT_MODELS
- *
- * Tiers:
- * - TIER_CONFIGURATION.flow / .craft
- *
- * Helpers:
- * - isValidModel(id)
- * - getModelPricing(id)
- * - getModelConfig(id)
- * - getDefaultModel(provider)
- * - getProviderModels(provider)
- * - calculateModelCost(id, input, output)
- * - getTierConfig(tier)
- * - isValidTier(tier)
- */
