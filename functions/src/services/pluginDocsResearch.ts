@@ -7,7 +7,6 @@
  * The AI searches for official documentation URLs and main functions.
  */
 
-import { Timestamp } from "firebase-admin/firestore";
 import { ModelService, ModelServiceKeys } from "./modelService";
 import { Logger } from "../lib/logger";
 import { savePluginDocs, getPluginDocs } from "../lib/firestore";
@@ -140,7 +139,7 @@ export class PluginDocsResearchService {
       }
 
       // Save to cache
-      const entry = await savePluginDocs({
+      await savePluginDocs({
         plugin_slug,
         plugin_version,
         docs_url: parsed.docs_url,

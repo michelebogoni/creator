@@ -7,7 +7,7 @@
  * Model configurations are imported from config/models.ts (single source of truth).
  */
 
-import { AIProvider, AI_MODELS, isValidModel, getPrimaryModel } from "../config/models";
+import { AIProvider, AI_MODELS, isValidModel, isValidProvider, getPrimaryModel, MODEL_IDS } from "../config/models";
 
 // ============================================================================
 // RE-EXPORTS FROM CONFIG/MODELS
@@ -21,7 +21,7 @@ export type AIModel = AIProvider;
 /**
  * Re-export model utilities
  */
-export { AI_MODELS, isValidModel, getPrimaryModel };
+export { AI_MODELS, isValidModel, isValidProvider, getPrimaryModel, MODEL_IDS };
 
 // ============================================================================
 // MODEL UTILITIES

@@ -29,7 +29,7 @@ import { sanitizePrompt, validatePrompt } from "../../services/aiRouter";
 import { ModelService } from "../../services/modelService";
 import {
   AIModel,
-  isValidModel,
+  isValidProvider,
 } from "../../types/ModelConfig";
 import {
   RouteRequest,
@@ -187,7 +187,7 @@ export const routeRequest = onRequest(
 
       // Validate model if provided (default to gemini)
       const requestedModel = (body.model as string) || "gemini";
-      if (!isValidModel(requestedModel)) {
+      if (!isValidProvider(requestedModel)) {
         logger.warn("Invalid model", { model: requestedModel });
         res.status(400).json({
           success: false,
@@ -197,6 +197,7 @@ export const routeRequest = onRequest(
         return;
       }
 
+      // requestedModel is now type-narrowed to AIModel via isValidProvider type guard
       const selectedModel: AIModel = requestedModel;
 
       // 4. Check quota
