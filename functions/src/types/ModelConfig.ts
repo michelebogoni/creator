@@ -1,54 +1,42 @@
 /**
- * @fileoverview Model Configuration for Creator AI Proxy
+ * @fileoverview Model Request/Response Types for Creator AI Proxy
  * @module types/ModelConfig
  *
  * @description
- * Simple model selection: Gemini 3 Pro or Claude Sonnet 4
- * Each model is the fallback for the other.
+ * Type definitions for AI model requests and responses.
+ * Model configurations are imported from config/models.ts (single source of truth).
  */
 
-/**
- * Available AI models
- */
-export type AIModel = "gemini" | "claude";
+import { AIProvider, AI_MODELS, isValidModel, getPrimaryModel } from "../config/models";
+
+// ============================================================================
+// RE-EXPORTS FROM CONFIG/MODELS
+// ============================================================================
 
 /**
- * Model identifiers for API calls
+ * Available AI models (re-exported for backwards compatibility)
  */
-export const MODEL_IDS = {
-  gemini: "gemini-3-pro-preview",
-  claude: "claude-sonnet-4-20250514",
-} as const;
+export type AIModel = AIProvider;
 
 /**
- * Model display names
+ * Re-export model utilities
  */
-export const MODEL_NAMES = {
-  gemini: "Gemini 3 Pro",
-  claude: "Claude Sonnet 4",
-} as const;
+export { AI_MODELS, isValidModel, getPrimaryModel };
+
+// ============================================================================
+// MODEL UTILITIES
+// ============================================================================
 
 /**
- * Model descriptions
- */
-export const MODEL_DESCRIPTIONS = {
-  gemini: "Google's most advanced model for complex tasks and reasoning",
-  claude: "Anthropic's balanced model for coding and creative tasks",
-} as const;
-
-/**
- * Get fallback model
+ * Get fallback model when primary fails
  */
 export function getFallbackModel(model: AIModel): AIModel {
   return model === "gemini" ? "claude" : "gemini";
 }
 
-/**
- * Check if a string is a valid model
- */
-export function isValidModel(model: string): model is AIModel {
-  return model === "gemini" || model === "claude";
-}
+// ============================================================================
+// REQUEST/RESPONSE INTERFACES
+// ============================================================================
 
 /**
  * File attachment for multimodal requests
