@@ -10,7 +10,7 @@
 
 import * as functions from "firebase-functions";
 import { Timestamp } from "firebase-admin/firestore";
-import * as logger from "../../lib/logger";
+import { logger } from "../../lib/logger";
 import {
   getPluginDocs,
   savePluginDocs,

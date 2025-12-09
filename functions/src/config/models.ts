@@ -139,3 +139,36 @@ export function getModelPricing(id: string): ModelPricing | null {
 export function getPrimaryModel(provider: AIProvider): string {
   return AI_MODELS[provider].id;
 }
+
+/**
+ * MODEL_IDS - Map from provider to model ID
+ *
+ * @description
+ * Quick lookup to get model ID from provider name.
+ *
+ * @example
+ * ```typescript
+ * MODEL_IDS["gemini"]; // "gemini-2.5-pro"
+ * MODEL_IDS["claude"]; // "claude-opus-4-5-20251101"
+ * ```
+ */
+export const MODEL_IDS: Record<AIProvider, string> = {
+  gemini: AI_MODELS.gemini.id,
+  claude: AI_MODELS.claude.id,
+};
+
+/**
+ * Type guard to check if a string is a valid AI provider
+ *
+ * @param {string} provider - The provider to validate
+ * @returns {boolean} True if provider is "gemini" or "claude"
+ *
+ * @example
+ * ```typescript
+ * isValidProvider("gemini"); // true
+ * isValidProvider("gpt"); // false
+ * ```
+ */
+export function isValidProvider(provider: string): provider is AIProvider {
+  return provider === "gemini" || provider === "claude";
+}
