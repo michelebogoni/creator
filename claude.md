@@ -127,18 +127,18 @@ Questo documento analizza in dettaglio come l'architettura attuale affronta ques
 | Provider AI Backup | OpenAI (non attivo nel flusso principale) |
 | Integrazioni WordPress | Elementor, ACF, RankMath, WooCommerce, LiteSpeed |
 | API Endpoints | 6 (auth, ai, tasks, analytics, plugin-docs) |
-| Performance Tiers | 2 (Flow, Craft) |
+| AI Models | 2 (Gemini, Claude) con fallback automatico |
 | Linee di Codice Stimate | ~20,000+ |
 | Complessità Architetturale | Alta |
 
 ### Cambiamenti dalla Versione 1.0
 
 - **Nuovo sistema di licensing** con JWT authentication
-- **Performance Tiers** (Flow/Craft) per ottimizzazione costi/qualità
+- **Model Selection** - Scelta del modello AI (Gemini/Claude) con fallback automatico
 - **Job Queue** per task asincroni (bulk articles, bulk products, design batch)
 - **Analytics endpoint** per monitoraggio costi e utilizzo
 - **Plugin Docs** sistema per ricerca documentazione plugin
-- **Rimozione routing matrix** - ora usa fallback semplice Gemini ↔ Claude
+- **Fallback semplice** Gemini ↔ Claude (sostituisce il vecchio routing matrix)
 - **Context Caching** (pianificato ma non ancora implementato)
 
 ### Cambiamenti v2.1.0 (Dicembre 2025)
@@ -215,18 +215,6 @@ Questo documento analizza in dettaglio come l'architettura attuale affronta ques
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                        Tier Chain Service                              │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
-│  │  │  FLOW Mode (0.5 credits)                                        │  │  │
-│  │  │  Gemini 2.5 Flash → Claude 4 Sonnet → Validation                │  │  │
-│  │  └─────────────────────────────────────────────────────────────────┘  │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
-│  │  │  CRAFT Mode (2.0 credits)                                       │  │  │
-│  │  │  Gemini Flash → Gemini Pro → Claude Opus → Validation           │  │  │
-│  │  └─────────────────────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
 │  │                          Firestore                                     │  │
 │  │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐       │  │
 │  │  │  licenses  │  │  job_queue │  │ audit_logs │  │   cost_    │       │  │
@@ -247,7 +235,7 @@ Il sistema segue un'architettura **Microservices + Plugin Modulare**:
 1. **Separation of Concerns**: Backend AI separato dal frontend WordPress
 2. **Provider Abstraction**: Interfaccia comune `IAIProvider` per tutti i provider AI
 3. **Simple Fallback**: Routing semplificato con fallback automatico Gemini ↔ Claude
-4. **Performance Tiers**: Due modalità (Flow/Craft) per bilanciare costi e qualità
+4. **Model Selection**: Scelta del modello AI da parte dell'utente (Gemini/Claude)
 5. **JWT Authentication**: Token-based auth per sicurezza API
 6. **Event-Driven Jobs**: Firestore triggers per elaborazione asincrona
 7. **Audit Trail**: Sistema completo di logging per tracciabilità
@@ -261,7 +249,7 @@ User Request → Chat Interface → REST API → License Validation
                                                 ↓
                                     Rate Limit Check
                                                 ↓
-                                    Model Service / Tier Chain
+                                    Model Service
                                                 ↓
                                     Provider Selection (Gemini/Claude)
                                                 ↓
@@ -492,26 +480,6 @@ const result = await modelService.generate({
 // Se Claude fallisce → prova Gemini automaticamente
 ```
 
-##### `src/services/tierChain.ts`
-
-**Funzione:** Chain multi-step per task complessi
-**Produce:** `TierChainResponse` con output e step details
-
-**FLOW Mode (0.5 credits):**
-```
-Step 1: Gemini 2.5 Flash → Context Analysis
-Step 2: Claude 4 Sonnet → Implementation
-Step 3: Syntactic Validation (no AI cost)
-```
-
-**CRAFT Mode (2.0 credits):**
-```
-Step 1: Gemini 2.5 Flash → Deep Context Analysis
-Step 2: Gemini 2.5 Pro → Strategy Generation
-Step 3: Claude 4.5 Opus → Implementation
-Step 4: Syntactic Validation + Optional AI Validation
-```
-
 ##### `src/services/licensing.ts`
 
 **Funzione:** Validazione e gestione licenze
@@ -639,7 +607,6 @@ interface RateLimitConfig {
 | `Job.ts` | `Job`, task types, validation functions |
 | `Analytics.ts` | `AnalyticsResponse`, `ExtendedAnalytics` |
 | `ModelConfig.ts` | `AIModel`, `MODEL_IDS`, `ModelRequest` |
-| `PerformanceTier.ts` | `PerformanceTier`, `TIER_CONFIGS`, `TIER_MODELS` |
 | `PluginDocs.ts` | Plugin documentation cache types |
 | `APIResponse.ts` | Standard API response wrapper |
 
@@ -934,13 +901,6 @@ Il flusso tracciato end-to-end dal plugin WordPress al backend Firebase:
 "gpt-4o": { input: 0.005, output: 0.015 }
 "gpt-4o-mini": { input: 0.00015, output: 0.0006 }
 ```
-
-### Performance Tiers
-
-| Tier | Credits | Chain | Use Case |
-|------|---------|-------|----------|
-| **Flow** | 0.5 | Flash → Sonnet → Validation | Iterative work, CSS, snippets |
-| **Craft** | 2.0 | Flash → Pro → Opus → Validation | Complex tasks, templates |
 
 ---
 
@@ -1408,19 +1368,18 @@ module.exports = {
 
 ## Punti Critici Identificati
 
-### 1. **Inconsistenza Modelli AI** ⚠️ ALTO
+### 1. **Inconsistenza Modelli AI** ✅ RISOLTO
 
-**File multipli con configurazioni diverse:**
+**File unificati (v2.2.0):**
 
 | File | Modello Gemini | Modello Claude |
 |------|----------------|----------------|
-| `ModelConfig.ts` | `gemini-3-pro-preview` | `claude-sonnet-4-20250514` |
-| `PerformanceTier.ts` | `gemini-2.5-flash`, `gemini-2.5-pro` | `claude-sonnet-4-20250514`, `claude-opus-4-5-20251101` |
-| `providers/gemini.ts` | `gemini-2.5-pro-preview-05-06` | - |
-| `providers/claude.ts` | - | `claude-opus-4-5-20251101` |
+| `config/models.ts` | `gemini-2.5-pro` | `claude-opus-4-5-20251101` |
+| `providers/gemini.ts` | Usa `config/models.ts` | - |
+| `providers/claude.ts` | - | Usa `config/models.ts` |
 
-**Rischio:** Errori runtime per modelli non esistenti
-**Azione:** Unificare configurazione modelli in un unico file source-of-truth
+**Stato:** Configurazione unificata in `config/models.ts`
+**Azione completata:** File `PerformanceTier.ts` e `tierChain.ts` rimossi
 
 ---
 
@@ -1488,11 +1447,12 @@ module.exports = {
 
 ---
 
-### 2. **ModelConfig vs PerformanceTier Duplicazione** 🗑️
+### 2. **ModelConfig vs PerformanceTier Duplicazione** ✅ RISOLTO
 
-**File:** `types/ModelConfig.ts` e `types/PerformanceTier.ts`
+**File eliminato:** `types/PerformanceTier.ts`
+**File eliminato:** `services/tierChain.ts`
 
-Entrambi definiscono modelli ma con valori diversi. Consolidare in un unico file.
+Il sistema ora usa esclusivamente `config/models.ts` come source-of-truth per i modelli AI.
 
 ---
 
@@ -1688,7 +1648,7 @@ L'ecosistema Creator v2.2 rappresenta un'evoluzione significativa con importanti
 - **Architettura pulita** con separazione backend/frontend
 - **Sistema di licensing robusto** con JWT authentication
 - **Fallback automatico** tra provider AI (Gemini ↔ Claude)
-- **Performance Tiers** per ottimizzazione costi/qualità
+- **Model Selection** - Scelta diretta del modello AI (Gemini/Claude)
 - **Job Queue** per operazioni asincrone
 - **Analytics completo** per monitoraggio costi
 - **Audit trail** dettagliato
@@ -1729,17 +1689,19 @@ L'ecosistema Creator v2.2 rappresenta un'evoluzione significativa con importanti
 | **ProxyClient** | +57 linee logging errori |
 | **SystemController** | +72 linee rate limiting /health |
 | **Test ProxyClient** | 5 test cases per copertura client |
+| **Bonifica Tier** | Rimossi `PerformanceTier.ts` e `tierChain.ts` - sistema semplificato |
 
 ### Raccomandazione Strategica
 
-La **stabilizzazione** e il **security hardening** sono stati completati. Prossimi passi:
+La **stabilizzazione**, il **security hardening** e la **bonifica tier** sono stati completati. Prossimi passi:
 1. ~~Unificare configurazioni modelli~~ ✅ Completato
 2. ~~Implementare test suite base~~ ✅ Completato
 3. ~~Security hardening plugin WordPress~~ ✅ Completato (v2.2.0)
 4. ~~Audit REST API e ProxyClient~~ ✅ Completato (v2.2.0)
-5. Aggiungere monitoring/alerting
-6. Implementare context caching
-7. Considerare circuit breaker pattern
+5. ~~Rimuovere sistema tier (Flow/Craft)~~ ✅ Completato (v2.2.0)
+6. Aggiungere monitoring/alerting
+7. Implementare context caching
+8. Considerare circuit breaker pattern
 
 ### Stato Complessivo
 
