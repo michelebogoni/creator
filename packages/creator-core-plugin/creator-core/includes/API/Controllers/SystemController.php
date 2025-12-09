@@ -42,11 +42,11 @@ class SystemController extends BaseController {
 			'permission_callback' => [ $this, 'check_permission' ],
 		]);
 
-		// Health check
+		// Health check (public but rate-limited)
 		register_rest_route( self::NAMESPACE, '/health', [
 			'methods'             => \WP_REST_Server::READABLE,
 			'callback'            => [ $this, 'health_check' ],
-			'permission_callback' => '__return_true',
+			'permission_callback' => [ $this, 'check_health_rate_limit' ],
 		]);
 
 		// Thinking logs
@@ -258,5 +258,77 @@ class SystemController extends BaseController {
 			'total_lines' => $total_lines,
 			'lines'       => $lines,
 		] );
+	}
+
+	/**
+	 * Rate limit check for health endpoint
+	 *
+	 * Allows public access but with IP-based rate limiting to prevent abuse.
+	 * Limits: 60 requests per minute per IP.
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return bool|\WP_Error True if allowed, WP_Error if rate limited.
+	 */
+	public function check_health_rate_limit( \WP_REST_Request $request ) {
+		// Get client IP
+		$ip = $this->get_client_ip();
+
+		// Transient key for this IP
+		$transient_key = 'creator_health_rate_' . md5( $ip );
+
+		// Get current request count
+		$count = (int) get_transient( $transient_key );
+
+		// Check rate limit (60 requests per minute)
+		if ( $count >= 60 ) {
+			// Log the rate limit hit
+			$logger = new AuditLogger();
+			$logger->warning( 'health_rate_limited', [
+				'ip'    => $ip,
+				'count' => $count,
+			]);
+
+			return new \WP_Error(
+				'rate_limited',
+				__( 'Too many requests. Please try again later.', 'creator-core' ),
+				[ 'status' => 429 ]
+			);
+		}
+
+		// Increment counter (expires in 60 seconds)
+		set_transient( $transient_key, $count + 1, 60 );
+
+		return true;
+	}
+
+	/**
+	 * Get client IP address
+	 *
+	 * @return string Client IP address.
+	 */
+	private function get_client_ip(): string {
+		$ip_headers = [
+			'HTTP_CF_CONNECTING_IP',     // Cloudflare
+			'HTTP_X_FORWARDED_FOR',      // Proxy
+			'HTTP_X_REAL_IP',            // Nginx
+			'REMOTE_ADDR',               // Standard
+		];
+
+		foreach ( $ip_headers as $header ) {
+			if ( ! empty( $_SERVER[ $header ] ) ) {
+				$ip = sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) );
+				// Handle comma-separated IPs (X-Forwarded-For)
+				if ( strpos( $ip, ',' ) !== false ) {
+					$ips = explode( ',', $ip );
+					$ip  = trim( $ips[0] );
+				}
+				// Validate IP format
+				if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+					return $ip;
+				}
+			}
+		}
+
+		return '0.0.0.0';
 	}
 }

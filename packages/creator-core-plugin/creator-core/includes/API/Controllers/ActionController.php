@@ -54,12 +54,15 @@ class ActionController extends BaseController {
 			'permission_callback' => [ $this, 'check_permission' ],
 			'args'                => [
 				'action' => [
-					'required' => true,
-					'type'     => 'object',
+					'required'          => true,
+					'type'              => 'object',
+					'validate_callback' => [ $this, 'validate_action_object' ],
+					'sanitize_callback' => [ $this, 'sanitize_action_object' ],
 				],
 				'chat_id' => [
-					'required' => false,
-					'type'     => 'integer',
+					'required'          => false,
+					'type'              => 'integer',
+					'sanitize_callback' => 'absint',
 				],
 			],
 		]);
@@ -164,5 +167,124 @@ class ActionController extends BaseController {
 		}
 
 		return $this->success( $result );
+	}
+
+	/**
+	 * Validate action object structure
+	 *
+	 * @param mixed            $value   The action value.
+	 * @param \WP_REST_Request $request Request object.
+	 * @param string           $key     Parameter key.
+	 * @return bool|WP_Error True if valid, WP_Error otherwise.
+	 */
+	public function validate_action_object( $value, $request, $key ) {
+		if ( ! is_array( $value ) ) {
+			return new \WP_Error(
+				'invalid_action_type',
+				__( 'Action must be an object', 'creator-core' ),
+				[ 'status' => 400 ]
+			);
+		}
+
+		// Must have a type
+		if ( empty( $value['type'] ) || ! is_string( $value['type'] ) ) {
+			return new \WP_Error(
+				'missing_action_type',
+				__( 'Action must have a valid type', 'creator-core' ),
+				[ 'status' => 400 ]
+			);
+		}
+
+		// Validate type is from allowed list
+		$allowed_types = [
+			// Context request types
+			'get_plugin_details',
+			'get_acf_details',
+			'get_cpt_details',
+			'get_taxonomy_details',
+			'get_wp_functions',
+			// Code execution types
+			'execute_code',
+			'create_snippet',
+			'modify_file',
+			// Elementor types
+			'create_elementor_page',
+			'update_elementor_page',
+		];
+
+		if ( ! in_array( $value['type'], $allowed_types, true ) ) {
+			return new \WP_Error(
+				'invalid_action_type',
+				sprintf(
+					/* translators: %s: action type */
+					__( 'Unknown action type: %s', 'creator-core' ),
+					sanitize_text_field( $value['type'] )
+				),
+				[ 'status' => 400 ]
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Sanitize action object
+	 *
+	 * Recursively sanitize all string values in the action object.
+	 *
+	 * @param mixed $value The action value.
+	 * @return array Sanitized action object.
+	 */
+	public function sanitize_action_object( $value ): array {
+		if ( ! is_array( $value ) ) {
+			return [];
+		}
+
+		return $this->sanitize_recursive( $value );
+	}
+
+	/**
+	 * Recursively sanitize an array
+	 *
+	 * @param array $data Array to sanitize.
+	 * @param int   $depth Current depth (max 10 to prevent infinite recursion).
+	 * @return array Sanitized array.
+	 */
+	private function sanitize_recursive( array $data, int $depth = 0 ): array {
+		// Prevent infinite recursion
+		if ( $depth > 10 ) {
+			return [];
+		}
+
+		$sanitized = [];
+
+		foreach ( $data as $key => $value ) {
+			// Sanitize key
+			$clean_key = is_string( $key ) ? sanitize_key( $key ) : $key;
+
+			// Sanitize value based on type
+			if ( is_array( $value ) ) {
+				$sanitized[ $clean_key ] = $this->sanitize_recursive( $value, $depth + 1 );
+			} elseif ( is_string( $value ) ) {
+				// For code content, preserve the value but remove null bytes
+				if ( in_array( $key, [ 'code', 'content', 'file_content' ], true ) ) {
+					$sanitized[ $clean_key ] = str_replace( "\0", '', $value );
+				} else {
+					// For other strings, use standard sanitization
+					$sanitized[ $clean_key ] = sanitize_text_field( $value );
+				}
+			} elseif ( is_bool( $value ) ) {
+				$sanitized[ $clean_key ] = (bool) $value;
+			} elseif ( is_int( $value ) ) {
+				$sanitized[ $clean_key ] = (int) $value;
+			} elseif ( is_float( $value ) ) {
+				$sanitized[ $clean_key ] = (float) $value;
+			} elseif ( is_null( $value ) ) {
+				$sanitized[ $clean_key ] = null;
+			}
+			// Skip other types (objects, resources, etc.)
+		}
+
+		return $sanitized;
 	}
 }

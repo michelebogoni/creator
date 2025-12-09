@@ -9,6 +9,8 @@ namespace CreatorCore\Integrations;
 
 defined( 'ABSPATH' ) || exit;
 
+use CreatorCore\Audit\AuditLogger;
+
 /**
  * Class ProxyClient
  *
@@ -40,10 +42,32 @@ class ProxyClient {
 	private int $timeout = 120;
 
 	/**
-	 * Constructor
+	 * Audit logger instance
+	 *
+	 * @var AuditLogger|null
 	 */
-	public function __construct() {
+	private ?AuditLogger $logger = null;
+
+	/**
+	 * Constructor
+	 *
+	 * @param AuditLogger|null $logger Optional audit logger instance.
+	 */
+	public function __construct( ?AuditLogger $logger = null ) {
 		$this->proxy_url = get_option( 'creator_proxy_url', CREATOR_PROXY_URL );
+		$this->logger    = $logger;
+	}
+
+	/**
+	 * Get logger instance (lazy initialization)
+	 *
+	 * @return AuditLogger
+	 */
+	private function get_logger(): AuditLogger {
+		if ( $this->logger === null ) {
+			$this->logger = new AuditLogger();
+		}
+		return $this->logger;
 	}
 
 	/**
@@ -332,7 +356,8 @@ class ProxyClient {
 	 * @return array|\WP_Error
 	 */
 	private function make_request( string $method, string $endpoint, array $body = [], array $headers = [] ) {
-		$url = rtrim( $this->proxy_url, '/' ) . $endpoint;
+		$url        = rtrim( $this->proxy_url, '/' ) . $endpoint;
+		$start_time = microtime( true );
 
 		$default_headers = [
 			'Content-Type'      => 'application/json',
@@ -352,17 +377,49 @@ class ProxyClient {
 		}
 
 		$response = wp_remote_request( $url, $args );
+		$duration = round( ( microtime( true ) - $start_time ) * 1000 );
 
+		// Log network errors (WP_Error)
 		if ( is_wp_error( $response ) ) {
+			$this->get_logger()->warning( 'proxy_network_error', [
+				'endpoint'    => $endpoint,
+				'method'      => $method,
+				'error'       => $response->get_error_message(),
+				'error_code'  => $response->get_error_code(),
+				'duration_ms' => $duration,
+			]);
 			return $response;
 		}
 
-		$status_code = wp_remote_retrieve_response_code( $response );
-		$body        = wp_remote_retrieve_body( $response );
-		$data        = json_decode( $body, true );
+		$status_code  = wp_remote_retrieve_response_code( $response );
+		$response_body = wp_remote_retrieve_body( $response );
+		$data         = json_decode( $response_body, true );
 
+		// Log JSON decode errors
+		if ( json_last_error() !== JSON_ERROR_NONE ) {
+			$this->get_logger()->warning( 'proxy_json_decode_error', [
+				'endpoint'      => $endpoint,
+				'method'        => $method,
+				'status_code'   => $status_code,
+				'json_error'    => json_last_error_msg(),
+				'body_preview'  => substr( $response_body, 0, 200 ),
+				'duration_ms'   => $duration,
+			]);
+		}
+
+		// Log HTTP errors (4xx/5xx)
 		if ( $status_code >= 400 ) {
 			$error_message = $data['error'] ?? $data['message'] ?? __( 'Request failed', 'creator-core' );
+
+			$log_level = $status_code >= 500 ? 'failure' : 'warning';
+			$this->get_logger()->log( 'proxy_http_error', $log_level, [
+				'endpoint'    => $endpoint,
+				'method'      => $method,
+				'status_code' => $status_code,
+				'error'       => $error_message,
+				'duration_ms' => $duration,
+			]);
+
 			return new \WP_Error( 'proxy_error', $error_message, [ 'status' => $status_code ] );
 		}
 

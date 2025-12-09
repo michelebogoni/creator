@@ -40,6 +40,51 @@ class DatabaseManager {
     private array $protected_tables = [
         'users',
         'usermeta',
+        'options',       // Sensitive WordPress settings
+    ];
+
+    /**
+     * Forbidden SQL keywords for query validation
+     *
+     * @var array
+     */
+    private array $forbidden_keywords = [
+        // DML (Data Modification)
+        'INSERT',
+        'UPDATE',
+        'DELETE',
+        'REPLACE',
+        'MERGE',
+        // DDL (Schema Modification)
+        'DROP',
+        'ALTER',
+        'TRUNCATE',
+        'CREATE',
+        'RENAME',
+        // DCL (Access Control)
+        'GRANT',
+        'REVOKE',
+        // File Operations (MySQL specific - high risk)
+        'INTO OUTFILE',
+        'INTO DUMPFILE',
+        'LOAD_FILE',
+        'LOAD DATA',
+        // Stored Procedures / Functions
+        'CALL',
+        'EXECUTE',
+        'EXEC',
+        // Transaction Control (prevent lock attacks)
+        'LOCK TABLES',
+        'UNLOCK TABLES',
+        // Other dangerous operations
+        'PREPARE',
+        'DEALLOCATE',
+        'HANDLER',
+        'FLUSH',
+        'RESET',
+        'PURGE',
+        'SHUTDOWN',
+        'KILL',
     ];
 
     /**
@@ -233,29 +278,20 @@ class DatabaseManager {
      * @return array Query results.
      */
     public function select( string $query, int $limit = 100, int $offset = 0 ): array {
-        // Validate it's a SELECT query
-        $query = trim( $query );
-        if ( stripos( $query, 'SELECT' ) !== 0 ) {
+        // Validate query using comprehensive security checks
+        $validation = $this->validate_select_query( $query );
+        if ( ! $validation['valid'] ) {
+            $this->logger->warning( 'database_query_blocked', [
+                'query'  => substr( $query, 0, 200 ),
+                'reason' => $validation['error'],
+            ]);
             return [
                 'success' => false,
-                'error'   => __( 'Only SELECT queries are allowed', 'creator-core' ),
+                'error'   => $validation['error'],
             ];
         }
 
-        // Prevent modification queries disguised as SELECT
-        $forbidden = [ 'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'REPLACE' ];
-        foreach ( $forbidden as $keyword ) {
-            if ( stripos( $query, $keyword ) !== false ) {
-                return [
-                    'success' => false,
-                    'error'   => sprintf(
-                        /* translators: %s: SQL keyword */
-                        __( 'Query contains forbidden keyword: %s', 'creator-core' ),
-                        $keyword
-                    ),
-                ];
-            }
-        }
+        $query = $validation['query'];
 
         // Apply limit if not present
         if ( stripos( $query, 'LIMIT' ) === false ) {
@@ -266,6 +302,10 @@ class DatabaseManager {
         $results = $this->wpdb->get_results( $query, ARRAY_A );
 
         if ( $this->wpdb->last_error ) {
+            $this->logger->warning( 'database_query_error', [
+                'query' => substr( $query, 0, 200 ),
+                'error' => $this->wpdb->last_error,
+            ]);
             return [
                 'success' => false,
                 'error'   => $this->wpdb->last_error,
@@ -274,7 +314,7 @@ class DatabaseManager {
         }
 
         $this->logger->info( 'database_query', [
-            'query'      => $query,
+            'query'      => substr( $query, 0, 200 ),
             'row_count'  => count( $results ),
         ]);
 
@@ -881,6 +921,129 @@ class DatabaseManager {
             'total_size'  => (int) $size,
             'formatted'   => size_format( $size ),
             'tables'      => $table_sizes,
+        ];
+    }
+
+    /**
+     * Validate a SELECT query for security
+     *
+     * Performs comprehensive security checks to prevent SQL injection
+     * and unauthorized data access/modification.
+     *
+     * @param string $query The SQL query to validate.
+     * @return array Validation result with 'valid', 'error', and sanitized 'query'.
+     */
+    private function validate_select_query( string $query ): array {
+        // Normalize query
+        $query = trim( $query );
+
+        // Must start with SELECT
+        if ( stripos( $query, 'SELECT' ) !== 0 ) {
+            return [
+                'valid' => false,
+                'error' => __( 'Only SELECT queries are allowed', 'creator-core' ),
+            ];
+        }
+
+        // Convert to uppercase for keyword matching
+        $query_upper = strtoupper( $query );
+
+        // Check for forbidden keywords
+        foreach ( $this->forbidden_keywords as $keyword ) {
+            // Use word boundary matching to avoid false positives
+            // e.g., "CREATED_AT" should not match "CREATE"
+            $pattern = '/\b' . preg_quote( $keyword, '/' ) . '\b/i';
+            if ( preg_match( $pattern, $query ) ) {
+                return [
+                    'valid' => false,
+                    'error' => sprintf(
+                        /* translators: %s: SQL keyword */
+                        __( 'Query contains forbidden keyword: %s', 'creator-core' ),
+                        $keyword
+                    ),
+                ];
+            }
+        }
+
+        // Block stacked queries (multiple statements)
+        if ( substr_count( $query, ';' ) > 0 ) {
+            // Allow semicolon only at the very end
+            $trimmed = rtrim( $query, "; \t\n\r" );
+            if ( strpos( $trimmed, ';' ) !== false ) {
+                return [
+                    'valid' => false,
+                    'error' => __( 'Multiple SQL statements are not allowed', 'creator-core' ),
+                ];
+            }
+        }
+
+        // Block comments that could hide malicious code
+        if ( preg_match( '/\/\*|\*\/|--\s|#/', $query ) ) {
+            return [
+                'valid' => false,
+                'error' => __( 'SQL comments are not allowed', 'creator-core' ),
+            ];
+        }
+
+        // Block UNION-based injection attempts
+        if ( preg_match( '/\bUNION\s+(ALL\s+)?SELECT\b/i', $query ) ) {
+            return [
+                'valid' => false,
+                'error' => __( 'UNION SELECT is not allowed', 'creator-core' ),
+            ];
+        }
+
+        // Block subqueries that modify data
+        if ( preg_match( '/\(\s*(?:INSERT|UPDATE|DELETE|DROP|ALTER|CREATE)\b/i', $query ) ) {
+            return [
+                'valid' => false,
+                'error' => __( 'Subqueries with data modification are not allowed', 'creator-core' ),
+            ];
+        }
+
+        // Block access to MySQL system tables
+        $system_tables = [
+            'mysql.',
+            'information_schema.',
+            'performance_schema.',
+            'sys.',
+        ];
+        foreach ( $system_tables as $sys_table ) {
+            if ( stripos( $query, $sys_table ) !== false ) {
+                return [
+                    'valid' => false,
+                    'error' => __( 'Access to system tables is not allowed', 'creator-core' ),
+                ];
+            }
+        }
+
+        // Block hex-encoded strings (common injection technique)
+        if ( preg_match( '/0x[0-9a-fA-F]{8,}/', $query ) ) {
+            return [
+                'valid' => false,
+                'error' => __( 'Hex-encoded values are not allowed', 'creator-core' ),
+            ];
+        }
+
+        // Block CHAR() function (often used to bypass filters)
+        if ( preg_match( '/\bCHAR\s*\(/i', $query ) ) {
+            return [
+                'valid' => false,
+                'error' => __( 'CHAR() function is not allowed', 'creator-core' ),
+            ];
+        }
+
+        // Block BENCHMARK and SLEEP (timing attacks)
+        if ( preg_match( '/\b(?:BENCHMARK|SLEEP)\s*\(/i', $query ) ) {
+            return [
+                'valid' => false,
+                'error' => __( 'Timing functions are not allowed', 'creator-core' ),
+            ];
+        }
+
+        return [
+            'valid' => true,
+            'query' => $query,
         ];
     }
 }

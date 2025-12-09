@@ -54,6 +54,47 @@ class FileSystemManager {
     ];
 
     /**
+     * Critical files that cannot be modified (relative to ABSPATH)
+     *
+     * @var array
+     */
+    private array $protected_files = [
+        'wp-config.php',
+        'wp-config-sample.php',
+        '.htaccess',
+        'wp-settings.php',
+        'wp-load.php',
+        'wp-blog-header.php',
+        'wp-cron.php',
+        'wp-login.php',
+        'wp-signup.php',
+        'wp-activate.php',
+        'xmlrpc.php',
+        'index.php',
+        'wp-comments-post.php',
+        'wp-links-opml.php',
+        'wp-mail.php',
+        'wp-trackback.php',
+    ];
+
+    /**
+     * Dangerous file patterns that cannot be created
+     *
+     * @var array
+     */
+    private array $dangerous_patterns = [
+        '/\.phar$/i',           // PHP archive files
+        '/\.php\d+$/i',         // PHP version-specific files
+        '/^\.ht/i',             // Apache config files
+        '/\.env$/i',            // Environment files
+        '/\.bak$/i',            // Backup files (can leak code)
+        '/\.sql$/i',            // SQL dump files
+        '/\.log$/i',            // Log files
+        '/\.key$/i',            // Private key files
+        '/\.pem$/i',            // Certificate files
+    ];
+
+    /**
      * Constructor
      *
      * @param AuditLogger|null $logger Audit logger instance.
@@ -150,6 +191,10 @@ class FileSystemManager {
         $absolute_path = $this->normalize_path( $file_path );
 
         if ( ! $this->is_safe_path( $absolute_path ) ) {
+            $this->logger->warning( 'file_write_blocked', [
+                'path'   => $absolute_path,
+                'reason' => 'outside_allowed_directories',
+            ]);
             return [
                 'success' => false,
                 'error'   => __( 'Access denied: Path is outside allowed directories', 'creator-core' ),
@@ -157,9 +202,26 @@ class FileSystemManager {
         }
 
         if ( $this->is_protected_path( $absolute_path ) ) {
+            $this->logger->warning( 'file_write_blocked', [
+                'path'   => $absolute_path,
+                'reason' => 'protected_path',
+            ]);
             return [
                 'success' => false,
                 'error'   => __( 'Access denied: Cannot modify protected WordPress core files', 'creator-core' ),
+            ];
+        }
+
+        // Additional write-specific validation (extension whitelist, PHP location, etc.)
+        $write_validation = $this->validate_write_path( $absolute_path );
+        if ( ! $write_validation['valid'] ) {
+            $this->logger->warning( 'file_write_blocked', [
+                'path'   => $absolute_path,
+                'reason' => $write_validation['error'],
+            ]);
+            return [
+                'success' => false,
+                'error'   => $write_validation['error'],
             ];
         }
 
@@ -648,14 +710,16 @@ class FileSystemManager {
     }
 
     /**
-     * Check if path is protected (WordPress core)
+     * Check if path is protected (WordPress core files and directories)
      *
      * @param string $path Absolute path.
      * @return bool
      */
     private function is_protected_path( string $path ): bool {
         $normalized = wp_normalize_path( $path );
+        $filename   = basename( $normalized );
 
+        // Check protected directories (wp-admin, wp-includes)
         foreach ( $this->protected_paths as $protected ) {
             $protected_path = wp_normalize_path( ABSPATH . $protected );
             if ( strpos( $normalized, $protected_path ) === 0 ) {
@@ -663,7 +727,107 @@ class FileSystemManager {
             }
         }
 
+        // Check protected files (wp-config.php, .htaccess, etc.)
+        foreach ( $this->protected_files as $protected_file ) {
+            $protected_path = wp_normalize_path( ABSPATH . $protected_file );
+            if ( $normalized === $protected_path ) {
+                return true;
+            }
+        }
+
+        // Check dangerous file patterns
+        foreach ( $this->dangerous_patterns as $pattern ) {
+            if ( preg_match( $pattern, $filename ) ) {
+                return true;
+            }
+        }
+
+        // Block path traversal attempts (even if normalized)
+        if ( preg_match( '/\.\./', $path ) ) {
+            return true;
+        }
+
+        // Block files outside wp-content that are in root (except explicitly allowed)
+        $wp_content = wp_normalize_path( WP_CONTENT_DIR );
+        $in_wp_content = strpos( $normalized, $wp_content ) === 0;
+
+        if ( ! $in_wp_content ) {
+            // If not in wp-content, only allow reading, not writing
+            // The write_file method should check this
+            $in_abspath = strpos( $normalized, wp_normalize_path( ABSPATH ) ) === 0;
+            if ( $in_abspath ) {
+                // Check if it's a root-level file (not in any subdirectory)
+                $relative = str_replace( wp_normalize_path( ABSPATH ), '', $normalized );
+                if ( strpos( $relative, '/' ) === false ) {
+                    // Root-level file outside wp-content
+                    return true;
+                }
+            }
+        }
+
         return false;
+    }
+
+    /**
+     * Check if a file can be written (additional write-specific checks)
+     *
+     * @param string $path Absolute path.
+     * @return array Validation result.
+     */
+    private function validate_write_path( string $path ): array {
+        $normalized = wp_normalize_path( $path );
+        $filename   = basename( $normalized );
+        $extension  = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+
+        // Check extension whitelist
+        if ( ! in_array( $extension, $this->allowed_extensions, true ) && $extension !== '' ) {
+            return [
+                'valid' => false,
+                'error' => sprintf(
+                    /* translators: %s: file extension */
+                    __( 'File extension not allowed: .%s', 'creator-core' ),
+                    $extension
+                ),
+            ];
+        }
+
+        // Restrict PHP file creation to plugins and themes directories only
+        if ( in_array( $extension, [ 'php', 'phtml', 'php5', 'php7', 'php8' ], true ) ) {
+            $allowed_php_dirs = [
+                wp_normalize_path( WP_PLUGIN_DIR ),
+                wp_normalize_path( get_theme_root() ),
+                wp_normalize_path( WPMU_PLUGIN_DIR ),
+            ];
+
+            $in_allowed_dir = false;
+            foreach ( $allowed_php_dirs as $allowed_dir ) {
+                if ( strpos( $normalized, $allowed_dir ) === 0 ) {
+                    $in_allowed_dir = true;
+                    break;
+                }
+            }
+
+            if ( ! $in_allowed_dir ) {
+                return [
+                    'valid' => false,
+                    'error' => __( 'PHP files can only be created in plugins or themes directories', 'creator-core' ),
+                ];
+            }
+        }
+
+        // Block executable files in uploads directory
+        $uploads_dir = wp_normalize_path( wp_upload_dir()['basedir'] );
+        if ( strpos( $normalized, $uploads_dir ) === 0 ) {
+            $dangerous_in_uploads = [ 'php', 'phtml', 'php5', 'php7', 'php8', 'phar', 'exe', 'sh', 'bash' ];
+            if ( in_array( $extension, $dangerous_in_uploads, true ) ) {
+                return [
+                    'valid' => false,
+                    'error' => __( 'Executable files cannot be created in uploads directory', 'creator-core' ),
+                ];
+            }
+        }
+
+        return [ 'valid' => true ];
     }
 
     /**
