@@ -1,5 +1,5 @@
 /**
- * Creator Core - Simple Chat Styles (Phase 2)
+ * Creator Core - Simple Chat Styles (Phase 2/3)
  *
  * @package CreatorCore
  */
@@ -238,4 +238,65 @@
 
 #creator-simple-messages::-webkit-scrollbar-thumb:hover {
     background: #ccc;
+}
+
+/* Phase 3: Execution Results */
+.creator-execution-result {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.execution-success {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #059669;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.execution-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #dc2626;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.execution-icon {
+    font-size: 16px;
+}
+
+.execution-output,
+.execution-data,
+.execution-error-message {
+    margin-top: 8px;
+    padding: 8px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.execution-output code,
+.execution-data code,
+.execution-error-message code {
+    display: block;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    color: #374151;
+}
+
+.execution-error-message {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.execution-error-message code {
+    color: #b91c1c;
 }

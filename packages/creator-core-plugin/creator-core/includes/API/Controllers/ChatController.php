@@ -19,6 +19,7 @@ use CreatorCore\Chat\ChatInterface;
 use CreatorCore\Backup\Rollback;
 use CreatorCore\Proxy\ProxyClient as SimpleProxyClient;
 use CreatorCore\Context\ContextLoaderSimple;
+use CreatorCore\Response\ResponseHandler;
 
 /**
  * Class ChatController
@@ -407,12 +408,13 @@ class ChatController extends BaseController {
 	}
 
 	/**
-	 * Handle simple chat message (Phase 2 - basic chat loop)
+	 * Handle simple chat message (Phase 2/3 - chat loop with code execution)
 	 *
 	 * POST /creator/v1/chat
 	 * - Receives user message
 	 * - Calls Firebase proxy
-	 * - Returns AI response
+	 * - Handles response (including code execution for type: "execute")
+	 * - Returns AI response with execution results
 	 *
 	 * @param \WP_REST_Request $request Request object.
 	 * @return \WP_REST_Response|\WP_Error
@@ -453,11 +455,16 @@ class ChatController extends BaseController {
 				);
 			}
 
-			// Parse and return response
+			// Parse AI response
 			$parsed = $this->parse_simple_response( $ai_response );
 
+			// Phase 3: Handle response through ResponseHandler (executes code if type: "execute")
+			$response_handler = new ResponseHandler( $proxy_client );
+			$result = $response_handler->handle( $parsed, $context );
+
 			return $this->success( [
-				'response'        => $parsed,
+				'success'         => true,
+				'response'        => $result,
 				'conversation_id' => $conversation_id,
 				'tokens_used'     => $ai_response['tokens_used'] ?? 0,
 				'model'           => $ai_response['model'] ?? 'unknown',
