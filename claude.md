@@ -1,7 +1,7 @@
 # Creator Ecosystem - Report Completo di Analisi
 
-**Data:** 9 Dicembre 2025
-**Versione:** 2.3.0
+**Data:** 10 Dicembre 2025
+**Versione:** 2.4.0
 **Autore:** Analisi Tecnica Automatica
 
 ---
@@ -43,18 +43,19 @@
 
 Non si tratta di un semplice assistente che risponde a domande o genera contenuti isolati. Creator è un sistema operativo AI completo, capace di comprendere richieste complesse, pianificare strategie di implementazione e **eseguire direttamente modifiche** sul sito WordPress dell'utente.
 
-### Caratteristica Chiave: Generazione Dinamica delle Azioni
+### Caratteristica Chiave: Universal PHP Engine (v2.4.0)
 
-> **Elemento Critico**: Creator **non ha azioni hardcoded predefinite**.
+> **Elemento Critico**: Creator utilizza un **Universal PHP Engine** dove l'AI genera direttamente **codice PHP eseguibile**.
 >
-> Le operazioni da compiere vengono strutturate dall'AI in modo **creativo e adattivo**, in base alla richiesta specifica dell'utente. Questo è il cuore tecnologico e la sfida principale del sistema.
+> Invece di un sistema con azioni hardcoded (es. `create_page`, `update_post`), l'AI genera codice PHP che utilizza le API native di WordPress (es. `wp_insert_post()`, `update_option()`). Questo approccio elimina completamente il mapping action→handler e offre flessibilità illimitata.
 
-Quando un utente chiede "Crea una landing page per il mio prodotto con sezione hero, testimonianze e call-to-action", Creator non esegue una sequenza predefinita. Invece:
+Quando un utente chiede "Crea una landing page per il mio prodotto con sezione hero, testimonianze e call-to-action", Creator:
 
 1. **Analizza** la richiesta e il contesto del sito
-2. **Pianifica** una strategia personalizzata
-3. **Genera** le azioni necessarie (creazione pagina, struttura Elementor, contenuti, stili)
-4. **Esegue** le operazioni sul sito WordPress
+2. **Genera codice PHP** che usa funzioni WordPress native (`wp_insert_post`, Elementor API, etc.)
+3. **Valida la sicurezza** del codice (26+ funzioni pericolose bloccate)
+4. **Esegue** il codice in ambiente sandboxed con output buffering
+5. **Ritorna** risultato strutturato con output, return value, e eventuali errori
 
 ### Capacità Operative
 
@@ -81,7 +82,7 @@ Questo approccio permette a Creator di:
 - Adattarsi a configurazioni custom esistenti
 - Rispettare convenzioni e stili già presenti nel sito
 
-### Il Flusso Operativo
+### Il Flusso Operativo (Universal PHP Engine)
 
 ```
 ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
@@ -100,11 +101,12 @@ Questo approccio permette a Creator di:
 
 ### La Sfida Tecnologica
 
-Il cuore della complessità di Creator risiede nel **garantire che l'AI generi azioni coerenti e funzionanti**:
+Il cuore della complessità di Creator risiede nel **garantire che l'AI generi codice PHP sicuro e funzionante**:
 
-- Le funzioni generate devono essere **sintatticamente corrette** (PHP, HTML, CSS, JSON)
+- Il codice generato deve essere **sintatticamente corretto** (PHP valido, no syntax errors)
 - Le operazioni devono essere **semanticamente valide** per WordPress e i plugin target
-- Il sistema deve **gestire errori** e situazioni impreviste gracefully
+- Il sistema deve **validare la sicurezza** (26+ funzioni pericolose bloccate: exec, shell_exec, eval, etc.)
+- Gli errori devono essere **catturati gracefully** (try/catch, error handler custom)
 - Le modifiche devono essere **reversibili** (sistema di snapshot)
 
 Questo documento analizza in dettaglio come l'architettura attuale affronta queste sfide e dove ci sono opportunità di miglioramento.
@@ -169,6 +171,19 @@ Questo documento analizza in dettaglio come l'architettura attuale affronta ques
 - **Nuove funzioni rate limit** - `checkRateLimitInMemory()`, `checkRateLimitByLicense()`, `createLicenseRateLimitMiddleware()`
 - **Environment variable** - `RATE_LIMIT_STRATEGY` per configurare strategia
 - **Documentazione README** - Nuovi file in `providers/`, `services/`, `includes/`
+
+### Cambiamenti v2.4.0 (Dicembre 2025) - Universal PHP Engine
+
+- **Universal PHP Engine** - Nuovo pattern architetturale dove l'AI genera codice PHP eseguibile
+- **ActionDispatcher** - Nuovo dispatcher che instrada le azioni al handler appropriato
+- **ExecutePHPHandler** - Handler universale per esecuzione codice PHP con validazione sicurezza
+- **ActionResult** - Value object immutabile per risultati esecuzione
+- **ActionHandler Interface** - Interfaccia base per tutti gli handler
+- **Security Blacklist** - 26+ funzioni pericolose bloccate (exec, shell_exec, eval, system, etc.)
+- **Legacy Action Rejection** - Azioni legacy (create_page, create_post) respinte con messaggio utile
+- **System Prompt Update** - Firebase modelService.ts aggiornato per generare codice PHP
+- **Test Suite PHP** - 44 nuovi test cases per Universal PHP Engine (159 assertions)
+- **ActionController Simplified** - Semplificato per supportare solo context requests e execute_code
 
 ---
 
@@ -688,7 +703,12 @@ creator-core/
 │   │   ├── AuditLogger.php      # Audit logging
 │   │   └── OperationTracker.php # Operation tracking
 │   ├── Executor/
-│   │   ├── CodeExecutor.php     # Code execution
+│   │   ├── ActionDispatcher.php # Universal action dispatcher (v2.4)
+│   │   ├── ActionHandler.php    # Handler interface (v2.4)
+│   │   ├── ActionResult.php     # Execution result value object (v2.4)
+│   │   ├── Handlers/
+│   │   │   └── ExecutePHPHandler.php # Universal PHP executor (v2.4)
+│   │   ├── CodeExecutor.php     # Legacy code execution
 │   │   ├── ExecutionVerifier.php # Execution verification
 │   │   ├── OperationFactory.php # Operation factory
 │   │   ├── CustomFileManager.php # Custom file management
@@ -1251,9 +1271,10 @@ WordPress               Firebase API            Firestore Trigger
 
 ### Stato Attuale
 
-Il backend Firebase Functions dispone ora di una **test suite completa** con Jest e ts-jest.
+Il backend Firebase Functions dispone di una **test suite completa** con Jest e ts-jest.
+Il plugin WordPress Creator Core dispone di **test PHPUnit** per il Universal PHP Engine.
 
-**Totale: 121 test cases su 8 test suites**
+**Totale: 165 test cases** (121 Firebase + 44 PHP)
 
 ```
 functions/
@@ -1274,6 +1295,27 @@ functions/
 │       └── jobQueue.test.ts         # E2E job queue processing
 └── jest.config.cjs                  # Jest configuration with ts-jest
 ```
+
+#### PHP Plugin Tests (v2.4.0)
+
+```
+packages/creator-core-plugin/creator-core/
+├── tests/
+│   ├── Unit/
+│   │   ├── ActionResultTest.php         # 9 tests - ActionResult value object
+│   │   ├── ExecutePHPHandlerTest.php    # 15 tests - Security validation & execution
+│   │   └── ActionDispatcherTest.php     # 12 tests - Action routing & legacy rejection
+│   └── Integration/
+│       └── UniversalPHPEngineTest.php   # 11 tests - E2E flow
+├── phpunit.xml                          # PHPUnit configuration
+└── composer.json                        # PHP dependencies
+```
+
+**Test Coverage PHP (v2.4.0):**
+- **ActionResult**: Creazione, success/failure, serializzazione
+- **ExecutePHPHandler**: Blocco 26+ funzioni pericolose, esecuzione sicura, output buffering
+- **ActionDispatcher**: Routing execute_code, rejection legacy actions, batch processing
+- **Integration**: Flusso completo AI → dispatch → execute → result
 
 ### Coverage Report (v2.3.0)
 
@@ -1710,10 +1752,13 @@ class ProviderCircuitBreaker {
 
 ## Conclusioni
 
-L'ecosistema Creator v2.3 rappresenta un'evoluzione significativa con importanti miglioramenti nella validazione, testing, **security hardening** e **rate limiting ottimizzato**:
+L'ecosistema Creator v2.4 rappresenta un'evoluzione significativa con il nuovo **Universal PHP Engine** che rivoluziona l'architettura di esecuzione, oltre ai miglioramenti in validazione, testing, **security hardening** e **rate limiting ottimizzato**:
 
 ### Punti di Forza ✅
 
+- **Universal PHP Engine** - AI genera codice PHP eseguibile, eliminando mapping action→handler ✅ NUOVO v2.4
+- **Security Blacklist** - 26+ funzioni pericolose bloccate (exec, eval, shell_exec, etc.) ✅ NUOVO v2.4
+- **ActionDispatcher Pattern** - Routing universale con rejection legacy actions ✅ NUOVO v2.4
 - **Architettura pulita** con separazione backend/frontend
 - **Sistema di licensing robusto** con JWT authentication
 - **Fallback automatico** tra provider AI (Gemini ↔ Claude)
@@ -1721,14 +1766,14 @@ L'ecosistema Creator v2.3 rappresenta un'evoluzione significativa con importanti
 - **Job Queue** per operazioni asincrone
 - **Analytics completo** per monitoraggio costi
 - **Audit trail** dettagliato
-- **Test suite completa** con 121 test cases (8 suites) ✅ AGGIORNATO v2.3
-- **Coverage elevata** - modelService 94.44%, licensing 88.31%, auth 100% ✅ NUOVO v2.3
+- **Test suite completa** con 165 test cases (121 Firebase + 44 PHP) ✅ AGGIORNATO v2.4
+- **Coverage elevata** - modelService 94.44%, licensing 88.31%, auth 100% ✅ v2.3
 - **Configurazione modelli unificata** in `config/models.ts`
 - **Plugin WordPress auditato** con 33 endpoint REST verificati ✅ v2.2
 - **Security hardening** con 609 linee di protezione ✅ v2.2
 - **ProxyClient robusto** con JWT, retry logic, error logging ✅ v2.2
-- **Rate limiting in-memory** ottimizzato per MVP con strategia configurabile ✅ NUOVO v2.3
-- **Documentazione README** per providers, services, includes ✅ NUOVO v2.3
+- **Rate limiting in-memory** ottimizzato per MVP con strategia configurabile ✅ v2.3
+- **Documentazione README** per providers, services, includes ✅ v2.3
 
 ### Aree di Miglioramento ⚠️
 
@@ -1776,9 +1821,24 @@ L'ecosistema Creator v2.3 rappresenta un'evoluzione significativa con importanti
 | **Documentazione** | README in `providers/`, `services/`, `includes/` |
 | **Jest Config** | Aggiornato `jest.config.cjs` con coverage thresholds |
 
+### Miglioramenti v2.4.0 (Dicembre 2025) - Universal PHP Engine
+
+| Componente | Cambiamento |
+|------------|-------------|
+| **Universal PHP Engine** | Nuovo pattern architetturale - AI genera codice PHP eseguibile |
+| **ActionDispatcher** | Routing universale azioni → handler |
+| **ExecutePHPHandler** | Handler per esecuzione PHP con validazione sicurezza |
+| **ActionResult** | Value object immutabile per risultati esecuzione |
+| **ActionHandler Interface** | Interfaccia base per handler pattern |
+| **Security Blacklist** | 26+ funzioni pericolose bloccate |
+| **Legacy Rejection** | Azioni legacy respinte con messaggio utile |
+| **System Prompt** | Firebase modelService.ts aggiornato per generare PHP |
+| **Test Suite PHP** | +44 nuovi test cases (Unit + Integration) |
+| **ActionController** | Semplificato per supportare solo context + execute_code |
+
 ### Raccomandazione Strategica
 
-La **stabilizzazione**, il **security hardening**, la **bonifica tier** e il **rate limiting ottimizzato** sono stati completati. Prossimi passi:
+La **stabilizzazione**, il **security hardening**, la **bonifica tier**, il **rate limiting ottimizzato** e il **Universal PHP Engine** sono stati completati. Prossimi passi:
 1. ~~Unificare configurazioni modelli~~ ✅ Completato
 2. ~~Implementare test suite base~~ ✅ Completato (v2.1.0)
 3. ~~Security hardening plugin WordPress~~ ✅ Completato (v2.2.0)
@@ -1787,10 +1847,12 @@ La **stabilizzazione**, il **security hardening**, la **bonifica tier** e il **r
 6. ~~Espandere test suite e coverage~~ ✅ Completato (v2.3.0 - 121 tests)
 7. ~~Implementare rate limiting in-memory~~ ✅ Completato (v2.3.0)
 8. ~~Aggiungere documentazione README~~ ✅ Completato (v2.3.0)
-9. Aggiungere monitoring/alerting
-10. Implementare context caching
-11. Considerare circuit breaker pattern
-12. Migrare rate limiting a Redis (produzione ad alto traffico)
+9. ~~Implementare Universal PHP Engine~~ ✅ Completato (v2.4.0 - 165 tests)
+10. ~~Rimuovere action handler legacy~~ ✅ Completato (v2.4.0)
+11. Aggiungere monitoring/alerting
+12. Implementare context caching
+13. Considerare circuit breaker pattern
+14. Migrare rate limiting a Redis (produzione ad alto traffico)
 
 ### Stato Complessivo
 
@@ -1798,12 +1860,13 @@ La **stabilizzazione**, il **security hardening**, la **bonifica tier** e il **r
 |------|--------|
 | Backend Firebase | ✅ Produzione Ready |
 | Plugin WordPress | ✅ Produzione Ready |
-| Security | ✅ APPROVATO |
-| Test Coverage | ✅ 121 test cases (90.18% coverage) |
+| Universal PHP Engine | ✅ Implementato |
+| Security | ✅ APPROVATO (26+ funzioni bloccate) |
+| Test Coverage | ✅ 165 test cases (Firebase 90.18% + PHP) |
 | Rate Limiting | ✅ In-memory MVP |
 | Documentazione | ✅ README + JSDoc |
 
 ---
 
-*Report generato automaticamente - Versione 2.3.0*
-*Data: 9 Dicembre 2025*
+*Report generato automaticamente - Versione 2.4.0*
+*Data: 10 Dicembre 2025*
