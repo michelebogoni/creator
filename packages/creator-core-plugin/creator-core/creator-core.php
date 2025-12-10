@@ -18,27 +18,6 @@
 
 defined( 'ABSPATH' ) || exit;
 
-// TEMPORARY DEBUG: Catch null parameter deprecation warnings
-// Remove this block after debugging
-set_error_handler( function( $errno, $errstr, $errfile, $errline ) {
-    if ( strpos( $errstr, 'Passing null' ) !== false ) {
-        $trace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 15 );
-        $log = "=== CREATOR NULL DEBUG ===\n";
-        $log .= "Error: $errstr\n";
-        $log .= "WP File: $errfile:$errline\n";
-        $log .= "Stack trace:\n";
-        foreach ( $trace as $i => $frame ) {
-            $file = $frame['file'] ?? 'unknown';
-            $line = $frame['line'] ?? 0;
-            $func = $frame['function'] ?? 'unknown';
-            $log .= "  #$i $file:$line - $func()\n";
-        }
-        $log .= "========================\n\n";
-        file_put_contents( __DIR__ . '/creator-debug.log', $log, FILE_APPEND );
-    }
-    return false; // Continue with normal error handling
-}, E_DEPRECATED );
-
 // Plugin constants
 define( 'CREATOR_CORE_VERSION', '1.2.0' );
 define( 'CREATOR_CORE_PATH', plugin_dir_path( __FILE__ ) );
