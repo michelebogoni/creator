@@ -9,8 +9,6 @@ namespace CreatorCore\Proxy;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Integrations\PluginDetector;
-
 /**
  * Class ProxyClient
  *
@@ -203,11 +201,11 @@ class ProxyClient {
 	/**
 	 * Get site context for AI requests
 	 *
+	 * MVP version: Simplified without PluginDetector.
+	 *
 	 * @return array
 	 */
 	private function get_site_context(): array {
-		$plugin_detector = new PluginDetector();
-
 		return [
 			'site_info'    => [
 				'site_title'        => get_bloginfo( 'name' ),
@@ -220,7 +218,6 @@ class ProxyClient {
 				'theme_author' => wp_get_theme()->get( 'Author' ),
 				'theme_uri'    => wp_get_theme()->get( 'ThemeURI' ),
 			],
-			'integrations' => $plugin_detector->get_all_integrations(),
 			'current_user' => [
 				'id'    => get_current_user_id(),
 				'email' => wp_get_current_user()->user_email,

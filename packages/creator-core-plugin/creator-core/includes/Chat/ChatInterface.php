@@ -1395,21 +1395,9 @@ class ChatInterface {
      * @return array|null Result if page was created, null if not applicable.
      */
     private function handle_elementor_actions( array $parsed_response ): ?array {
-        // Only handle if Elementor is available.
-        if ( ! class_exists( '\Elementor\Plugin' ) ) {
-            return null;
-        }
-
-        try {
-            $handler = new \CreatorCore\Integrations\ElementorActionHandler( $this->thinking_logger );
-            return $handler->handle_response( $parsed_response );
-        } catch ( \Throwable $e ) {
-            error_log( 'Creator: Elementor action error: ' . $e->getMessage() );
-            return [
-                'success' => false,
-                'error'   => $e->getMessage(),
-            ];
-        }
+        // Elementor integration disabled in Phase 1 cleanup
+        // Will be re-implemented via universal code execution in Phase 2
+        return null;
     }
 
     /**

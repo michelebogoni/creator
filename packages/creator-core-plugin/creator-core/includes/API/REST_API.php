@@ -15,8 +15,6 @@ defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Chat\ChatInterface;
 use CreatorCore\API\Controllers\ChatController;
-use CreatorCore\API\Controllers\FileController;
-use CreatorCore\API\Controllers\ElementorController;
 use CreatorCore\API\Controllers\SystemController;
 use CreatorCore\API\Controllers\ContextController;
 use CreatorCore\API\Controllers\PluginController;
@@ -92,8 +90,6 @@ class REST_API {
 			'action'    => new ActionController( $this->chat_interface ),
 
 			// Controllers with lazy-loaded dependencies
-			'file'      => new FileController(),
-			'elementor' => new ElementorController(),
 			'system'    => new SystemController(),
 			'context'   => new ContextController(),
 			'plugin'    => new PluginController(),

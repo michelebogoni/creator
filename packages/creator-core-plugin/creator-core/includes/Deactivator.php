@@ -25,14 +25,6 @@ class Deactivator {
         self::clear_scheduled_hooks();
         self::clear_transients();
 
-        // Log deactivation (if logger is available)
-        if ( class_exists( '\CreatorCore\Audit\AuditLogger' ) ) {
-            $logger = new \CreatorCore\Audit\AuditLogger();
-            $logger->log( 'plugin_deactivated', 'success', [
-                'version' => CREATOR_CORE_VERSION,
-            ]);
-        }
-
         // Clear cache
         wp_cache_flush();
     }

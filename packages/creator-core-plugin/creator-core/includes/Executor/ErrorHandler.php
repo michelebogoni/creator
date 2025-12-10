@@ -2,6 +2,8 @@
 /**
  * Error Handler
  *
+ * MVP version: Simplified without AuditLogger dependency.
+ *
  * @package CreatorCore
  */
 
@@ -9,21 +11,12 @@ namespace CreatorCore\Executor;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Audit\AuditLogger;
-
 /**
  * Class ErrorHandler
  *
  * Handles errors during action execution
  */
 class ErrorHandler {
-
-    /**
-     * Audit logger instance
-     *
-     * @var AuditLogger
-     */
-    private AuditLogger $logger;
 
     /**
      * Error codes
@@ -38,11 +31,21 @@ class ErrorHandler {
 
     /**
      * Constructor
-     *
-     * @param AuditLogger|null $logger Audit logger instance.
      */
-    public function __construct( ?AuditLogger $logger = null ) {
-        $this->logger = $logger ?? new AuditLogger();
+    public function __construct() {
+        // No dependencies needed for MVP
+    }
+
+    /**
+     * Log message for debugging
+     *
+     * @param string $message Log message.
+     * @param array  $context Additional context.
+     */
+    private function log( string $message, array $context = [] ): void {
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( 'Creator ErrorHandler: ' . $message . ' ' . wp_json_encode( $context ) );
+        }
     }
 
     /**
@@ -57,20 +60,21 @@ class ErrorHandler {
         $error_message = $this->format_error_message( $exception, $error_code );
 
         // Log the error
-        $this->logger->failure( 'executor_error', [
+        $this->log( 'executor_error', [
             'code'      => $error_code,
             'message'   => $exception->getMessage(),
             'file'      => $exception->getFile(),
             'line'      => $exception->getLine(),
             'context'   => $context,
-            'trace'     => CREATOR_DEBUG ? $exception->getTraceAsString() : null,
         ]);
+
+        $debug_mode = defined( 'CREATOR_DEBUG' ) && CREATOR_DEBUG;
 
         return [
             'success'   => false,
             'code'      => $error_code,
             'message'   => $error_message,
-            'debug'     => CREATOR_DEBUG ? [
+            'debug'     => $debug_mode ? [
                 'exception' => get_class( $exception ),
                 'file'      => $exception->getFile(),
                 'line'      => $exception->getLine(),
@@ -90,7 +94,7 @@ class ErrorHandler {
         $error_message = $error->get_error_message();
 
         // Log the error
-        $this->logger->failure( 'wp_error', [
+        $this->log( 'wp_error', [
             'code'    => $error_code,
             'message' => $error_message,
             'data'    => $error->get_error_data(),
@@ -113,7 +117,7 @@ class ErrorHandler {
      * @return array
      */
     public function create_error( string $code, string $message, array $data = [] ): array {
-        $this->logger->failure( 'error_created', [
+        $this->log( 'error_created', [
             'code'    => $code,
             'message' => $message,
             'data'    => $data,
@@ -168,7 +172,8 @@ class ErrorHandler {
      */
     private function format_error_message( \Exception $exception, string $error_code ): string {
         // Return original message in debug mode
-        if ( CREATOR_DEBUG ) {
+        $debug_mode = defined( 'CREATOR_DEBUG' ) && CREATOR_DEBUG;
+        if ( $debug_mode ) {
             return $exception->getMessage();
         }
 
