@@ -283,6 +283,25 @@ class Loader {
             'creator-setup',
             [ $this->setup_wizard, 'render' ]
         );
+
+        // Simple Chat (Phase 2 test page)
+        add_submenu_page(
+            'creator-dashboard',
+            __( 'Simple Chat (Test)', 'creator-core' ),
+            __( 'Simple Chat', 'creator-core' ),
+            'manage_options',
+            'creator-simple-chat',
+            [ $this, 'render_simple_chat' ]
+        );
+    }
+
+    /**
+     * Render simple chat page (Phase 2)
+     *
+     * @return void
+     */
+    public function render_simple_chat(): void {
+        include CREATOR_CORE_PATH . 'templates/chat-simple.php';
     }
 
     /**
@@ -445,6 +464,29 @@ class Loader {
                     'cacheCleared' => __( 'Cache cleared', 'creator-core' ),
                     'confirmDelete' => __( 'Are you sure you want to delete this?', 'creator-core' ),
                 ],
+            ]);
+        }
+
+        // Simple Chat (Phase 2 test)
+        if ( strpos( $hook, 'creator-simple-chat' ) !== false ) {
+            wp_enqueue_style(
+                'creator-chat-simple',
+                CREATOR_CORE_URL . 'assets/css/chat-simple.css',
+                [ 'creator-admin-common' ],
+                CREATOR_CORE_VERSION
+            );
+            wp_enqueue_script(
+                'creator-chat-simple',
+                CREATOR_CORE_URL . 'assets/js/chat-simple.js',
+                [ 'jquery' ],
+                CREATOR_CORE_VERSION,
+                true
+            );
+            wp_localize_script( 'creator-chat-simple', 'creatorChat', [
+                'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+                'restUrl'   => rest_url( 'creator/v1/' ),
+                'nonce'     => wp_create_nonce( 'creator_chat_nonce' ),
+                'restNonce' => wp_create_nonce( 'wp_rest' ),
             ]);
         }
     }
