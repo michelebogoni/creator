@@ -10,7 +10,7 @@
 /**
  * Supported AI provider names
  */
-export type ProviderName = "openai" | "gemini" | "claude";
+export type ProviderName = "gemini" | "claude";
 
 /**
  * File attachment for multimodal requests
@@ -297,13 +297,6 @@ export interface ProviderPricing {
  * - Gemini Pro (fallback)
  */
 export const PROVIDER_PRICING: Record<ProviderName, Record<string, ProviderPricing>> = {
-  openai: {
-    // OpenAI kept for future compatibility but not actively used
-    "gpt-4o": {
-      input_cost_per_1k: 0.005,
-      output_cost_per_1k: 0.015,
-    },
-  },
   gemini: {
     // Gemini Pro - Primary fallback model
     "gemini-2.5-pro-preview-05-06": {

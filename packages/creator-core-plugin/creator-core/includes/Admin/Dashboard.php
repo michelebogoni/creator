@@ -10,9 +10,7 @@ namespace CreatorCore\Admin;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Integrations\PluginDetector;
-use CreatorCore\Audit\AuditLogger;
 use CreatorCore\Chat\ChatInterface;
-use CreatorCore\Backup\SnapshotManager;
 
 /**
  * Class Dashboard
@@ -29,21 +27,12 @@ class Dashboard {
     private PluginDetector $plugin_detector;
 
     /**
-     * Audit logger instance
-     *
-     * @var AuditLogger
-     */
-    private AuditLogger $logger;
-
-    /**
      * Constructor
      *
      * @param PluginDetector $plugin_detector Plugin detector instance.
-     * @param AuditLogger    $logger          Audit logger instance.
      */
-    public function __construct( PluginDetector $plugin_detector, AuditLogger $logger ) {
+    public function __construct( PluginDetector $plugin_detector ) {
         $this->plugin_detector = $plugin_detector;
-        $this->logger          = $logger;
     }
 
     /**
@@ -151,15 +140,13 @@ class Dashboard {
     /**
      * Get recent activity
      *
+     * Note: Activity logging temporarily disabled in Phase 1 cleanup.
+     *
      * @return array
      */
     private function get_recent_activity(): array {
-        $logs = $this->logger->get_logs( [
-            'user_id'  => get_current_user_id(),
-            'per_page' => 10,
-        ]);
-
-        return $logs['items'] ?? [];
+        // Activity logging temporarily disabled
+        return [];
     }
 
     /**

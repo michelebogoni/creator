@@ -25,7 +25,7 @@ import {
   updateCostTracking,
   checkAndIncrementRateLimit,
 } from "../../lib/firestore";
-import { sanitizePrompt, validatePrompt } from "../../services/aiRouter";
+import { sanitizePrompt, validatePrompt } from "../../utils/promptUtils";
 import { ModelService } from "../../services/modelService";
 import {
   AIModel,

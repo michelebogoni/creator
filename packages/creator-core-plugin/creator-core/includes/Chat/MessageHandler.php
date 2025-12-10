@@ -9,8 +9,6 @@ namespace CreatorCore\Chat;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Audit\AuditLogger;
-
 /**
  * Class MessageHandler
  *
@@ -19,19 +17,23 @@ use CreatorCore\Audit\AuditLogger;
 class MessageHandler {
 
     /**
-     * Audit logger instance
-     *
-     * @var AuditLogger
+     * Constructor
      */
-    private AuditLogger $logger;
+    public function __construct() {
+        // No dependencies required
+    }
 
     /**
-     * Constructor
+     * Simple logging method
      *
-     * @param AuditLogger|null $logger Audit logger instance.
+     * @param string $message Log message.
+     * @param array  $context Optional context data.
+     * @return void
      */
-    public function __construct( ?AuditLogger $logger = null ) {
-        $this->logger = $logger ?? new AuditLogger();
+    private function log( string $message, array $context = [] ): void {
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( 'CreatorCore MessageHandler: ' . $message . ' ' . wp_json_encode( $context ) );
+        }
     }
 
     /**
@@ -70,11 +72,11 @@ class MessageHandler {
         );
 
         if ( $result === false ) {
-            $this->logger->failure( 'message_save_failed', [
+            $this->log( 'message_save_failed', [
                 'chat_id' => $chat_id,
                 'role'    => $role,
                 'error'   => $wpdb->last_error,
-            ]);
+            ] );
             return false;
         }
 

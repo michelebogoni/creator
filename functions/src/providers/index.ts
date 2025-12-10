@@ -9,17 +9,16 @@
  *
  * @example
  * ```typescript
- * import { createProvider, OpenAIProvider } from "./providers";
+ * import { createProvider, GeminiProvider } from "./providers";
  *
  * // Using factory function (recommended)
- * const provider = createProvider("openai", apiKey);
+ * const provider = createProvider("gemini", apiKey);
  *
  * // Or direct instantiation
- * const openai = new OpenAIProvider(apiKey);
+ * const gemini = new GeminiProvider(apiKey);
  * ```
  */
 
-import { OpenAIProvider } from "./openai";
 import { GeminiProvider } from "./gemini";
 import { ClaudeProvider } from "./claude";
 import {
@@ -29,7 +28,6 @@ import {
 } from "../types/AIProvider";
 
 // Export provider classes
-export { OpenAIProvider } from "./openai";
 export { GeminiProvider } from "./gemini";
 export { ClaudeProvider } from "./claude";
 
@@ -60,14 +58,11 @@ export interface ProviderConfig {
  *
  * @example
  * ```typescript
- * // Create OpenAI provider with default model
- * const openai = createProvider("openai", process.env.OPENAI_KEY);
- *
  * // Create Gemini provider with specific model
  * const gemini = createProvider("gemini", process.env.GEMINI_KEY, "gemini-1.5-pro");
  *
  * // Use the provider
- * const response = await openai.generate("Hello, world!");
+ * const response = await gemini.generate("Hello, world!");
  * ```
  */
 export function createProvider(
@@ -76,8 +71,6 @@ export function createProvider(
   model?: string
 ): IAIProvider {
   switch (providerName) {
-    case "openai":
-      return new OpenAIProvider(apiKey, model);
     case "gemini":
       return new GeminiProvider(apiKey, model);
     case "claude":
@@ -96,7 +89,6 @@ export function createProvider(
  * Map of provider names to their default models
  */
 export const DEFAULT_MODELS: Record<ProviderName, string> = {
-  openai: "gpt-4o",
   gemini: "gemini-2.5-flash-preview-05-20",
   claude: "claude-sonnet-4-20250514",
 };
@@ -105,7 +97,6 @@ export const DEFAULT_MODELS: Record<ProviderName, string> = {
  * Map of provider names to their alternative models
  */
 export const ALTERNATIVE_MODELS: Record<ProviderName, string[]> = {
-  openai: ["gpt-4o", "gpt-4o-mini"],
   gemini: [
     "gemini-2.5-flash-preview-05-20",
     "gemini-2.5-pro-preview-05-06",

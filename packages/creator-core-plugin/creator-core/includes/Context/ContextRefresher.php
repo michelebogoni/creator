@@ -12,8 +12,6 @@ namespace CreatorCore\Context;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Audit\AuditLogger;
-
 /**
  * Class ContextRefresher
  *
@@ -34,24 +32,28 @@ class ContextRefresher {
 	private ?CreatorContext $context = null;
 
 	/**
-	 * Audit logger instance
-	 *
-	 * @var AuditLogger|null
-	 */
-	private ?AuditLogger $logger = null;
-
-	/**
 	 * Constructor
 	 *
 	 * @param CreatorContext|null $context Creator context instance.
-	 * @param AuditLogger|null    $logger  Audit logger instance.
 	 */
-	public function __construct( ?CreatorContext $context = null, ?AuditLogger $logger = null ) {
+	public function __construct( ?CreatorContext $context = null ) {
 		try {
 			$this->context = $context ?? new CreatorContext();
-			$this->logger  = $logger ?? new AuditLogger();
 		} catch ( \Throwable $e ) {
 			error_log( 'Creator: Failed to initialize ContextRefresher: ' . $e->getMessage() );
+		}
+	}
+
+	/**
+	 * Simple logging method
+	 *
+	 * @param string $message Log message.
+	 * @param array  $context Optional context data.
+	 * @return void
+	 */
+	private function log( string $message, array $context = [] ): void {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'CreatorCore ContextRefresher: ' . $message . ' ' . wp_json_encode( $context ) );
 		}
 	}
 
@@ -67,17 +69,6 @@ class ContextRefresher {
 		return $this->context;
 	}
 
-	/**
-	 * Get logger instance (with lazy initialization)
-	 *
-	 * @return AuditLogger
-	 */
-	private function get_logger(): AuditLogger {
-		if ( $this->logger === null ) {
-			$this->logger = new AuditLogger();
-		}
-		return $this->logger;
-	}
 
 	/**
 	 * Register all hooks for auto-refresh
@@ -308,7 +299,7 @@ class ContextRefresher {
 
 			$duration = round( ( microtime( true ) - $start_time ) * 1000 );
 
-			$this->get_logger()->success( 'context_refreshed', [
+			$this->log( 'context_refreshed', [
 				'reason'      => $reason,
 				'details'     => $details,
 				'duration_ms' => $duration,
@@ -321,7 +312,7 @@ class ContextRefresher {
 				'timestamp'   => current_time( 'c' ),
 			];
 		} catch ( \Exception $e ) {
-			$this->get_logger()->failure( 'context_refresh_failed', [
+			$this->log( 'context_refresh_failed', [
 				'reason' => $reason,
 				'error'  => $e->getMessage(),
 			] );
