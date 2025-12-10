@@ -191,7 +191,7 @@ export class PluginDocsResearchService {
     name?: string,
     uri?: string
   ): string {
-    let prompt = `Research the WordPress plugin documentation for:\n\n`;
+    let prompt = "Research the WordPress plugin documentation for:\n\n";
     prompt += `Plugin Slug: ${slug}\n`;
     prompt += `Version: ${version}\n`;
 
@@ -203,9 +203,9 @@ export class PluginDocsResearchService {
       prompt += `Plugin URI: ${uri}\n`;
     }
 
-    prompt += `\nFind the official documentation URL and list the main functions/hooks this plugin provides.`;
-    prompt += `\n\nIf this is a well-known plugin, provide the actual documentation URLs.`;
-    prompt += `\nFor less known plugins, use the WordPress.org plugin page.`;
+    prompt += "\nFind the official documentation URL and list the main functions/hooks this plugin provides.";
+    prompt += "\n\nIf this is a well-known plugin, provide the actual documentation URLs.";
+    prompt += "\nFor less known plugins, use the WordPress.org plugin page.";
 
     return prompt;
   }
