@@ -117,7 +117,8 @@ class SetupWizard {
 
         // Force redirect to setup if not completed and user tries to access other Creator pages
         if ( ! get_option( 'creator_setup_completed' ) && current_user_can( 'manage_options' ) ) {
-            if ( isset( $_GET['page'] ) && strpos( $_GET['page'], 'creator-' ) === 0 && $_GET['page'] !== 'creator-setup' ) {
+            $page = isset( $_GET['page'] ) ? (string) $_GET['page'] : '';
+            if ( $page !== '' && strpos( $page, 'creator-' ) === 0 && $page !== 'creator-setup' ) {
                 wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
                 exit;
             }
