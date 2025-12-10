@@ -121,6 +121,11 @@ class ExecutePHPHandler implements ActionHandler {
 		$type = $action['type'] ?? '';
 		$code = $action['details']['code'] ?? $action['code'] ?? '';
 
+		// Must have code to execute - type alone is not enough
+		if ( empty( $code ) ) {
+			return false;
+		}
+
 		return 'execute_code' === $type || ! empty( $code );
 	}
 
