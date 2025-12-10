@@ -616,11 +616,14 @@ class ChatInterface {
         } catch ( \Throwable $e ) {
             error_log( 'Creator: Error sending to AI: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() );
             $this->thinking_logger->error( 'AI request failed: ' . $e->getMessage() );
+            // Mark as complete so SSE stream knows to stop
+            $this->thinking_logger->log_complete( 'Failed with error' );
             return [
                 'success'         => false,
                 'user_message_id' => $user_message_id,
                 'error'           => 'Error sending to AI: ' . $e->getMessage(),
                 'suggestion'      => $this->get_ai_error_suggestion( $e->getMessage() ),
+                'thinking'        => $this->thinking_logger->get_logs(),
             ];
         }
 
@@ -647,11 +650,15 @@ class ChatInterface {
                 ]
             );
 
+            // Mark as complete so SSE stream knows to stop
+            $this->thinking_logger->log_complete( 'Failed: ' . $error_msg );
+
             return [
                 'success'        => false,
                 'user_message_id' => $user_message_id,
                 'error'          => $error_msg,
                 'suggestion'     => $suggestion,
+                'thinking'       => $this->thinking_logger->get_logs(),
             ];
         }
 
