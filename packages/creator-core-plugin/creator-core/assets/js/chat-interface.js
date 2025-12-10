@@ -228,6 +228,7 @@
                 url: creatorChat.restUrl + 'chats',
                 type: 'POST',
                 contentType: 'application/json',
+                timeout: 30000, // 30 second timeout for chat creation
                 headers: {
                     'X-WP-Nonce': creatorChat.restNonce
                 },
@@ -253,14 +254,20 @@
                         self.sendMessageToChat(response.chat.id, message);
                     } else {
                         self.hideTypingIndicator();
-                        const errorMsg = response.message || 'Failed to create chat';
+                        const errorMsg = response.message || response.error || 'Failed to create chat';
                         self.showError(errorMsg, self.isLicenseError(errorMsg));
                     }
                 },
-                error: function(xhr) {
+                error: function(xhr, status, error) {
                     self.hideTypingIndicator();
-                    const error = xhr.responseJSON?.message || 'Failed to create chat';
-                    self.showError(error, self.isLicenseError(error));
+                    let errorMsg;
+                    if (status === 'timeout') {
+                        errorMsg = 'Request timed out. Please try again.';
+                    } else {
+                        errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Failed to create chat';
+                    }
+                    console.error('[CreatorChat] Create chat error:', { status, error, xhr: xhr.status });
+                    self.showError(errorMsg, self.isLicenseError(errorMsg));
                 }
             });
         },
@@ -1551,6 +1558,7 @@
             url: creatorChat.restUrl + 'chats/' + chatId + '/messages',
             type: 'POST',
             contentType: 'application/json',
+            timeout: 90000, // 90 second timeout (slightly less than server's 120s)
             headers: {
                 'X-WP-Nonce': creatorChat.restNonce
             },
@@ -1603,16 +1611,29 @@
                 } else {
                     CreatorThinking.stopStreaming();
                     CreatorThinking.remove();
-                    const errorMsg = response.message || 'Failed to send message';
+                    const errorMsg = response.message || response.error || 'Failed to send message';
                     self.showError(errorMsg, self.isLicenseError(errorMsg));
                 }
             },
-            error: function(xhr) {
+            error: function(xhr, status, error) {
                 self.hideTypingIndicator();
                 CreatorThinking.stopStreaming();
                 CreatorThinking.remove();
-                const error = xhr.responseJSON?.message || 'Failed to send message';
-                self.showError(error, self.isLicenseError(error));
+
+                // Handle different error types
+                let errorMsg;
+                if (status === 'timeout') {
+                    errorMsg = 'Request timed out. The AI service may be overloaded. Please try again.';
+                } else if (status === 'abort') {
+                    errorMsg = 'Request was cancelled.';
+                } else if (xhr.status === 0) {
+                    errorMsg = 'Network error. Please check your connection and try again.';
+                } else {
+                    errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || error || 'Failed to send message';
+                }
+
+                console.error('[CreatorChat] AJAX error:', { status, error, xhr: xhr.status, response: xhr.responseText });
+                self.showError(errorMsg, self.isLicenseError(errorMsg));
             }
         });
     };
