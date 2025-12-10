@@ -515,8 +515,9 @@ class ContextCollector {
         ] );
 
         foreach ( $pages as $page ) {
+            $permalink = get_permalink( $page->ID );
             $sitemap[] = [
-                'url'         => str_replace( home_url(), '', get_permalink( $page->ID ) ),
+                'url'         => $permalink ? str_replace( home_url(), '', $permalink ) : '',
                 'title'       => $page->post_title,
                 'description' => $this->get_post_summary( $page ),
                 'post_type'   => 'page',
@@ -538,8 +539,9 @@ class ContextCollector {
 
         foreach ( $posts as $post ) {
             $categories = wp_get_post_categories( $post->ID, [ 'fields' => 'names' ] );
+            $permalink = get_permalink( $post->ID );
             $sitemap[] = [
-                'url'         => str_replace( home_url(), '', get_permalink( $post->ID ) ),
+                'url'         => $permalink ? str_replace( home_url(), '', $permalink ) : '',
                 'title'       => $post->post_title,
                 'description' => $this->get_post_summary( $post ),
                 'post_type'   => 'post',
@@ -561,8 +563,9 @@ class ContextCollector {
             ] );
 
             foreach ( $cpt_posts as $cpt_post ) {
+                $permalink = get_permalink( $cpt_post->ID );
                 $sitemap[] = [
-                    'url'         => str_replace( home_url(), '', get_permalink( $cpt_post->ID ) ),
+                    'url'         => $permalink ? str_replace( home_url(), '', $permalink ) : '',
                     'title'       => $cpt_post->post_title,
                     'description' => $this->get_post_summary( $cpt_post ),
                     'post_type'   => $cpt,

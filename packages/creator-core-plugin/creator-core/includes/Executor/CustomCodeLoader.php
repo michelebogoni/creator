@@ -222,10 +222,10 @@ class CustomCodeLoader {
 		}
 
 		// Remove whitespace and check if content remains
-		$stripped = preg_replace( '/\s+/', '', $stripped );
-		$stripped = str_replace( [ 'definedABSPATHexit', 'usestrict' ], '', $stripped );
+		$stripped = preg_replace( '/\s+/', '', $stripped ?? '' );
+		$stripped = str_replace( [ 'definedABSPATHexit', 'usestrict' ], '', $stripped ?? '' );
 
-		return strlen( $stripped ) > 50; // Arbitrary threshold for "real" code
+		return strlen( $stripped ?? '' ) > 50; // Arbitrary threshold for "real" code
 	}
 
 	/**
