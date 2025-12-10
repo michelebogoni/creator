@@ -1352,6 +1352,13 @@
          * Create the thinking panel HTML
          */
         createPanel: function() {
+            // Check if container exists
+            const $container = $('.creator-input-container');
+            if ($container.length === 0) {
+                console.warn('[CreatorThinking] Input container not found, panel will not be created');
+                return;
+            }
+
             const panelHtml = `
                 <div class="creator-thinking-panel collapsed" id="creator-thinking-panel" style="display: none;">
                     <div class="creator-thinking-header">
@@ -1379,7 +1386,7 @@
             `;
 
             // Insert panel before the input area
-            $('.creator-input-container').before(panelHtml);
+            $container.before(panelHtml);
             this.panel = $('#creator-thinking-panel');
             this.logContainer = $('#thinking-log');
         },
@@ -1402,6 +1409,9 @@
          * Toggle panel collapse state
          */
         togglePanel: function() {
+            if (!this.panel || this.panel.length === 0) {
+                return;
+            }
             this.panel.toggleClass('collapsed');
             const isCollapsed = this.panel.hasClass('collapsed');
             $('#thinking-toggle').text(isCollapsed ? '+' : '−');
@@ -1411,9 +1421,21 @@
          * Show the thinking panel
          */
         show: function() {
+            // Ensure panel is created
+            if (!this.panel || this.panel.length === 0) {
+                this.createPanel();
+            }
+            // If still no panel, bail out
+            if (!this.panel || this.panel.length === 0) {
+                console.warn('[CreatorThinking] Cannot show - panel not available');
+                return;
+            }
+
             this.isVisible = true;
             this.logs = [];
-            this.logContainer.empty();
+            if (this.logContainer && this.logContainer.length) {
+                this.logContainer.empty();
+            }
             this.panel.show().removeClass('collapsed');
             $('#thinking-toggle').text('−');
             $('#thinking-badge').text('0');
@@ -1425,7 +1447,9 @@
          */
         hide: function() {
             this.isVisible = false;
-            this.panel.addClass('collapsed');
+            if (this.panel && this.panel.length) {
+                this.panel.addClass('collapsed');
+            }
             $('#thinking-toggle').text('+');
             this.showSummary();
         },
@@ -1436,6 +1460,11 @@
         addLog: function(log) {
             this.logs.push(log);
 
+            // Skip DOM operations if container not available
+            if (!this.logContainer || this.logContainer.length === 0) {
+                return;
+            }
+
             const logItem = $(`
                 <div class="creator-thinking-log-item level-${log.level || 'info'}">
                     <span class="creator-thinking-log-phase ${log.phase || ''}">${log.phase || ''}</span>
@@ -1445,7 +1474,9 @@
             `);
 
             this.logContainer.append(logItem);
-            this.logContainer.scrollTop(this.logContainer[0].scrollHeight);
+            if (this.logContainer[0]) {
+                this.logContainer.scrollTop(this.logContainer[0].scrollHeight);
+            }
 
             // Update badge
             $('#thinking-badge').text(this.logs.length);
@@ -1479,7 +1510,9 @@
          */
         clear: function() {
             this.logs = [];
-            this.logContainer.empty();
+            if (this.logContainer && this.logContainer.length) {
+                this.logContainer.empty();
+            }
             $('#thinking-badge').text('0');
             $('#thinking-summary').hide();
         },
@@ -1488,7 +1521,9 @@
          * Completely hide the panel
          */
         remove: function() {
-            this.panel.hide();
+            if (this.panel && this.panel.length) {
+                this.panel.hide();
+            }
             this.clear();
         },
 
