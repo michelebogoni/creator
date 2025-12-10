@@ -1,7 +1,7 @@
 /**
- * Creator Core - Simple Chat Scripts (Phase 2)
+ * Creator Core - Simple Chat Scripts (Phase 2/3)
  *
- * Basic chat loop: Message -> Firebase -> AI -> Response
+ * Chat loop with code execution: Message -> Firebase -> AI -> Response -> Execute
  *
  * @package CreatorCore
  */
@@ -154,12 +154,61 @@
                 if (metadata.type) html += '<span class="meta-type">Type: ' + metadata.type + '</span>';
                 if (metadata.status) html += '<span class="meta-status">' + metadata.status + '</span>';
                 html += '</div>';
+
+                // Phase 3: Show execution result if present
+                if (metadata.execution_result) {
+                    html += this.formatExecutionResult(metadata.execution_result);
+                }
             }
 
             html += '</div></div>';
 
             $messages.append(html);
             this.scrollToBottom();
+        },
+
+        /**
+         * Format execution result for display
+         */
+        formatExecutionResult: function(result) {
+            let html = '<div class="creator-execution-result">';
+
+            if (result.success) {
+                html += '<div class="execution-success">';
+                html += '<span class="execution-icon">✅</span>';
+                html += '<span class="execution-label">Code executed successfully</span>';
+                html += '</div>';
+
+                // Show output if present
+                if (result.output && result.output.trim()) {
+                    html += '<div class="execution-output">';
+                    html += '<strong>Output:</strong><br>';
+                    html += '<code>' + this.escapeHtml(result.output) + '</code>';
+                    html += '</div>';
+                }
+
+                // Show result data if present
+                if (result.result && typeof result.result === 'object') {
+                    html += '<div class="execution-data">';
+                    html += '<strong>Result:</strong><br>';
+                    html += '<code>' + this.escapeHtml(JSON.stringify(result.result, null, 2)) + '</code>';
+                    html += '</div>';
+                }
+            } else {
+                html += '<div class="execution-error">';
+                html += '<span class="execution-icon">❌</span>';
+                html += '<span class="execution-label">Execution failed</span>';
+                html += '</div>';
+
+                if (result.error) {
+                    html += '<div class="execution-error-message">';
+                    html += '<code>' + this.escapeHtml(result.error) + '</code>';
+                    html += '</div>';
+                }
+            }
+
+            html += '</div>';
+            return html;
         },
 
         /**
