@@ -106,6 +106,65 @@ IMPORTANT RULES:
 
 Return ONLY the JSON object.`;
 
+/**
+ * Build context-aware system prompt
+ *
+ * @param basePrompt - Base system prompt
+ * @param context - WordPress context from plugin
+ * @returns Enhanced system prompt with context
+ */
+function buildContextAwarePrompt(
+  basePrompt: string,
+  context?: Record<string, unknown>
+): string {
+  if (!context || Object.keys(context).length === 0) {
+    return basePrompt;
+  }
+
+  // Build WordPress environment summary
+  const wpInfo = context.wordpress as Record<string, unknown> | undefined;
+  const phpInfo = context.php as Record<string, unknown> | undefined;
+  const mysqlInfo = context.mysql as Record<string, unknown> | undefined;
+  const themeInfo = context.theme as Record<string, unknown> | undefined;
+  const pluginsInfo = context.plugins as Array<Record<string, unknown>> | undefined;
+
+  let envSummary = "\n\nCURRENT WORDPRESS ENVIRONMENT:";
+
+  if (wpInfo) {
+    envSummary += `\n- WordPress Version: ${wpInfo.version || "unknown"}`;
+    if (wpInfo.locale) envSummary += `\n- Locale: ${wpInfo.locale}`;
+    if (wpInfo.multisite) envSummary += `\n- Multisite: ${wpInfo.multisite}`;
+    if (wpInfo.site_url) envSummary += `\n- Site URL: ${wpInfo.site_url}`;
+  }
+
+  if (phpInfo?.version) {
+    envSummary += `\n- PHP Version: ${phpInfo.version}`;
+  }
+
+  if (mysqlInfo?.version) {
+    envSummary += `\n- MySQL Version: ${mysqlInfo.version}`;
+  }
+
+  if (themeInfo) {
+    envSummary += `\n- Active Theme: ${themeInfo.name || "unknown"}`;
+    if (themeInfo.version) envSummary += ` (v${themeInfo.version})`;
+    if (themeInfo.parent) envSummary += ` - Child of: ${themeInfo.parent}`;
+  }
+
+  if (pluginsInfo && Array.isArray(pluginsInfo)) {
+    const activePlugins = pluginsInfo.filter((p) => p.active);
+    if (activePlugins.length > 0) {
+      envSummary += "\n- Active Plugins:";
+      activePlugins.forEach((plugin) => {
+        envSummary += `\n  - ${plugin.name} (v${plugin.version})`;
+      });
+    }
+  }
+
+  envSummary += "\n\nUse this environment information when answering questions about the site configuration.";
+
+  return basePrompt + envSummary;
+}
 
 /**
  * Provider keys configuration
@@ -220,7 +279,10 @@ export class ModelService {
     const modelId = MODEL_IDS[model];
 
     // Use default system prompt if none provided
-    const systemPrompt = request.system_prompt || DEFAULT_SYSTEM_PROMPT;
+    const baseSystemPrompt = request.system_prompt || DEFAULT_SYSTEM_PROMPT;
+
+    // Enhance system prompt with WordPress context if available
+    const systemPrompt = buildContextAwarePrompt(baseSystemPrompt, request.context);
 
     try {
       let response;

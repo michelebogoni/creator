@@ -17,6 +17,8 @@ defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Chat\ChatInterface;
 use CreatorCore\Backup\Rollback;
+use CreatorCore\Proxy\ProxyClient as SimpleProxyClient;
+use CreatorCore\Context\ContextLoaderSimple;
 
 /**
  * Class ChatController
@@ -47,6 +49,30 @@ class ChatController extends BaseController {
 	 * @return void
 	 */
 	public function register_routes(): void {
+		// Phase 2: Simple chat endpoint (POST /creator/v1/chat)
+		register_rest_route( self::NAMESPACE, '/chat', [
+			'methods'             => \WP_REST_Server::CREATABLE,
+			'callback'            => [ $this, 'handle_simple_chat' ],
+			'permission_callback' => [ $this, 'check_permission' ],
+			'args'                => [
+				'message' => [
+					'required'          => true,
+					'type'              => 'string',
+					'sanitize_callback' => 'sanitize_textarea_field',
+				],
+				'conversation_id' => [
+					'required' => false,
+					'type'     => 'string',
+					'default'  => '',
+				],
+				'conversation_history' => [
+					'required' => false,
+					'type'     => 'array',
+					'default'  => [],
+				],
+			],
+		]);
+
 		// Chat list and create
 		register_rest_route( self::NAMESPACE, '/chats', [
 			[
@@ -378,5 +404,109 @@ class ChatController extends BaseController {
 		$status = $this->chat_interface->check_undo_availability( $message_id );
 
 		return $this->success( $status );
+	}
+
+	/**
+	 * Handle simple chat message (Phase 2 - basic chat loop)
+	 *
+	 * POST /creator/v1/chat
+	 * - Receives user message
+	 * - Calls Firebase proxy
+	 * - Returns AI response
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public function handle_simple_chat( \WP_REST_Request $request ) {
+		$message         = $request->get_param( 'message' );
+		$conversation_id = $request->get_param( 'conversation_id' );
+		$history         = $request->get_param( 'conversation_history' );
+
+		// Validate message
+		if ( empty( trim( $message ) ) ) {
+			return $this->error(
+				'empty_message',
+				__( 'Message cannot be empty', 'creator-core' ),
+				400
+			);
+		}
+
+		try {
+			// Get WordPress context
+			$context_loader = new ContextLoaderSimple();
+			$context        = $context_loader->get_context();
+
+			// Send to Firebase proxy
+			$proxy_client = new SimpleProxyClient();
+			$ai_response  = $proxy_client->send_message( [
+				'prompt'               => $message,
+				'context'              => $context,
+				'conversation_history' => $history,
+			] );
+
+			// Handle errors
+			if ( ! $ai_response['success'] ) {
+				return $this->error(
+					'ai_request_failed',
+					$ai_response['error'] ?? __( 'AI request failed', 'creator-core' ),
+					500
+				);
+			}
+
+			// Parse and return response
+			$parsed = $this->parse_simple_response( $ai_response );
+
+			return $this->success( [
+				'response'        => $parsed,
+				'conversation_id' => $conversation_id,
+				'tokens_used'     => $ai_response['tokens_used'] ?? 0,
+				'model'           => $ai_response['model'] ?? 'unknown',
+			] );
+
+		} catch ( \Throwable $e ) {
+			error_log( 'Creator simple chat error: ' . $e->getMessage() );
+
+			return $this->error(
+				'chat_exception',
+				sprintf( 'Error: %s', $e->getMessage() ),
+				500
+			);
+		}
+	}
+
+	/**
+	 * Parse simple AI response
+	 *
+	 * @param array $ai_response Raw AI response from Firebase.
+	 * @return array Parsed response.
+	 */
+	private function parse_simple_response( array $ai_response ): array {
+		$content = $ai_response['content'] ?? '';
+
+		// Try to parse as JSON (AI should respond with structured format)
+		$json = json_decode( $content, true );
+
+		if ( json_last_error() === JSON_ERROR_NONE && is_array( $json ) ) {
+			return [
+				'step'                   => $json['step'] ?? 'discovery',
+				'type'                   => $json['type'] ?? 'complete',
+				'status'                 => $json['status'] ?? '',
+				'message'                => $json['message'] ?? $content,
+				'data'                   => $json['data'] ?? [],
+				'requires_confirmation'  => $json['requires_confirmation'] ?? false,
+				'continue_automatically' => $json['continue_automatically'] ?? false,
+			];
+		}
+
+		// Plain text response
+		return [
+			'step'                   => 'discovery',
+			'type'                   => 'complete',
+			'status'                 => 'Response ready',
+			'message'                => $content,
+			'data'                   => [],
+			'requires_confirmation'  => false,
+			'continue_automatically' => false,
+		];
 	}
 }
