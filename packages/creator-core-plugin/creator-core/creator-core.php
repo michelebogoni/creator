@@ -40,7 +40,8 @@ add_action( 'admin_notices', function() {
     if ( get_option( 'creator_setup_completed' ) ) {
         return;
     }
-    if ( isset( $_GET['page'] ) && strpos( $_GET['page'], 'creator-' ) === 0 ) {
+    $page = isset( $_GET['page'] ) ? (string) $_GET['page'] : '';
+    if ( $page !== '' && strpos( $page, 'creator-' ) === 0 ) {
         return;
     }
     $url = admin_url( 'admin.php?page=creator-setup' );
