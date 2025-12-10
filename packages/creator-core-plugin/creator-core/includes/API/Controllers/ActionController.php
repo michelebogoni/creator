@@ -17,28 +17,39 @@ defined( 'ABSPATH' ) || exit;
 use CreatorCore\Chat\ChatInterface;
 use CreatorCore\Backup\Rollback;
 use CreatorCore\Context\ContextLoader;
+use CreatorCore\Executor\ActionDispatcher;
 
 /**
  * Class ActionController
  *
  * REST API controller for action operations.
+ * Uses the Universal PHP Engine pattern via ActionDispatcher.
  */
 class ActionController extends BaseController {
 
 	/**
-	 * Chat interface instance
+	 * Chat interface instance (kept for backward compatibility)
 	 *
 	 * @var ChatInterface
 	 */
 	private ChatInterface $chat_interface;
 
 	/**
+	 * Action dispatcher for Universal PHP Engine
+	 *
+	 * @var ActionDispatcher
+	 */
+	private ActionDispatcher $dispatcher;
+
+	/**
 	 * Constructor
 	 *
-	 * @param ChatInterface $chat_interface Chat interface instance.
+	 * @param ChatInterface         $chat_interface Chat interface instance.
+	 * @param ActionDispatcher|null $dispatcher     Optional action dispatcher.
 	 */
-	public function __construct( ChatInterface $chat_interface ) {
+	public function __construct( ChatInterface $chat_interface, ?ActionDispatcher $dispatcher = null ) {
 		$this->chat_interface = $chat_interface;
+		$this->dispatcher     = $dispatcher ?? new ActionDispatcher();
 	}
 
 	/**
@@ -78,10 +89,12 @@ class ActionController extends BaseController {
 	/**
 	 * Execute an action (context request or code execution)
 	 *
-	 * Supports the universal PHP engine pattern where AI generates executable code.
-	 * Only two action categories are supported:
-	 * 1. Context requests (get_plugin_details, get_acf_details, etc.)
-	 * 2. Code execution (execute_code) - The universal PHP engine
+	 * Supports the Universal PHP Engine pattern where AI generates executable code.
+	 * Routes actions through ActionDispatcher for clean separation of concerns.
+	 *
+	 * Two action categories are supported:
+	 * 1. Context requests (get_plugin_details, get_acf_details, etc.) - for discovery phase
+	 * 2. Code execution (execute_code) - Universal PHP Engine via ActionDispatcher
 	 *
 	 * @param \WP_REST_Request $request Request object.
 	 * @return \WP_REST_Response|\WP_Error
@@ -101,6 +114,7 @@ class ActionController extends BaseController {
 		$type = $action['type'] ?? '';
 
 		// Handle context request actions (lazy-load for discovery phase)
+		// These bypass the dispatcher as they don't execute code
 		$context_types = [
 			'get_plugin_details',
 			'get_acf_details',
@@ -110,52 +124,91 @@ class ActionController extends BaseController {
 		];
 
 		if ( in_array( $type, $context_types, true ) ) {
-			try {
-				$context_loader = new ContextLoader();
-				$result         = $context_loader->handle_context_request( $action );
-
-				return $this->success( [
-					'success' => $result['success'] ?? false,
-					'data'    => $result['data'] ?? null,
-					'error'   => $result['error'] ?? null,
-					'type'    => $type,
-				] );
-			} catch ( \Throwable $e ) {
-				return $this->error(
-					'context_request_failed',
-					$e->getMessage(),
-					500
-				);
-			}
+			return $this->handle_context_request( $action, $type );
 		}
 
-		// Universal PHP Engine: Handle execute_code action
-		// Code can be in $action['code'] or $action['details']['code'] (new format)
+		// Universal PHP Engine: Route through ActionDispatcher
+		return $this->handle_code_execution( $action, $chat_id );
+	}
+
+	/**
+	 * Handle context request actions
+	 *
+	 * @param array  $action Action data.
+	 * @param string $type   Action type.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	private function handle_context_request( array $action, string $type ) {
+		try {
+			$context_loader = new ContextLoader();
+			$result         = $context_loader->handle_context_request( $action );
+
+			return $this->success( [
+				'success' => $result['success'] ?? false,
+				'data'    => $result['data'] ?? null,
+				'error'   => $result['error'] ?? null,
+				'type'    => $type,
+			] );
+		} catch ( \Throwable $e ) {
+			return $this->error(
+				'context_request_failed',
+				$e->getMessage(),
+				500
+			);
+		}
+	}
+
+	/**
+	 * Handle code execution via ActionDispatcher
+	 *
+	 * @param array $action  Action data with code.
+	 * @param int   $chat_id Chat ID for context.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	private function handle_code_execution( array $action, int $chat_id ) {
+		// Extract code to verify we have something to execute
 		$code = $this->extract_code_from_action( $action );
 
-		if ( ! empty( $code ) ) {
-			try {
-				// Normalize action structure for CodeExecutor
-				// CodeExecutor expects: content, title, description, language, auto_execute
-				$normalized_action = $this->normalize_code_action( $action, $code );
-
-				$result = $this->chat_interface->execute_action_code( $normalized_action, $chat_id );
-
-				return $this->success( $result );
-			} catch ( \Throwable $e ) {
-				return $this->error(
-					'code_execution_failed',
-					$e->getMessage(),
-					500
-				);
-			}
+		if ( empty( $code ) ) {
+			return $this->error(
+				'invalid_action',
+				__( 'Action must contain executable code (type: execute_code with code in details)', 'creator-core' ),
+				400
+			);
 		}
 
-		return $this->error(
-			'invalid_action',
-			__( 'Action must be a context request or contain executable code (execute_code type)', 'creator-core' ),
-			400
-		);
+		try {
+			// Dispatch through the Universal PHP Engine
+			$result = $this->dispatcher->dispatch( $action );
+
+			// Convert ActionResult to response format
+			$response_data = $result->toArray();
+
+			// Add chat context
+			if ( $chat_id > 0 ) {
+				$response_data['chat_id'] = $chat_id;
+			}
+
+			// Fire action for logging/tracking
+			do_action( 'creator_code_executed', $action, $result, $chat_id );
+
+			if ( $result->isSuccess() ) {
+				return $this->success( $response_data );
+			}
+
+			return $this->error(
+				'code_execution_failed',
+				$result->getError() ?? __( 'Code execution failed', 'creator-core' ),
+				500,
+				$response_data
+			);
+		} catch ( \Throwable $e ) {
+			return $this->error(
+				'code_execution_failed',
+				$e->getMessage(),
+				500
+			);
+		}
 	}
 
 	/**
@@ -323,28 +376,5 @@ class ActionController extends BaseController {
 		}
 
 		return '';
-	}
-
-	/**
-	 * Normalize action to CodeExecutor expected format
-	 *
-	 * CodeExecutor expects: content, title, description, language, auto_execute
-	 *
-	 * @param array  $action Original action object.
-	 * @param string $code   Extracted PHP code.
-	 * @return array Normalized action for CodeExecutor.
-	 */
-	private function normalize_code_action( array $action, string $code ): array {
-		$details = $action['details'] ?? [];
-
-		return [
-			'content'      => $code,
-			'title'        => $details['description'] ?? $action['title'] ?? 'AI Generated Code',
-			'description'  => $details['description'] ?? $action['description'] ?? '',
-			'language'     => 'php',
-			'auto_execute' => true,
-			'risk'         => $details['estimated_risk'] ?? $action['risk'] ?? 'medium',
-			'type'         => 'execute_code',
-		];
 	}
 }
