@@ -11,12 +11,8 @@ defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Admin\Dashboard;
 use CreatorCore\Admin\Settings;
-use CreatorCore\Admin\SetupWizard;
 use CreatorCore\Chat\ChatInterface;
-use CreatorCore\Backup\SnapshotManager;
-use CreatorCore\Permission\CapabilityChecker;
-use CreatorCore\Audit\AuditLogger;
-use CreatorCore\Integrations\ProxyClient;
+use CreatorCore\Proxy\ProxyClient;
 use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\API\REST_API;
 use CreatorCore\Context\ContextRefresher;
@@ -44,39 +40,11 @@ class Loader {
     private Settings $settings;
 
     /**
-     * Setup wizard instance
-     *
-     * @var SetupWizard
-     */
-    private SetupWizard $setup_wizard;
-
-    /**
      * Chat interface instance
      *
      * @var ChatInterface
      */
     private ChatInterface $chat_interface;
-
-    /**
-     * Snapshot manager instance
-     *
-     * @var SnapshotManager
-     */
-    private SnapshotManager $snapshot_manager;
-
-    /**
-     * Capability checker instance
-     *
-     * @var CapabilityChecker
-     */
-    private CapabilityChecker $capability_checker;
-
-    /**
-     * Audit logger instance
-     *
-     * @var AuditLogger
-     */
-    private AuditLogger $audit_logger;
 
     /**
      * Proxy client instance
@@ -129,32 +97,19 @@ class Loader {
      * @return void
      */
     private function init_components(): void {
-        // Core services (order matters - dependencies first)
-        $this->audit_logger       = new AuditLogger();
-        $this->capability_checker = new CapabilityChecker();
-        $this->plugin_detector    = new PluginDetector();
-        $this->proxy_client       = new ProxyClient();
-        $this->snapshot_manager   = new SnapshotManager( $this->audit_logger );
+        // Core services
+        $this->plugin_detector = new PluginDetector();
+        $this->proxy_client    = new ProxyClient();
 
         // Admin components
-        $this->dashboard     = new Dashboard( $this->plugin_detector, $this->audit_logger );
-        $this->settings      = new Settings( $this->proxy_client, $this->plugin_detector );
-        $this->setup_wizard  = new SetupWizard( $this->plugin_detector );
+        $this->dashboard = new Dashboard( $this->plugin_detector );
+        $this->settings  = new Settings( $this->proxy_client, $this->plugin_detector );
 
         // Chat system
-        $this->chat_interface = new ChatInterface(
-            $this->proxy_client,
-            $this->capability_checker,
-            $this->snapshot_manager,
-            $this->audit_logger
-        );
+        $this->chat_interface = new ChatInterface( $this->proxy_client );
 
         // REST API
-        $this->rest_api = new REST_API(
-            $this->chat_interface,
-            $this->capability_checker,
-            $this->audit_logger
-        );
+        $this->rest_api = new REST_API( $this->chat_interface );
 
         // Context auto-refresh
         $this->context_refresher = new ContextRefresher();
@@ -178,14 +133,8 @@ class Loader {
         // REST API
         add_action( 'rest_api_init', [ $this->rest_api, 'register_routes' ] );
 
-        // Setup wizard redirect on activation (priority 1 to run early)
-        add_action( 'admin_init', [ $this->setup_wizard, 'maybe_redirect' ], 1 );
-
         // Plugin action links
         add_filter( 'plugin_action_links_' . CREATOR_CORE_BASENAME, [ $this, 'add_action_links' ] );
-
-        // Add custom capabilities on init
-        add_action( 'init', [ $this->capability_checker, 'register_capabilities' ] );
 
         // Register context auto-refresh hooks
         $this->context_refresher->register_hooks();
@@ -193,38 +142,8 @@ class Loader {
         // Initialize custom code loader (loads PHP, enqueues CSS/JS)
         $this->custom_code_loader->init();
 
-        // Register cron handler for backup cleanup
-        add_action( 'creator_cleanup_backups', [ $this, 'run_backup_cleanup' ] );
-
         // Register cron handler for thinking logs cleanup (30 days retention)
         add_action( 'creator_cleanup_thinking_logs', [ Activator::class, 'cleanup_thinking_logs' ] );
-    }
-
-    /**
-     * Run scheduled backup cleanup
-     *
-     * Enforces both retention days and max size limits.
-     *
-     * @return void
-     */
-    public function run_backup_cleanup(): void {
-        $retention_days = (int) get_option( 'creator_backup_retention', 30 );
-        $max_size_mb    = (int) get_option( 'creator_max_backup_size_mb', 500 );
-
-        // Clean up old snapshots by retention days
-        $deleted_by_age = $this->snapshot_manager->cleanup_old_snapshots( $retention_days );
-
-        // Enforce max size limit
-        $deleted_by_size = $this->snapshot_manager->enforce_size_limit( $max_size_mb );
-
-        if ( $deleted_by_age > 0 || $deleted_by_size > 0 ) {
-            $this->audit_logger->success( 'scheduled_backup_cleanup', [
-                'deleted_by_age'  => $deleted_by_age,
-                'deleted_by_size' => $deleted_by_size,
-                'retention_days'  => $retention_days,
-                'max_size_mb'     => $max_size_mb,
-            ]);
-        }
     }
 
     /**
@@ -272,16 +191,6 @@ class Loader {
             'manage_options',
             'creator-settings',
             [ $this->settings, 'render' ]
-        );
-
-        // Setup Wizard (hidden from menu - use 'options.php' as parent for PHP 8 compatibility)
-        add_submenu_page(
-            'options.php',
-            __( 'Setup Wizard', 'creator-core' ),
-            __( 'Setup Wizard', 'creator-core' ),
-            'manage_options',
-            'creator-setup',
-            [ $this->setup_wizard, 'render' ]
         );
     }
 
@@ -381,38 +290,6 @@ class Loader {
                     'undoSuccess'   => __( 'Action undone successfully.', 'creator-core' ),
                     'processing'    => __( 'Processing...', 'creator-core' ),
                     'goToSettings'  => __( 'Go to Settings', 'creator-core' ),
-                ],
-            ]);
-        }
-
-        if ( strpos( $hook, 'creator-setup' ) !== false ) {
-            wp_enqueue_style(
-                'creator-setup-wizard',
-                CREATOR_CORE_URL . 'assets/css/setup-wizard.css',
-                [ 'creator-admin-common' ],
-                CREATOR_CORE_VERSION
-            );
-            wp_enqueue_script(
-                'creator-setup-wizard',
-                CREATOR_CORE_URL . 'assets/js/setup-wizard.js',
-                [ 'jquery' ],
-                CREATOR_CORE_VERSION,
-                true
-            );
-            $current_step = isset( $_GET['step'] ) ? sanitize_key( $_GET['step'] ) : 'safety';
-            $step_map     = [ 'safety' => 1, 'overview' => 2, 'backup' => 3, 'license' => 4, 'profile' => 5, 'finish' => 6 ];
-            wp_localize_script( 'creator-setup-wizard', 'creatorSetup', [
-                'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
-                'nonce'        => wp_create_nonce( 'creator_setup_nonce' ),
-                'currentStep'  => $step_map[ $current_step ] ?? 1,
-                'dashboardUrl' => admin_url( 'admin.php?page=creator-dashboard' ),
-                'i18n'         => [
-                    'installing' => __( 'Installing...', 'creator-core' ),
-                    'installed'  => __( 'Installed', 'creator-core' ),
-                    'error'      => __( 'Installation failed', 'creator-core' ),
-                    'validating' => __( 'Validating...', 'creator-core' ),
-                    'valid'      => __( 'Valid', 'creator-core' ),
-                    'invalid'    => __( 'Invalid license key', 'creator-core' ),
                 ],
             ]);
         }

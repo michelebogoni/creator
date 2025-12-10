@@ -12,8 +12,6 @@ namespace CreatorCore\Executor;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Audit\AuditLogger;
-
 /**
  * Class ExecutionVerifier
  *
@@ -36,19 +34,23 @@ class ExecutionVerifier {
 	public const RESULT_SKIPPED = 'skipped';
 
 	/**
-	 * Audit logger instance
-	 *
-	 * @var AuditLogger
+	 * Constructor
 	 */
-	private AuditLogger $logger;
+	public function __construct() {
+		// No dependencies needed
+	}
 
 	/**
-	 * Constructor
+	 * Log a message (simple debug logging)
 	 *
-	 * @param AuditLogger|null $logger Audit logger instance.
+	 * @param string $level   Log level.
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
-	public function __construct( ?AuditLogger $logger = null ) {
-		$this->logger = $logger ?? new AuditLogger();
+	private function log( string $level, string $message, array $context = [] ): void {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( "Creator ExecutionVerifier [$level]: $message " . wp_json_encode( $context ) );
+		}
 	}
 
 	/**
@@ -69,9 +71,9 @@ class ExecutionVerifier {
 		}
 
 		// Log verification result
-		$this->logger->log(
-			'execution_verified',
+		$this->log(
 			$result['success'] ? 'success' : 'warning',
+			'execution_verified',
 			[
 				'action_type' => $action_type,
 				'result'      => $result['status'],

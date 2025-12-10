@@ -10,7 +10,7 @@
 /**
  * Supported AI provider names
  */
-export type ProviderName = "openai" | "gemini" | "claude";
+export type ProviderName = "gemini" | "claude";
 
 /**
  * File attachment for multimodal requests
@@ -293,26 +293,27 @@ export interface ProviderPricing {
  * Updated as of December 2025
  *
  * Active models:
- * - Claude Opus 4 (primary)
- * - Gemini Pro (fallback)
+ * - Gemini 2.5 Flash (primary)
+ * - Claude (fallback)
  */
 export const PROVIDER_PRICING: Record<ProviderName, Record<string, ProviderPricing>> = {
-  openai: {
-    // OpenAI kept for future compatibility but not actively used
-    "gpt-4o": {
-      input_cost_per_1k: 0.005,
-      output_cost_per_1k: 0.015,
-    },
-  },
   gemini: {
-    // Gemini Pro - Primary fallback model
+    // Gemini 2.5 Flash - Primary model
+    "gemini-2.5-flash-preview-05-20": {
+      input_cost_per_1k: 0.00015,
+      output_cost_per_1k: 0.0006,
+    },
     "gemini-2.5-pro-preview-05-06": {
       input_cost_per_1k: 0.00125,
       output_cost_per_1k: 0.01,
     },
   },
   claude: {
-    // Claude Opus 4 - Primary model
+    // Claude Sonnet 4 - Fallback model
+    "claude-sonnet-4-20250514": {
+      input_cost_per_1k: 0.003,
+      output_cost_per_1k: 0.015,
+    },
     "claude-opus-4-5-20251101": {
       input_cost_per_1k: 0.015,
       output_cost_per_1k: 0.075,

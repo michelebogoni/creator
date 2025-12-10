@@ -10,9 +10,6 @@ namespace CreatorCore\Admin;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Integrations\PluginDetector;
-use CreatorCore\Audit\AuditLogger;
-use CreatorCore\Chat\ChatInterface;
-use CreatorCore\Backup\SnapshotManager;
 
 /**
  * Class Dashboard
@@ -29,21 +26,12 @@ class Dashboard {
     private PluginDetector $plugin_detector;
 
     /**
-     * Audit logger instance
-     *
-     * @var AuditLogger
-     */
-    private AuditLogger $logger;
-
-    /**
      * Constructor
      *
      * @param PluginDetector $plugin_detector Plugin detector instance.
-     * @param AuditLogger    $logger          Audit logger instance.
      */
-    public function __construct( PluginDetector $plugin_detector, AuditLogger $logger ) {
+    public function __construct( PluginDetector $plugin_detector ) {
         $this->plugin_detector = $plugin_detector;
-        $this->logger          = $logger;
     }
 
     /**

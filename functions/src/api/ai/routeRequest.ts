@@ -25,8 +25,45 @@ import {
   updateCostTracking,
   checkAndIncrementRateLimit,
 } from "../../lib/firestore";
-import { sanitizePrompt, validatePrompt } from "../../services/aiRouter";
 import { ModelService } from "../../services/modelService";
+
+/**
+ * Validates a prompt string
+ */
+function validatePrompt(
+  prompt: string | undefined | null,
+  maxLength: number
+): { valid: boolean; error?: string } {
+  if (!prompt || typeof prompt !== "string") {
+    return { valid: false, error: "Prompt is required and must be a string" };
+  }
+
+  const trimmed = prompt.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: "Prompt cannot be empty" };
+  }
+
+  if (trimmed.length > maxLength) {
+    return {
+      valid: false,
+      error: `Prompt exceeds maximum length of ${maxLength} characters`,
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Sanitizes a prompt by removing potentially dangerous content
+ */
+function sanitizePrompt(prompt: string): string {
+  return prompt
+    .trim()
+    // Remove null bytes
+    .replace(/\0/g, "")
+    // Normalize whitespace
+    .replace(/\s+/g, " ");
+}
 import {
   AIModel,
   isValidProvider,

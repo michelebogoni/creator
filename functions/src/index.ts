@@ -6,7 +6,7 @@
  * This is the main entry point for all Cloud Functions.
  * All functions are exported from this file and deployed to Firebase.
  *
- * @version 1.0.0
+ * @version 3.0.0-MVP
  * @author Creator AI Team
  */
 
@@ -21,7 +21,7 @@
  */
 export { validateLicense } from "./api/auth/validateLicense";
 
-// ==================== AI ENDPOINTS (Milestone 4) ====================
+// ==================== AI ENDPOINTS ====================
 
 /**
  * POST /api/ai/route-request
@@ -31,39 +31,6 @@ export { validateLicense } from "./api/auth/validateLicense";
  * @see {@link module:api/ai/routeRequest}
  */
 export { routeRequest } from "./api/ai/routeRequest";
-
-// ==================== TASK ENDPOINTS (Milestone 5) ====================
-
-/**
- * POST /api/tasks/submit
- *
- * Submits an async task for background processing.
- * Returns a job_id that can be used to poll status.
- *
- * @see {@link module:api/tasks/submitTask}
- */
-export { submitTask } from "./api/tasks/submitTask";
-
-/**
- * GET /api/tasks/status/:job_id
- *
- * Retrieves the current status of an async job.
- *
- * @see {@link module:api/tasks/getStatus}
- */
-export { getTaskStatus } from "./api/tasks/getStatus";
-
-// ==================== ANALYTICS ENDPOINTS (Milestone 6) ====================
-
-/**
- * GET /api/analytics
- *
- * Returns cost tracking and usage analytics for a license.
- * Provides dashboard-ready data including totals and breakdowns.
- *
- * @see {@link module:api/analytics/getAnalytics}
- */
-export { getAnalytics } from "./api/analytics/getAnalytics";
 
 // ==================== PLUGIN DOCS REPOSITORY ====================
 
@@ -122,15 +89,3 @@ export { researchPluginDocsApi } from "./api/plugin-docs/pluginDocs";
  * @see {@link module:api/plugin-docs/pluginDocs}
  */
 export { syncPluginDocsApi } from "./api/plugin-docs/pluginDocs";
-
-// ==================== FIRESTORE TRIGGERS (Milestone 5) ====================
-
-/**
- * Firestore trigger: job_queue/{jobId}
- *
- * Automatically processes jobs when created in job_queue collection.
- * Handles retry logic and updates job status.
- *
- * @see {@link module:triggers/jobQueueTrigger}
- */
-export { processJobQueue } from "./triggers/jobQueueTrigger";

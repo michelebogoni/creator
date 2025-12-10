@@ -9,12 +9,7 @@ namespace CreatorCore\Chat;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Integrations\ProxyClient;
-use CreatorCore\Permission\CapabilityChecker;
-use CreatorCore\Backup\SnapshotManager;
-use CreatorCore\Backup\Rollback;
-use CreatorCore\Audit\AuditLogger;
-use CreatorCore\User\UserProfile;
+use CreatorCore\Proxy\ProxyClient;
 use CreatorCore\Context\CreatorContext;
 use CreatorCore\Context\ContextLoader;
 use CreatorCore\Context\ThinkingLogger;
@@ -34,27 +29,6 @@ class ChatInterface {
      * @var ProxyClient
      */
     private ProxyClient $proxy_client;
-
-    /**
-     * Capability checker instance
-     *
-     * @var CapabilityChecker
-     */
-    private CapabilityChecker $capability_checker;
-
-    /**
-     * Snapshot manager instance
-     *
-     * @var SnapshotManager
-     */
-    private SnapshotManager $snapshot_manager;
-
-    /**
-     * Audit logger instance
-     *
-     * @var AuditLogger
-     */
-    private AuditLogger $logger;
 
     /**
      * Message handler instance
@@ -108,29 +82,18 @@ class ChatInterface {
     /**
      * Constructor
      *
-     * @param ProxyClient       $proxy_client       Proxy client instance.
-     * @param CapabilityChecker $capability_checker Capability checker instance.
-     * @param SnapshotManager   $snapshot_manager   Snapshot manager instance.
-     * @param AuditLogger       $logger             Audit logger instance.
+     * @param ProxyClient $proxy_client Proxy client instance.
      */
-    public function __construct(
-        ProxyClient $proxy_client,
-        CapabilityChecker $capability_checker,
-        SnapshotManager $snapshot_manager,
-        AuditLogger $logger
-    ) {
-        $this->proxy_client       = $proxy_client;
-        $this->capability_checker = $capability_checker;
-        $this->snapshot_manager   = $snapshot_manager;
-        $this->logger             = $logger;
-        $this->message_handler    = new MessageHandler( $logger );
+    public function __construct( ProxyClient $proxy_client ) {
+        $this->proxy_client    = $proxy_client;
+        $this->message_handler = new MessageHandler();
 
         // Initialize context system components (may fail gracefully)
         try {
             $this->creator_context    = new CreatorContext();
             $this->phase_detector     = new PhaseDetector();
             $this->code_executor      = new CodeExecutor();
-            $this->execution_verifier = new ExecutionVerifier( $logger );
+            $this->execution_verifier = new ExecutionVerifier();
         } catch ( \Throwable $e ) {
             // Log error but don't fail - components can be initialized lazily when needed
             error_log( 'Creator: Failed to initialize context components: ' . $e->getMessage() );
@@ -180,9 +143,22 @@ class ChatInterface {
      */
     private function get_execution_verifier(): ExecutionVerifier {
         if ( $this->execution_verifier === null ) {
-            $this->execution_verifier = new ExecutionVerifier( $this->logger );
+            $this->execution_verifier = new ExecutionVerifier();
         }
         return $this->execution_verifier;
+    }
+
+    /**
+     * Log a message (simple debug logging)
+     *
+     * @param string $level   Log level (success, warning, failure, info).
+     * @param string $message Log message.
+     * @param array  $context Additional context.
+     */
+    private function log( string $level, string $message, array $context = [] ): void {
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( "Creator [$level]: $message " . wp_json_encode( $context ) );
+        }
     }
 
     /**
@@ -203,8 +179,8 @@ class ChatInterface {
      * @return void
      */
     public function render(): void {
-        // Check permission
-        if ( ! $this->capability_checker->can_use_creator() ) {
+        // Check basic permission (administrator only for now)
+        if ( ! current_user_can( 'manage_options' ) ) {
             wp_die(
                 esc_html__( 'You do not have permission to access Creator.', 'creator-core' ),
                 esc_html__( 'Access Denied', 'creator-core' ),
@@ -264,7 +240,7 @@ class ChatInterface {
 
         $chat_id = $wpdb->insert_id;
 
-        $this->logger->success( 'chat_created', [
+        $this->log( 'success', 'chat_created', [
             'chat_id'  => $chat_id,
             'title'    => $title,
             'ai_model' => $ai_model,
@@ -730,7 +706,7 @@ class ChatInterface {
         // Save thinking logs to database
         $this->thinking_logger->save_to_database();
 
-        $this->logger->success( 'message_sent', [
+        $this->log( 'success', 'message_sent', [
             'chat_id'      => $chat_id,
             'user_msg_id'  => $user_message_id,
             'ai_msg_id'    => $assistant_message_id,
@@ -752,145 +728,34 @@ class ChatInterface {
     /**
      * Handle undo/rollback request for a message
      *
+     * Note: Rollback functionality has been removed in Phase 1 restructuring.
+     * This method returns a "feature unavailable" response.
+     *
      * @param int $chat_id    Chat ID.
      * @param int $message_id Message ID to undo.
      * @return array Result with success status and details.
      */
     public function handle_undo( int $chat_id, int $message_id ): array {
-        // Verify chat exists and belongs to user
-        $chat = $this->get_chat( $chat_id );
-
-        if ( ! $chat ) {
-            return [
-                'success' => false,
-                'error'   => __( 'Chat not found', 'creator-core' ),
-                'code'    => 'chat_not_found',
-            ];
-        }
-
-        if ( (int) $chat['user_id'] !== get_current_user_id() && ! current_user_can( 'manage_options' ) ) {
-            return [
-                'success' => false,
-                'error'   => __( 'Access denied', 'creator-core' ),
-                'code'    => 'access_denied',
-            ];
-        }
-
-        // Get snapshot for this message
-        $snapshot = $this->snapshot_manager->get_message_snapshot( $message_id );
-
-        if ( ! $snapshot ) {
-            return [
-                'success'    => false,
-                'error'      => __( 'No rollback data found for this action. The snapshot may have expired or was never created.', 'creator-core' ),
-                'code'       => 'snapshot_not_found',
-                'suggestion' => __( 'Rollback is available for 24 hours after an action is executed.', 'creator-core' ),
-            ];
-        }
-
-        // Check if snapshot is expired
-        $snapshot_age_hours = $this->get_snapshot_age_hours( $snapshot['created_at'] );
-
-        if ( $snapshot_age_hours > self::SNAPSHOT_EXPIRATION_HOURS ) {
-            return [
-                'success'    => false,
-                'error'      => __( 'This action can no longer be undone because the snapshot has expired.', 'creator-core' ),
-                'code'       => 'snapshot_expired',
-                'suggestion' => sprintf(
-                    /* translators: %d: Number of hours */
-                    __( 'Rollback is available for %d hours after an action is executed.', 'creator-core' ),
-                    self::SNAPSHOT_EXPIRATION_HOURS
-                ),
-                'expired_at' => gmdate( 'Y-m-d H:i:s', strtotime( $snapshot['created_at'] ) + ( self::SNAPSHOT_EXPIRATION_HOURS * 3600 ) ),
-            ];
-        }
-
-        // Perform rollback
-        $rollback = new Rollback( $this->snapshot_manager, $this->logger );
-        $result   = $rollback->rollback_snapshot( (int) $snapshot['id'] );
-
-        if ( $result['success'] ) {
-            // Save a system message noting the rollback
-            $this->message_handler->save_message(
-                $chat_id,
-                sprintf(
-                    /* translators: %s: Timestamp */
-                    __( '↩️ Action rolled back successfully at %s', 'creator-core' ),
-                    current_time( 'H:i:s' )
-                ),
-                'system',
-                'rollback',
-                [
-                    'snapshot_id'   => $snapshot['id'],
-                    'operations'    => count( $result['results'] ?? [] ),
-                    'original_msg'  => $message_id,
-                ]
-            );
-
-            $this->logger->success( 'undo_completed', [
-                'chat_id'     => $chat_id,
-                'message_id'  => $message_id,
-                'snapshot_id' => $snapshot['id'],
-            ]);
-
-            return [
-                'success'    => true,
-                'message'    => $result['message'],
-                'operations' => count( $result['results'] ?? [] ),
-                'details'    => $result['results'],
-            ];
-        }
-
-        // Partial or failed rollback
-        $this->logger->warning( 'undo_failed', [
-            'chat_id'     => $chat_id,
-            'message_id'  => $message_id,
-            'snapshot_id' => $snapshot['id'],
-            'errors'      => $result['errors'],
-        ]);
-
         return [
             'success'    => false,
-            'error'      => $result['message'] ?? __( 'Rollback failed', 'creator-core' ),
-            'code'       => 'rollback_failed',
-            'errors'     => $result['errors'] ?? [],
-            'suggestion' => $this->get_rollback_error_suggestion( $result['errors'] ?? [] ),
+            'error'      => __( 'Undo functionality is temporarily unavailable.', 'creator-core' ),
+            'code'       => 'feature_unavailable',
+            'suggestion' => __( 'Please manually revert any changes if needed.', 'creator-core' ),
         ];
     }
 
     /**
      * Check if undo is available for a message
      *
+     * Note: Rollback functionality has been removed in Phase 1 restructuring.
+     *
      * @param int $message_id Message ID.
      * @return array Undo availability info.
      */
     public function check_undo_availability( int $message_id ): array {
-        $snapshot = $this->snapshot_manager->get_message_snapshot( $message_id );
-
-        if ( ! $snapshot ) {
-            return [
-                'available' => false,
-                'reason'    => 'no_snapshot',
-            ];
-        }
-
-        $age_hours = $this->get_snapshot_age_hours( $snapshot['created_at'] );
-        $remaining_hours = max( 0, self::SNAPSHOT_EXPIRATION_HOURS - $age_hours );
-
-        if ( $age_hours > self::SNAPSHOT_EXPIRATION_HOURS ) {
-            return [
-                'available' => false,
-                'reason'    => 'expired',
-                'expired_at' => gmdate( 'Y-m-d H:i:s', strtotime( $snapshot['created_at'] ) + ( self::SNAPSHOT_EXPIRATION_HOURS * 3600 ) ),
-            ];
-        }
-
         return [
-            'available'       => true,
-            'snapshot_id'     => $snapshot['id'],
-            'created_at'      => $snapshot['created_at'],
-            'expires_in_hours' => round( $remaining_hours, 1 ),
-            'operations_count' => count( $snapshot['operations'] ?? [] ),
+            'available' => false,
+            'reason'    => 'feature_unavailable',
         ];
     }
 
@@ -957,7 +822,7 @@ class ChatInterface {
                 // Success - return response
                 if ( $ai_response['success'] ) {
                     if ( $attempt > 1 ) {
-                        $this->logger->info( 'ai_request_succeeded_after_retry', [
+                        $this->log( 'info', 'ai_request_succeeded_after_retry', [
                             'attempt' => $attempt,
                             'chat_id' => $ai_options['chat_id'] ?? null,
                         ]);
@@ -983,7 +848,7 @@ class ChatInterface {
             }
 
             // Log retry attempt
-            $this->logger->warning( 'ai_request_retry', [
+            $this->log( 'warning', 'ai_request_retry', [
                 'attempt'   => $attempt,
                 'max'       => self::MAX_RETRY_ATTEMPTS,
                 'error'     => $last_error,
@@ -998,7 +863,7 @@ class ChatInterface {
         }
 
         // All retries exhausted
-        $this->logger->failure( 'ai_request_all_retries_failed', [
+        $this->log( 'failure', 'ai_request_all_retries_failed', [
             'attempts'   => $attempt,
             'last_error' => $last_error,
             'chat_id'    => $ai_options['chat_id'] ?? null,
@@ -1416,9 +1281,9 @@ class ChatInterface {
         $result = $this->get_code_executor()->execute( $code_data );
 
         // Log execution
-        $this->logger->log(
-            'code_execution',
+        $this->log(
             $result['success'] ? 'success' : 'failure',
+            'code_execution',
             [
                 'code_type'  => $code_data['type'] ?? 'unknown',
                 'title'      => $code_data['title'] ?? 'Untitled',
@@ -1764,7 +1629,7 @@ class ChatInterface {
         );
 
         if ( $result !== false ) {
-            $this->logger->success( 'chat_archived', [ 'chat_id' => $chat_id ] );
+            $this->log( 'success', 'chat_archived', [ 'chat_id' => $chat_id ] );
         }
 
         return $result !== false;
@@ -1794,7 +1659,7 @@ class ChatInterface {
         );
 
         if ( $result !== false ) {
-            $this->logger->success( 'chat_deleted', [ 'chat_id' => $chat_id ] );
+            $this->log( 'success', 'chat_deleted', [ 'chat_id' => $chat_id ] );
         }
 
         return $result !== false;

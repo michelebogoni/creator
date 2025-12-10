@@ -5,11 +5,11 @@
  * @package CreatorCore
  */
 
-namespace CreatorCore\Integrations;
+namespace CreatorCore\Proxy;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Audit\AuditLogger;
+use CreatorCore\Integrations\PluginDetector;
 
 /**
  * Class ProxyClient
@@ -42,32 +42,22 @@ class ProxyClient {
 	private int $timeout = 120;
 
 	/**
-	 * Audit logger instance
-	 *
-	 * @var AuditLogger|null
-	 */
-	private ?AuditLogger $logger = null;
-
-	/**
 	 * Constructor
-	 *
-	 * @param AuditLogger|null $logger Optional audit logger instance.
 	 */
-	public function __construct( ?AuditLogger $logger = null ) {
+	public function __construct() {
 		$this->proxy_url = get_option( 'creator_proxy_url', CREATOR_PROXY_URL );
-		$this->logger    = $logger;
 	}
 
 	/**
-	 * Get logger instance (lazy initialization)
+	 * Log message for debugging
 	 *
-	 * @return AuditLogger
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
 	 */
-	private function get_logger(): AuditLogger {
-		if ( $this->logger === null ) {
-			$this->logger = new AuditLogger();
+	private function log( string $message, array $context = [] ): void {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'CreatorCore ProxyClient: ' . $message . ' ' . wp_json_encode( $context ) );
 		}
-		return $this->logger;
 	}
 
 	/**
@@ -381,7 +371,7 @@ class ProxyClient {
 
 		// Log network errors (WP_Error)
 		if ( is_wp_error( $response ) ) {
-			$this->get_logger()->warning( 'proxy_network_error', [
+			$this->log( 'proxy_network_error', [
 				'endpoint'    => $endpoint,
 				'method'      => $method,
 				'error'       => $response->get_error_message(),
@@ -397,7 +387,7 @@ class ProxyClient {
 
 		// Log JSON decode errors
 		if ( json_last_error() !== JSON_ERROR_NONE ) {
-			$this->get_logger()->warning( 'proxy_json_decode_error', [
+			$this->log( 'proxy_json_decode_error', [
 				'endpoint'      => $endpoint,
 				'method'        => $method,
 				'status_code'   => $status_code,
@@ -411,8 +401,7 @@ class ProxyClient {
 		if ( $status_code >= 400 ) {
 			$error_message = $data['error'] ?? $data['message'] ?? __( 'Request failed', 'creator-core' );
 
-			$log_level = $status_code >= 500 ? 'failure' : 'warning';
-			$this->get_logger()->log( 'proxy_http_error', $log_level, [
+			$this->log( 'proxy_http_error', [
 				'endpoint'    => $endpoint,
 				'method'      => $method,
 				'status_code' => $status_code,
