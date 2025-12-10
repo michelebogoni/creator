@@ -14,8 +14,6 @@ namespace CreatorCore\API;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Chat\ChatInterface;
-use CreatorCore\Permission\CapabilityChecker;
-use CreatorCore\Audit\AuditLogger;
 use CreatorCore\API\Controllers\ChatController;
 use CreatorCore\API\Controllers\FileController;
 use CreatorCore\API\Controllers\ElementorController;
@@ -47,20 +45,6 @@ class REST_API {
 	private ChatInterface $chat_interface;
 
 	/**
-	 * Capability checker instance
-	 *
-	 * @var CapabilityChecker
-	 */
-	private CapabilityChecker $capability_checker;
-
-	/**
-	 * Audit logger instance
-	 *
-	 * @var AuditLogger
-	 */
-	private AuditLogger $logger;
-
-	/**
 	 * Rate limiter instance
 	 *
 	 * @var RateLimiter
@@ -77,19 +61,11 @@ class REST_API {
 	/**
 	 * Constructor
 	 *
-	 * @param ChatInterface     $chat_interface     Chat interface instance.
-	 * @param CapabilityChecker $capability_checker Capability checker instance.
-	 * @param AuditLogger       $logger             Audit logger instance.
+	 * @param ChatInterface $chat_interface Chat interface instance.
 	 */
-	public function __construct(
-		ChatInterface $chat_interface,
-		CapabilityChecker $capability_checker,
-		AuditLogger $logger
-	) {
-		$this->chat_interface     = $chat_interface;
-		$this->capability_checker = $capability_checker;
-		$this->logger             = $logger;
-		$this->rate_limiter       = new RateLimiter();
+	public function __construct( ChatInterface $chat_interface ) {
+		$this->chat_interface = $chat_interface;
+		$this->rate_limiter   = new RateLimiter();
 
 		// Initialize controllers
 		$this->init_controllers();

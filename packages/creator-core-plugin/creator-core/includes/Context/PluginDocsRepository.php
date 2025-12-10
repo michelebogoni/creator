@@ -13,7 +13,7 @@ namespace CreatorCore\Context;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Integrations\ProxyClient;
+use CreatorCore\Proxy\ProxyClient;
 
 /**
  * Class PluginDocsRepository

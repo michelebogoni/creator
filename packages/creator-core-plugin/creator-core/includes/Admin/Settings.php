@@ -9,7 +9,7 @@ namespace CreatorCore\Admin;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Integrations\ProxyClient;
+use CreatorCore\Proxy\ProxyClient;
 use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\Permission\RoleMapper;
 use CreatorCore\Backup\SnapshotManager;
