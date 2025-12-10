@@ -2,6 +2,8 @@
 /**
  * Plugin Loader
  *
+ * MVP version: Simplified loader with minimal components.
+ *
  * @package CreatorCore
  */
 
@@ -9,13 +11,10 @@ namespace CreatorCore;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Admin\Dashboard;
 use CreatorCore\Admin\Settings;
 use CreatorCore\Chat\ChatInterface;
+use CreatorCore\Chat\ChatController;
 use CreatorCore\Proxy\ProxyClient;
-use CreatorCore\API\REST_API;
-use CreatorCore\Context\ContextRefresher;
-use CreatorCore\Executor\CustomCodeLoader;
 
 /**
  * Class Loader
@@ -23,13 +22,6 @@ use CreatorCore\Executor\CustomCodeLoader;
  * Main plugin loader that initializes all components
  */
 class Loader {
-
-	/**
-	 * Dashboard instance
-	 *
-	 * @var Dashboard
-	 */
-	private Dashboard $dashboard;
 
 	/**
 	 * Settings instance
@@ -46,32 +38,18 @@ class Loader {
 	private ChatInterface $chat_interface;
 
 	/**
+	 * Chat controller instance
+	 *
+	 * @var ChatController
+	 */
+	private ChatController $chat_controller;
+
+	/**
 	 * Proxy client instance
 	 *
 	 * @var ProxyClient
 	 */
 	private ProxyClient $proxy_client;
-
-	/**
-	 * REST API instance
-	 *
-	 * @var REST_API
-	 */
-	private REST_API $rest_api;
-
-	/**
-	 * Context refresher instance
-	 *
-	 * @var ContextRefresher
-	 */
-	private ContextRefresher $context_refresher;
-
-	/**
-	 * Custom code loader instance
-	 *
-	 * @var CustomCodeLoader
-	 */
-	private CustomCodeLoader $custom_code_loader;
 
 	/**
 	 * Run the loader
@@ -93,20 +71,11 @@ class Loader {
 		$this->proxy_client = new ProxyClient();
 
 		// Admin components
-		$this->dashboard = new Dashboard();
-		$this->settings  = new Settings( $this->proxy_client );
+		$this->settings = new Settings( $this->proxy_client );
 
 		// Chat system
-		$this->chat_interface = new ChatInterface( $this->proxy_client );
-
-		// REST API
-		$this->rest_api = new REST_API( $this->chat_interface );
-
-		// Context auto-refresh
-		$this->context_refresher = new ContextRefresher();
-
-		// Custom code loader (for WP Code fallback)
-		$this->custom_code_loader = new CustomCodeLoader();
+		$this->chat_interface  = new ChatInterface( $this->proxy_client );
+		$this->chat_controller = new ChatController( $this->chat_interface, $this->proxy_client );
 	}
 
 	/**
@@ -122,19 +91,10 @@ class Loader {
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
 
 		// REST API
-		add_action( 'rest_api_init', [ $this->rest_api, 'register_routes' ] );
+		add_action( 'rest_api_init', [ $this->chat_controller, 'register_routes' ] );
 
 		// Plugin action links
 		add_filter( 'plugin_action_links_' . CREATOR_CORE_BASENAME, [ $this, 'add_action_links' ] );
-
-		// Register context auto-refresh hooks
-		$this->context_refresher->register_hooks();
-
-		// Initialize custom code loader (loads PHP, enqueues CSS/JS)
-		$this->custom_code_loader->init();
-
-		// Register cron handler for thinking logs cleanup (30 days retention)
-		add_action( 'creator_cleanup_thinking_logs', [ Activator::class, 'cleanup_thinking_logs' ] );
 	}
 
 	/**
@@ -143,32 +103,22 @@ class Loader {
 	 * @return void
 	 */
 	public function register_admin_menu(): void {
-		// Main menu - accessible to anyone who can edit posts
+		// Main menu - Chat page
 		add_menu_page(
 			__( 'Creator', 'creator-core' ),
 			__( 'Creator', 'creator-core' ),
 			'edit_posts',
-			'creator-dashboard',
-			[ $this->dashboard, 'render' ],
+			'creator-chat',
+			[ $this->chat_interface, 'render' ],
 			'dashicons-superhero-alt',
 			30
 		);
 
-		// Dashboard submenu (same as main)
+		// Chat submenu (same as main)
 		add_submenu_page(
-			'creator-dashboard',
-			__( 'Dashboard', 'creator-core' ),
-			__( 'Dashboard', 'creator-core' ),
-			'edit_posts',
-			'creator-dashboard',
-			[ $this->dashboard, 'render' ]
-		);
-
-		// New Chat
-		add_submenu_page(
-			'creator-dashboard',
-			__( 'New Chat', 'creator-core' ),
-			__( 'New Chat', 'creator-core' ),
+			'creator-chat',
+			__( 'Chat', 'creator-core' ),
+			__( 'Chat', 'creator-core' ),
 			'edit_posts',
 			'creator-chat',
 			[ $this->chat_interface, 'render' ]
@@ -176,32 +126,13 @@ class Loader {
 
 		// Settings
 		add_submenu_page(
-			'creator-dashboard',
+			'creator-chat',
 			__( 'Settings', 'creator-core' ),
 			__( 'Settings', 'creator-core' ),
 			'manage_options',
 			'creator-settings',
 			[ $this->settings, 'render' ]
 		);
-
-		// Simple Chat (Phase 2 test page)
-		add_submenu_page(
-			'creator-dashboard',
-			__( 'Simple Chat (Test)', 'creator-core' ),
-			__( 'Simple Chat', 'creator-core' ),
-			'manage_options',
-			'creator-simple-chat',
-			[ $this, 'render_simple_chat' ]
-		);
-	}
-
-	/**
-	 * Render simple chat page (Phase 2)
-	 *
-	 * @return void
-	 */
-	public function render_simple_chat(): void {
-		include CREATOR_CORE_PATH . 'templates/chat-simple.php';
 	}
 
 	/**
@@ -211,7 +142,6 @@ class Loader {
 	 * @return void
 	 */
 	public function enqueue_admin_assets( string $hook ): void {
-		// Ensure $hook is a valid string (PHP 8 compatibility)
 		$hook = (string) $hook;
 		if ( $hook === '' ) {
 			return;
@@ -230,36 +160,7 @@ class Loader {
 			CREATOR_CORE_VERSION
 		);
 
-		// Page-specific assets
-		if ( strpos( $hook, 'creator-dashboard' ) !== false ) {
-			wp_enqueue_style(
-				'creator-admin-dashboard',
-				CREATOR_CORE_URL . 'assets/css/admin-dashboard.css',
-				[ 'creator-admin-common' ],
-				CREATOR_CORE_VERSION
-			);
-			wp_enqueue_script(
-				'creator-admin-dashboard',
-				CREATOR_CORE_URL . 'assets/js/admin-dashboard.js',
-				[ 'jquery' ],
-				CREATOR_CORE_VERSION,
-				true
-			);
-			wp_localize_script( 'creator-admin-dashboard', 'creatorDashboard', [
-				'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
-				'restUrl'    => rest_url( 'creator/v1/' ),
-				'nonce'      => wp_create_nonce( 'creator_dashboard_nonce' ),
-				'restNonce'  => wp_create_nonce( 'wp_rest' ),
-				'newChatUrl' => admin_url( 'admin.php?page=creator-chat' ),
-				'i18n'       => [
-					'loading'      => __( 'Loading...', 'creator-core' ),
-					'error'        => __( 'An error occurred', 'creator-core' ),
-					'noChats'      => __( 'No recent chats', 'creator-core' ),
-					'refreshStats' => __( 'Refresh statistics', 'creator-core' ),
-				],
-			]);
-		}
-
+		// Chat page assets
 		if ( strpos( $hook, 'creator-chat' ) !== false ) {
 			wp_enqueue_style(
 				'creator-chat-interface',
@@ -274,36 +175,27 @@ class Loader {
 				CREATOR_CORE_VERSION,
 				true
 			);
-			wp_enqueue_script(
-				'creator-action-handler',
-				CREATOR_CORE_URL . 'assets/js/action-handler.js',
-				[ 'creator-chat-interface' ],
-				CREATOR_CORE_VERSION,
-				true
-			);
 			$current_user = wp_get_current_user();
 			$chat_id      = isset( $_GET['chat_id'] ) ? absint( $_GET['chat_id'] ) : null;
 			wp_localize_script( 'creator-chat-interface', 'creatorChat', [
 				'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
 				'restUrl'     => rest_url( 'creator/v1/' ),
 				'adminUrl'    => admin_url( 'admin.php' ),
-				'settingsUrl' => admin_url( 'admin.php?page=creator-settings#api' ),
+				'settingsUrl' => admin_url( 'admin.php?page=creator-settings' ),
 				'nonce'       => wp_create_nonce( 'creator_chat_nonce' ),
 				'restNonce'   => wp_create_nonce( 'wp_rest' ),
 				'chatId'      => $chat_id,
 				'userName'    => $current_user->display_name,
 				'userAvatar'  => get_avatar_url( $current_user->ID, [ 'size' => 32 ] ),
 				'i18n'        => [
-					'sending'       => __( 'Sending...', 'creator-core' ),
-					'error'         => __( 'An error occurred. Please try again.', 'creator-core' ),
-					'confirmUndo'   => __( 'Are you sure you want to undo this action?', 'creator-core' ),
-					'undoSuccess'   => __( 'Action undone successfully.', 'creator-core' ),
-					'processing'    => __( 'Processing...', 'creator-core' ),
-					'goToSettings'  => __( 'Go to Settings', 'creator-core' ),
+					'sending'    => __( 'Sending...', 'creator-core' ),
+					'error'      => __( 'An error occurred. Please try again.', 'creator-core' ),
+					'processing' => __( 'Processing...', 'creator-core' ),
 				],
 			]);
 		}
 
+		// Settings page assets
 		if ( strpos( $hook, 'creator-settings' ) !== false ) {
 			wp_enqueue_style(
 				'creator-settings',
@@ -330,31 +222,7 @@ class Loader {
 					'validating'   => __( 'Validating...', 'creator-core' ),
 					'clearing'     => __( 'Clearing cache...', 'creator-core' ),
 					'cacheCleared' => __( 'Cache cleared', 'creator-core' ),
-					'confirmDelete' => __( 'Are you sure you want to delete this?', 'creator-core' ),
 				],
-			]);
-		}
-
-		// Simple Chat (Phase 2 test)
-		if ( strpos( $hook, 'creator-simple-chat' ) !== false ) {
-			wp_enqueue_style(
-				'creator-chat-simple',
-				CREATOR_CORE_URL . 'assets/css/chat-simple.css',
-				[ 'creator-admin-common' ],
-				CREATOR_CORE_VERSION
-			);
-			wp_enqueue_script(
-				'creator-chat-simple',
-				CREATOR_CORE_URL . 'assets/js/chat-simple.js',
-				[ 'jquery' ],
-				CREATOR_CORE_VERSION,
-				true
-			);
-			wp_localize_script( 'creator-chat-simple', 'creatorChat', [
-				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-				'restUrl'   => rest_url( 'creator/v1/' ),
-				'nonce'     => wp_create_nonce( 'creator_chat_nonce' ),
-				'restNonce' => wp_create_nonce( 'wp_rest' ),
 			]);
 		}
 	}
@@ -368,20 +236,9 @@ class Loader {
 	public function add_action_links( array $links ): array {
 		$plugin_links = [
 			'<a href="' . admin_url( 'admin.php?page=creator-settings' ) . '">' . __( 'Settings', 'creator-core' ) . '</a>',
-			'<a href="' . admin_url( 'admin.php?page=creator-dashboard' ) . '">' . __( 'Dashboard', 'creator-core' ) . '</a>',
+			'<a href="' . admin_url( 'admin.php?page=creator-chat' ) . '">' . __( 'Chat', 'creator-core' ) . '</a>',
 		];
 
 		return array_merge( $plugin_links, $links );
-	}
-
-	/**
-	 * Get component instance
-	 *
-	 * @param string $component Component name.
-	 * @return object|null
-	 */
-	public function get_component( string $component ): ?object {
-		$property = str_replace( '-', '_', $component );
-		return $this->$property ?? null;
 	}
 }
