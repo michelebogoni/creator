@@ -78,6 +78,13 @@ class ThinkingLogger {
 	private string $current_phase = self::PHASE_DISCOVERY;
 
 	/**
+	 * Whether the thinking process is complete
+	 *
+	 * @var bool
+	 */
+	private bool $is_complete = false;
+
+	/**
 	 * Constructor
 	 *
 	 * @param int      $chat_id    Chat ID.
@@ -462,11 +469,18 @@ class ThinkingLogger {
 	/**
 	 * Log completion
 	 *
+	 * Marks the thinking process as complete and updates the transient
+	 * so SSE streaming can detect completion.
+	 *
 	 * @param string $summary Summary of what was accomplished.
 	 * @return self
 	 */
 	public function log_complete( string $summary ): self {
-		return $this->success( "Complete: {$summary}" );
+		$this->is_complete = true;
+		$this->success( "Complete: {$summary}" );
+		// Ensure transient is updated with complete status
+		$this->update_transient();
+		return $this;
 	}
 
 	// =========================================================================
@@ -476,10 +490,61 @@ class ThinkingLogger {
 	/**
 	 * Get all logs
 	 *
+	 * When called on a new instance (SSE polling), reads from transient.
+	 * Supports filtering by after_index for incremental updates.
+	 *
+	 * @param int $after_index Only return logs with index > this value.
 	 * @return array
 	 */
-	public function get_logs(): array {
-		return $this->logs;
+	public function get_logs( int $after_index = 0 ): array {
+		// If we have local logs, use them
+		$logs = $this->logs;
+
+		// If no local logs, try to read from transient (SSE polling scenario)
+		if ( empty( $logs ) ) {
+			$transient = get_transient( "creator_thinking_{$this->chat_id}" );
+			if ( $transient && isset( $transient['logs'] ) ) {
+				$logs = $transient['logs'];
+			} elseif ( is_array( $transient ) && ! isset( $transient['logs'] ) ) {
+				// Legacy format: transient contains just logs array
+				$logs = $transient;
+			}
+		}
+
+		// Filter by after_index if specified
+		if ( $after_index > 0 ) {
+			$logs = array_filter( $logs, fn( $log ) => ( $log['id'] ?? 0 ) > $after_index );
+			$logs = array_values( $logs ); // Re-index array
+		}
+
+		// Add index for SSE tracking
+		return array_map( function ( $log, $key ) {
+			$log['index'] = $log['id'] ?? $key;
+			return $log;
+		}, $logs, array_keys( $logs ) );
+	}
+
+	/**
+	 * Get thinking status
+	 *
+	 * Returns the current status of the thinking process.
+	 * Used by SSE streaming to detect completion.
+	 *
+	 * @return array Status with 'complete' boolean.
+	 */
+	public function get_status(): array {
+		// Check local status first
+		if ( $this->is_complete ) {
+			return [ 'complete' => true ];
+		}
+
+		// Read from transient (SSE polling scenario)
+		$transient = get_transient( "creator_thinking_{$this->chat_id}" );
+		if ( $transient && isset( $transient['complete'] ) ) {
+			return [ 'complete' => (bool) $transient['complete'] ];
+		}
+
+		return [ 'complete' => false ];
 	}
 
 	/**
@@ -535,6 +600,7 @@ class ThinkingLogger {
 	 * Update transient for real-time access
 	 *
 	 * Limits stored logs to prevent oversized transients with long sessions.
+	 * Also stores the completion status for SSE polling.
 	 *
 	 * @return void
 	 */
@@ -547,7 +613,13 @@ class ThinkingLogger {
 			$logs = array_slice( $logs, -self::MAX_TRANSIENT_LOGS );
 		}
 
-		set_transient( $key, $logs, 300 ); // 5 minutes
+		// Store logs with completion status for SSE streaming
+		$data = [
+			'logs'     => $logs,
+			'complete' => $this->is_complete,
+		];
+
+		set_transient( $key, $data, 300 ); // 5 minutes
 	}
 
 	/**
@@ -585,12 +657,27 @@ class ThinkingLogger {
 	 * Get thinking logs from transient
 	 *
 	 * @param int $chat_id Chat ID.
-	 * @return array|null
+	 * @return array|null Array of logs, or null if not found.
 	 */
 	public static function get_from_transient( int $chat_id ): ?array {
-		$key  = "creator_thinking_{$chat_id}";
-		$logs = get_transient( $key );
-		return $logs ?: null;
+		$key       = "creator_thinking_{$chat_id}";
+		$transient = get_transient( $key );
+
+		if ( ! $transient ) {
+			return null;
+		}
+
+		// New format: { logs: [...], complete: bool }
+		if ( isset( $transient['logs'] ) ) {
+			return $transient['logs'];
+		}
+
+		// Legacy format: just the logs array
+		if ( is_array( $transient ) ) {
+			return $transient;
+		}
+
+		return null;
 	}
 
 	/**
