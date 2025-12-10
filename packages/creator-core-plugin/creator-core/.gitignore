@@ -1,0 +1,19 @@
+# Composer dependencies
+/vendor/
+
+# PHPUnit cache
+.phpunit.result.cache
+.phpunit.cache/
+
+# Coverage reports
+/coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
