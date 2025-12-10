@@ -256,7 +256,21 @@ class ActionController extends BaseController {
 		}
 
 		$type = $value['type'] ?? '';
-		$code = $value['code'] ?? ( $value['details']['code'] ?? '' );
+
+		// Extract code from multiple possible locations (handles different AI response formats)
+		$code = '';
+		if ( isset( $value['code'] ) ) {
+			if ( is_array( $value['code'] ) ) {
+				// Nested format: {"code": {"content": "...", "type": "wpcode_snippet"}}
+				$code = $value['code']['content'] ?? $value['code']['code'] ?? '';
+			} else {
+				// Direct format: {"code": "..."}
+				$code = $value['code'];
+			}
+		}
+		if ( empty( $code ) && isset( $value['details']['code'] ) ) {
+			$code = $value['details']['code'];
+		}
 
 		// Context request types (for discovery phase)
 		$context_types = [
@@ -270,7 +284,7 @@ class ActionController extends BaseController {
 		// Valid if: it's a context request OR it's execute_code with code OR it has code directly
 		$is_context_request = in_array( $type, $context_types, true );
 		$is_code_execution  = ( $type === 'execute_code' && ! empty( $code ) );
-		$has_code_directly  = ! empty( $code );
+		$has_code_directly  = ! empty( $code ) && is_string( $code );
 
 		if ( ! $is_context_request && ! $is_code_execution && ! $has_code_directly ) {
 			return new \WP_Error(
@@ -365,9 +379,14 @@ class ActionController extends BaseController {
 			return $action['code'];
 		}
 
-		// Legacy format: code as array with content
-		if ( ! empty( $action['code']['content'] ) ) {
-			return $action['code']['content'];
+		// Legacy format: code as array with content or code key
+		if ( is_array( $action['code'] ?? null ) ) {
+			if ( ! empty( $action['code']['content'] ) ) {
+				return $action['code']['content'];
+			}
+			if ( ! empty( $action['code']['code'] ) ) {
+				return $action['code']['code'];
+			}
 		}
 
 		// Legacy format: content directly
