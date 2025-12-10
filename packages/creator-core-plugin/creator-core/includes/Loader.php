@@ -274,9 +274,9 @@ class Loader {
             [ $this->settings, 'render' ]
         );
 
-        // Setup Wizard (hidden from menu)
+        // Setup Wizard (hidden from menu - use empty string for PHP 8 compatibility)
         add_submenu_page(
-            null,
+            '',
             __( 'Setup Wizard', 'creator-core' ),
             __( 'Setup Wizard', 'creator-core' ),
             'manage_options',
