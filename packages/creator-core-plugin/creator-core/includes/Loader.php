@@ -292,6 +292,12 @@ class Loader {
      * @return void
      */
     public function enqueue_admin_assets( string $hook ): void {
+        // Ensure $hook is a valid string (PHP 8 compatibility)
+        $hook = (string) $hook;
+        if ( $hook === '' ) {
+            return;
+        }
+
         // Only load on Creator pages
         if ( strpos( $hook, 'creator' ) === false ) {
             return;
