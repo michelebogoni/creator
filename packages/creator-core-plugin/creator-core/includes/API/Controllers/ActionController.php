@@ -17,28 +17,39 @@ defined( 'ABSPATH' ) || exit;
 use CreatorCore\Chat\ChatInterface;
 use CreatorCore\Backup\Rollback;
 use CreatorCore\Context\ContextLoader;
+use CreatorCore\Executor\ActionDispatcher;
 
 /**
  * Class ActionController
  *
  * REST API controller for action operations.
+ * Uses the Universal PHP Engine pattern via ActionDispatcher.
  */
 class ActionController extends BaseController {
 
 	/**
-	 * Chat interface instance
+	 * Chat interface instance (kept for backward compatibility)
 	 *
 	 * @var ChatInterface
 	 */
 	private ChatInterface $chat_interface;
 
 	/**
+	 * Action dispatcher for Universal PHP Engine
+	 *
+	 * @var ActionDispatcher
+	 */
+	private ActionDispatcher $dispatcher;
+
+	/**
 	 * Constructor
 	 *
-	 * @param ChatInterface $chat_interface Chat interface instance.
+	 * @param ChatInterface         $chat_interface Chat interface instance.
+	 * @param ActionDispatcher|null $dispatcher     Optional action dispatcher.
 	 */
-	public function __construct( ChatInterface $chat_interface ) {
+	public function __construct( ChatInterface $chat_interface, ?ActionDispatcher $dispatcher = null ) {
 		$this->chat_interface = $chat_interface;
+		$this->dispatcher     = $dispatcher ?? new ActionDispatcher();
 	}
 
 	/**
@@ -78,6 +89,13 @@ class ActionController extends BaseController {
 	/**
 	 * Execute an action (context request or code execution)
 	 *
+	 * Supports the Universal PHP Engine pattern where AI generates executable code.
+	 * Routes actions through ActionDispatcher for clean separation of concerns.
+	 *
+	 * Two action categories are supported:
+	 * 1. Context requests (get_plugin_details, get_acf_details, etc.) - for discovery phase
+	 * 2. Code execution (execute_code) - Universal PHP Engine via ActionDispatcher
+	 *
 	 * @param \WP_REST_Request $request Request object.
 	 * @return \WP_REST_Response|\WP_Error
 	 */
@@ -95,7 +113,8 @@ class ActionController extends BaseController {
 
 		$type = $action['type'] ?? '';
 
-		// Handle context request actions (lazy-load)
+		// Handle context request actions (lazy-load for discovery phase)
+		// These bypass the dispatcher as they don't execute code
 		$context_types = [
 			'get_plugin_details',
 			'get_acf_details',
@@ -105,45 +124,91 @@ class ActionController extends BaseController {
 		];
 
 		if ( in_array( $type, $context_types, true ) ) {
-			try {
-				$context_loader = new ContextLoader();
-				$result         = $context_loader->handle_context_request( $action );
-
-				return $this->success( [
-					'success' => $result['success'] ?? false,
-					'data'    => $result['data'] ?? null,
-					'error'   => $result['error'] ?? null,
-					'type'    => $type,
-				] );
-			} catch ( \Throwable $e ) {
-				return $this->error(
-					'context_request_failed',
-					$e->getMessage(),
-					500
-				);
-			}
+			return $this->handle_context_request( $action, $type );
 		}
 
-		// Handle code execution actions
-		if ( ! empty( $action['code'] ) ) {
-			try {
-				$result = $this->chat_interface->execute_action_code( $action, $chat_id );
+		// Universal PHP Engine: Route through ActionDispatcher
+		return $this->handle_code_execution( $action, $chat_id );
+	}
 
-				return $this->success( $result );
-			} catch ( \Throwable $e ) {
-				return $this->error(
-					'code_execution_failed',
-					$e->getMessage(),
-					500
-				);
-			}
+	/**
+	 * Handle context request actions
+	 *
+	 * @param array  $action Action data.
+	 * @param string $type   Action type.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	private function handle_context_request( array $action, string $type ) {
+		try {
+			$context_loader = new ContextLoader();
+			$result         = $context_loader->handle_context_request( $action );
+
+			return $this->success( [
+				'success' => $result['success'] ?? false,
+				'data'    => $result['data'] ?? null,
+				'error'   => $result['error'] ?? null,
+				'type'    => $type,
+			] );
+		} catch ( \Throwable $e ) {
+			return $this->error(
+				'context_request_failed',
+				$e->getMessage(),
+				500
+			);
+		}
+	}
+
+	/**
+	 * Handle code execution via ActionDispatcher
+	 *
+	 * @param array $action  Action data with code.
+	 * @param int   $chat_id Chat ID for context.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	private function handle_code_execution( array $action, int $chat_id ) {
+		// Extract code to verify we have something to execute
+		$code = $this->extract_code_from_action( $action );
+
+		if ( empty( $code ) ) {
+			return $this->error(
+				'invalid_action',
+				__( 'Action must contain executable code (type: execute_code with code in details)', 'creator-core' ),
+				400
+			);
 		}
 
-		return $this->error(
-			'unknown_action_type',
-			sprintf( __( 'Unknown action type: %s', 'creator-core' ), $type ),
-			400
-		);
+		try {
+			// Dispatch through the Universal PHP Engine
+			$result = $this->dispatcher->dispatch( $action );
+
+			// Convert ActionResult to response format
+			$response_data = $result->toArray();
+
+			// Add chat context
+			if ( $chat_id > 0 ) {
+				$response_data['chat_id'] = $chat_id;
+			}
+
+			// Fire action for logging/tracking
+			do_action( 'creator_code_executed', $action, $result, $chat_id );
+
+			if ( $result->isSuccess() ) {
+				return $this->success( $response_data );
+			}
+
+			return $this->error(
+				'code_execution_failed',
+				$result->getError() ?? __( 'Code execution failed', 'creator-core' ),
+				500,
+				$response_data
+			);
+		} catch ( \Throwable $e ) {
+			return $this->error(
+				'code_execution_failed',
+				$e->getMessage(),
+				500
+			);
+		}
 	}
 
 	/**
@@ -172,6 +237,10 @@ class ActionController extends BaseController {
 	/**
 	 * Validate action object structure
 	 *
+	 * With the Universal PHP Engine pattern, we only validate:
+	 * 1. Action is an object
+	 * 2. Has a type (context request) OR has code (execute_code)
+	 *
 	 * @param mixed            $value   The action value.
 	 * @param \WP_REST_Request $request Request object.
 	 * @param string           $key     Parameter key.
@@ -186,40 +255,27 @@ class ActionController extends BaseController {
 			);
 		}
 
-		// Must have a type
-		if ( empty( $value['type'] ) || ! is_string( $value['type'] ) ) {
-			return new \WP_Error(
-				'missing_action_type',
-				__( 'Action must have a valid type', 'creator-core' ),
-				[ 'status' => 400 ]
-			);
-		}
+		$type = $value['type'] ?? '';
+		$code = $value['code'] ?? ( $value['details']['code'] ?? '' );
 
-		// Validate type is from allowed list
-		$allowed_types = [
-			// Context request types
+		// Context request types (for discovery phase)
+		$context_types = [
 			'get_plugin_details',
 			'get_acf_details',
 			'get_cpt_details',
 			'get_taxonomy_details',
 			'get_wp_functions',
-			// Code execution types
-			'execute_code',
-			'create_snippet',
-			'modify_file',
-			// Elementor types
-			'create_elementor_page',
-			'update_elementor_page',
 		];
 
-		if ( ! in_array( $value['type'], $allowed_types, true ) ) {
+		// Valid if: it's a context request OR it's execute_code with code OR it has code directly
+		$is_context_request = in_array( $type, $context_types, true );
+		$is_code_execution  = ( $type === 'execute_code' && ! empty( $code ) );
+		$has_code_directly  = ! empty( $code );
+
+		if ( ! $is_context_request && ! $is_code_execution && ! $has_code_directly ) {
 			return new \WP_Error(
-				'invalid_action_type',
-				sprintf(
-					/* translators: %s: action type */
-					__( 'Unknown action type: %s', 'creator-core' ),
-					sanitize_text_field( $value['type'] )
-				),
+				'invalid_action',
+				__( 'Action must be a context request (get_plugin_details, etc.) or contain executable code (type: execute_code with code)', 'creator-core' ),
 				[ 'status' => 400 ]
 			);
 		}
@@ -286,5 +342,39 @@ class ActionController extends BaseController {
 		}
 
 		return $sanitized;
+	}
+
+	/**
+	 * Extract code from action object
+	 *
+	 * Supports multiple formats:
+	 * - New format: $action['details']['code'] (Universal PHP Engine)
+	 * - Legacy format: $action['code'] (string or array with 'content')
+	 *
+	 * @param array $action Action object.
+	 * @return string PHP code or empty string.
+	 */
+	private function extract_code_from_action( array $action ): string {
+		// New Universal PHP Engine format: details.code
+		if ( ! empty( $action['details']['code'] ) ) {
+			return $action['details']['code'];
+		}
+
+		// Legacy format: code as string
+		if ( ! empty( $action['code'] ) && is_string( $action['code'] ) ) {
+			return $action['code'];
+		}
+
+		// Legacy format: code as array with content
+		if ( ! empty( $action['code']['content'] ) ) {
+			return $action['code']['content'];
+		}
+
+		// Legacy format: content directly
+		if ( ! empty( $action['content'] ) ) {
+			return $action['content'];
+		}
+
+		return '';
 	}
 }
