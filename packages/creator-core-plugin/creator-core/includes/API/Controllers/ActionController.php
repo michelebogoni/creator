@@ -15,7 +15,6 @@ namespace CreatorCore\API\Controllers;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Chat\ChatInterface;
-use CreatorCore\Backup\Rollback;
 use CreatorCore\Context\ContextLoader;
 use CreatorCore\Executor\ActionDispatcher;
 
@@ -214,24 +213,18 @@ class ActionController extends BaseController {
 	/**
 	 * Rollback an action
 	 *
+	 * MVP version: Rollback temporarily disabled.
+	 *
 	 * @param \WP_REST_Request $request Request object.
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public function rollback_action( \WP_REST_Request $request ) {
-		$action_id = (int) $request->get_param( 'action_id' );
-
-		$rollback = new Rollback();
-		$result   = $rollback->rollback_action( $action_id );
-
-		if ( ! $result['success'] ) {
-			return $this->error(
-				'rollback_failed',
-				$result['error'] ?? __( 'Rollback failed', 'creator-core' ),
-				500
-			);
-		}
-
-		return $this->success( $result );
+		// MVP: Rollback functionality temporarily disabled
+		return $this->error(
+			'rollback_disabled',
+			__( 'Rollback functionality is temporarily disabled in MVP version.', 'creator-core' ),
+			501
+		);
 	}
 
 	/**

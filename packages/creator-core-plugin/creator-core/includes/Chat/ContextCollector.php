@@ -9,21 +9,13 @@ namespace CreatorCore\Chat;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Integrations\PluginDetector;
-
 /**
  * Class ContextCollector
  *
- * Collects WordPress context for AI requests
+ * Collects WordPress context for AI requests.
+ * MVP version: Simplified without PluginDetector dependency.
  */
 class ContextCollector {
-
-    /**
-     * Plugin detector instance
-     *
-     * @var PluginDetector
-     */
-    private PluginDetector $plugin_detector;
 
     /**
      * Cached context
@@ -34,11 +26,9 @@ class ContextCollector {
 
     /**
      * Constructor
-     *
-     * @param PluginDetector|null $plugin_detector Plugin detector instance.
      */
-    public function __construct( ?PluginDetector $plugin_detector = null ) {
-        $this->plugin_detector = $plugin_detector ?? new PluginDetector();
+    public function __construct() {
+        // No dependencies needed for MVP
     }
 
     /**
@@ -62,7 +52,7 @@ class ContextCollector {
             'site_info'        => $this->get_site_info(),
             'theme_info'       => $this->get_theme_info(),
             'active_plugins'   => $this->get_active_plugins_info(),
-            'integrations'     => $this->plugin_detector->get_all_integrations(),
+            'integrations'     => $this->get_active_integrations(),
             'current_user'     => $this->get_current_user_info(),
             'content_stats'    => $this->get_content_statistics(),
             'capabilities'     => $this->get_available_capabilities(),
@@ -297,19 +287,58 @@ class ContextCollector {
     /**
      * Get available capabilities based on integrations
      *
+     * MVP version: Simplified without PluginDetector.
+     *
      * @return array
      */
     public function get_available_capabilities(): array {
-        $integrations = $this->plugin_detector->get_all_integrations();
+        $integrations = $this->get_active_integrations();
         $capabilities = [ 'wordpress_core' ];
 
         foreach ( $integrations as $key => $status ) {
-            if ( $status['active'] && $status['compatible'] ) {
+            if ( $status['active'] ) {
                 $capabilities[] = $key;
             }
         }
 
         return $capabilities;
+    }
+
+    /**
+     * Get active integrations (simplified version)
+     *
+     * MVP version: Returns basic integration info without PluginDetector.
+     *
+     * @return array
+     */
+    private function get_active_integrations(): array {
+        $integrations = [];
+
+        // Check Elementor
+        if ( class_exists( '\Elementor\Plugin' ) ) {
+            $integrations['elementor'] = [
+                'name'   => 'Elementor',
+                'active' => true,
+            ];
+        }
+
+        // Check ACF
+        if ( function_exists( 'acf_get_field_groups' ) ) {
+            $integrations['acf'] = [
+                'name'   => 'Advanced Custom Fields',
+                'active' => true,
+            ];
+        }
+
+        // Check WooCommerce
+        if ( class_exists( 'WooCommerce' ) ) {
+            $integrations['woocommerce'] = [
+                'name'   => 'WooCommerce',
+                'active' => true,
+            ];
+        }
+
+        return $integrations;
     }
 
     /**

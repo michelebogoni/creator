@@ -12,8 +12,6 @@ namespace CreatorCore\Executor;
 
 defined( 'ABSPATH' ) || exit;
 
-use CreatorCore\Audit\AuditLogger;
-
 /**
  * Class CustomFileManager
  *
@@ -22,6 +20,8 @@ use CreatorCore\Audit\AuditLogger;
  * - codice-custom.css  (CSS rules)
  * - codice-custom.js   (JavaScript)
  * - codice-manifest.json (registry of all modifications)
+ *
+ * MVP version: Simplified without AuditLogger dependency.
  */
 class CustomFileManager {
 
@@ -42,13 +42,6 @@ class CustomFileManager {
 	private const FILE_MANIFEST = 'custom-code/codice-manifest.json';
 
 	/**
-	 * Audit logger instance
-	 *
-	 * @var AuditLogger
-	 */
-	private AuditLogger $logger;
-
-	/**
 	 * Base directory for custom files
 	 *
 	 * @var string
@@ -57,12 +50,21 @@ class CustomFileManager {
 
 	/**
 	 * Constructor
-	 *
-	 * @param AuditLogger|null $logger Audit logger instance.
 	 */
-	public function __construct( ?AuditLogger $logger = null ) {
-		$this->logger   = $logger ?? new AuditLogger();
+	public function __construct() {
 		$this->base_dir = CREATOR_CORE_PATH;
+	}
+
+	/**
+	 * Log message for debugging
+	 *
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
+	 */
+	private function log( string $message, array $context = [] ): void {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'Creator CustomFileManager: ' . $message . ' ' . wp_json_encode( $context ) );
+		}
 	}
 
 	/**
@@ -131,7 +133,7 @@ class CustomFileManager {
 			'user_login'  => wp_get_current_user()->user_login,
 		] );
 
-		$this->logger->success( 'custom_code_written', [
+		$this->log( 'custom_code_written', [
 			'mod_id' => $mod_id,
 			'type'   => $type,
 			'file'   => basename( $file_path ),
@@ -201,7 +203,7 @@ class CustomFileManager {
 		// Remove from manifest
 		$this->unregister_modification( $mod_id );
 
-		$this->logger->success( 'custom_code_removed', [
+		$this->log( 'custom_code_removed', [
 			'mod_id' => $mod_id,
 			'type'   => $mod_info['type'],
 		] );

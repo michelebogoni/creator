@@ -13,7 +13,6 @@ namespace CreatorCore\Context;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Chat\ContextCollector;
-use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\User\UserProfile;
 
 /**
@@ -45,13 +44,6 @@ class CreatorContext {
 	private ContextCollector $context_collector;
 
 	/**
-	 * Plugin detector instance
-	 *
-	 * @var PluginDetector
-	 */
-	private PluginDetector $plugin_detector;
-
-	/**
 	 * Plugin docs repository instance
 	 *
 	 * @var PluginDocsRepository
@@ -75,21 +67,20 @@ class CreatorContext {
 	/**
 	 * Constructor
 	 *
+	 * MVP version: Simplified without PluginDetector dependency.
+	 *
 	 * @param ContextCollector|null     $context_collector Context collector instance.
-	 * @param PluginDetector|null       $plugin_detector   Plugin detector instance.
 	 * @param PluginDocsRepository|null $docs_repository   Plugin docs repository instance.
 	 * @param SystemPrompts|null        $system_prompts    System prompts instance.
 	 * @param ContextCache|null         $cache             Context cache instance.
 	 */
 	public function __construct(
 		?ContextCollector $context_collector = null,
-		?PluginDetector $plugin_detector = null,
 		?PluginDocsRepository $docs_repository = null,
 		?SystemPrompts $system_prompts = null,
 		?ContextCache $cache = null
 	) {
 		$this->context_collector = $context_collector ?? new ContextCollector();
-		$this->plugin_detector   = $plugin_detector ?? new PluginDetector();
 		$this->docs_repository   = $docs_repository ?? new PluginDocsRepository();
 		$this->system_prompts    = $system_prompts ?? new SystemPrompts();
 		$this->cache             = $cache ?? new ContextCache();
@@ -381,18 +372,17 @@ class CreatorContext {
 			}
 		}
 
-		// Get missing suggested plugins
+		// Get missing suggested plugins (MVP: simplified check without PluginDetector)
 		$missing_suggested = [];
 		$suggested_plugins = [
-			'acf_pro'   => [ 'slug' => 'advanced-custom-fields-pro', 'reason' => 'Professional custom fields with repeaters and flexible content' ],
-			'rank_math' => [ 'slug' => 'seo-by-rank-math', 'reason' => 'SEO management and optimization' ],
-			'wpcode'    => [ 'slug' => 'insert-headers-and-footers', 'reason' => 'Safe code snippet management with easy rollback' ],
-			'elementor' => [ 'slug' => 'elementor', 'reason' => 'Visual page builder for easier content creation' ],
+			'acf_pro'   => [ 'slug' => 'advanced-custom-fields-pro', 'reason' => 'Professional custom fields with repeaters and flexible content', 'check' => fn() => function_exists( 'acf_get_field_groups' ) ],
+			'rank_math' => [ 'slug' => 'seo-by-rank-math', 'reason' => 'SEO management and optimization', 'check' => fn() => defined( 'RANK_MATH_VERSION' ) ],
+			'wpcode'    => [ 'slug' => 'insert-headers-and-footers', 'reason' => 'Safe code snippet management with easy rollback', 'check' => fn() => class_exists( 'WPCode' ) ],
+			'elementor' => [ 'slug' => 'elementor', 'reason' => 'Visual page builder for easier content creation', 'check' => fn() => class_exists( '\Elementor\Plugin' ) ],
 		];
 
-		$integrations = $this->plugin_detector->get_all_integrations();
 		foreach ( $suggested_plugins as $key => $info ) {
-			if ( empty( $integrations[ $key ]['active'] ) ) {
+			if ( ! ( $info['check'] )() ) {
 				$missing_suggested[] = [
 					'slug'   => $info['slug'],
 					'reason' => $info['reason'],
@@ -554,21 +544,51 @@ class CreatorContext {
 	/**
 	 * Generate integrations information
 	 *
+	 * MVP version: Simplified without PluginDetector dependency.
+	 *
 	 * @return array
 	 */
 	private function generate_integrations_info(): array {
-		$integrations = $this->plugin_detector->get_all_integrations();
 		$result = [];
 
-		foreach ( $integrations as $key => $status ) {
-			if ( $status['active'] ) {
-				$result[ $key ] = [
-					'name'       => $status['name'],
-					'active'     => true,
-					'compatible' => $status['compatible'],
-					'version'    => $status['version'] ?? null,
-				];
-			}
+		// Check Elementor
+		if ( class_exists( '\Elementor\Plugin' ) ) {
+			$result['elementor'] = [
+				'name'       => 'Elementor',
+				'active'     => true,
+				'compatible' => true,
+				'version'    => defined( 'ELEMENTOR_VERSION' ) ? ELEMENTOR_VERSION : null,
+			];
+		}
+
+		// Check ACF
+		if ( function_exists( 'acf_get_field_groups' ) ) {
+			$result['acf'] = [
+				'name'       => 'Advanced Custom Fields',
+				'active'     => true,
+				'compatible' => true,
+				'version'    => defined( 'ACF_VERSION' ) ? ACF_VERSION : null,
+			];
+		}
+
+		// Check WooCommerce
+		if ( class_exists( 'WooCommerce' ) ) {
+			$result['woocommerce'] = [
+				'name'       => 'WooCommerce',
+				'active'     => true,
+				'compatible' => true,
+				'version'    => defined( 'WC_VERSION' ) ? WC_VERSION : null,
+			];
+		}
+
+		// Check RankMath
+		if ( defined( 'RANK_MATH_VERSION' ) ) {
+			$result['rank_math'] = [
+				'name'       => 'Rank Math SEO',
+				'active'     => true,
+				'compatible' => true,
+				'version'    => RANK_MATH_VERSION,
+			];
 		}
 
 		return $result;

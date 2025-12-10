@@ -13,7 +13,6 @@ use CreatorCore\Admin\Dashboard;
 use CreatorCore\Admin\Settings;
 use CreatorCore\Chat\ChatInterface;
 use CreatorCore\Proxy\ProxyClient;
-use CreatorCore\Integrations\PluginDetector;
 use CreatorCore\API\REST_API;
 use CreatorCore\Context\ContextRefresher;
 use CreatorCore\Executor\CustomCodeLoader;
@@ -54,13 +53,6 @@ class Loader {
 	private ProxyClient $proxy_client;
 
 	/**
-	 * Plugin detector instance
-	 *
-	 * @var PluginDetector
-	 */
-	private PluginDetector $plugin_detector;
-
-	/**
 	 * REST API instance
 	 *
 	 * @var REST_API
@@ -98,12 +90,11 @@ class Loader {
 	 */
 	private function init_components(): void {
 		// Core services
-		$this->plugin_detector = new PluginDetector();
-		$this->proxy_client    = new ProxyClient();
+		$this->proxy_client = new ProxyClient();
 
 		// Admin components
-		$this->dashboard = new Dashboard( $this->plugin_detector );
-		$this->settings  = new Settings( $this->proxy_client, $this->plugin_detector );
+		$this->dashboard = new Dashboard();
+		$this->settings  = new Settings( $this->proxy_client );
 
 		// Chat system
 		$this->chat_interface = new ChatInterface( $this->proxy_client );

@@ -16,7 +16,6 @@ namespace CreatorCore\API\Controllers;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Chat\ChatInterface;
-use CreatorCore\Backup\Rollback;
 use CreatorCore\Proxy\ProxyClient as SimpleProxyClient;
 use CreatorCore\Context\ContextLoaderSimple;
 use CreatorCore\Response\ResponseHandler;
@@ -146,6 +145,8 @@ class ChatController extends BaseController {
 	/**
 	 * Check AI permission (stricter rate limiting)
 	 *
+	 * MVP version: Simplified permission check.
+	 *
 	 * @param \WP_REST_Request $request Request object.
 	 * @return bool|\WP_Error
 	 */
@@ -154,7 +155,8 @@ class ChatController extends BaseController {
 			return $this->error( 'rest_forbidden', __( 'You must be logged in.', 'creator-core' ), 401 );
 		}
 
-		if ( ! $this->get_capability_checker()->can_use_creator() ) {
+		// MVP: Simple capability check - require edit_posts
+		if ( ! current_user_can( 'edit_posts' ) ) {
 			return $this->error( 'rest_forbidden', __( 'Permission denied.', 'creator-core' ), 403 );
 		}
 

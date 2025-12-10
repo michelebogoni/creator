@@ -5,6 +5,8 @@
  * Abstract base class for all REST API controllers.
  * Provides common functionality and enforces consistent structure.
  *
+ * MVP version: Simplified without CapabilityChecker and AuditLogger.
+ *
  * @package CreatorCore
  * @since 1.0.0
  */
@@ -14,8 +16,6 @@ namespace CreatorCore\API\Controllers;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\API\RateLimiter;
-use CreatorCore\Permission\CapabilityChecker;
-use CreatorCore\Audit\AuditLogger;
 
 /**
  * Abstract Class BaseController
@@ -34,25 +34,11 @@ abstract class BaseController {
 	const NAMESPACE = 'creator/v1';
 
 	/**
-	 * Capability checker instance (lazy-loaded)
-	 *
-	 * @var CapabilityChecker|null
-	 */
-	protected ?CapabilityChecker $capability_checker = null;
-
-	/**
 	 * Rate limiter instance (lazy-loaded)
 	 *
 	 * @var RateLimiter|null
 	 */
 	protected ?RateLimiter $rate_limiter = null;
-
-	/**
-	 * Audit logger instance (lazy-loaded)
-	 *
-	 * @var AuditLogger|null
-	 */
-	protected ?AuditLogger $logger = null;
 
 	/**
 	 * Register routes for this controller
@@ -71,18 +57,6 @@ abstract class BaseController {
 	}
 
 	/**
-	 * Get capability checker (lazy-loads if needed)
-	 *
-	 * @return CapabilityChecker
-	 */
-	protected function get_capability_checker(): CapabilityChecker {
-		if ( null === $this->capability_checker ) {
-			$this->capability_checker = new CapabilityChecker();
-		}
-		return $this->capability_checker;
-	}
-
-	/**
 	 * Get rate limiter (lazy-loads if needed)
 	 *
 	 * @return RateLimiter
@@ -95,19 +69,10 @@ abstract class BaseController {
 	}
 
 	/**
-	 * Get audit logger (lazy-loads if needed)
-	 *
-	 * @return AuditLogger
-	 */
-	protected function get_logger(): AuditLogger {
-		if ( null === $this->logger ) {
-			$this->logger = new AuditLogger();
-		}
-		return $this->logger;
-	}
-
-	/**
 	 * Check permission for API access
+	 *
+	 * Simplified permission check: requires user to be logged in
+	 * and have edit_posts capability.
 	 *
 	 * @param \WP_REST_Request $request Request object.
 	 * @return bool|\WP_Error
@@ -121,7 +86,8 @@ abstract class BaseController {
 			);
 		}
 
-		if ( ! $this->get_capability_checker()->can_use_creator() ) {
+		// MVP: Simple capability check - require edit_posts
+		if ( ! current_user_can( 'edit_posts' ) ) {
 			return new \WP_Error(
 				'rest_forbidden',
 				__( 'You do not have permission to use Creator.', 'creator-core' ),
@@ -201,13 +167,15 @@ abstract class BaseController {
 	}
 
 	/**
-	 * Log an action
+	 * Log an action (simplified - uses error_log in debug mode)
 	 *
 	 * @param string $action  Action name.
 	 * @param array  $details Action details.
 	 * @return void
 	 */
 	protected function log( string $action, array $details = [] ): void {
-		$this->get_logger()->info( $action, $details );
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'Creator API: ' . $action . ' ' . wp_json_encode( $details ) );
+		}
 	}
 }

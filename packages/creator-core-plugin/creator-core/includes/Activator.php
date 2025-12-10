@@ -32,14 +32,6 @@ class Activator {
 
         // Clear any cached data
         wp_cache_flush();
-
-        // Log activation
-        if ( class_exists( '\CreatorCore\Audit\AuditLogger' ) ) {
-            $logger = new \CreatorCore\Audit\AuditLogger();
-            $logger->log( 'plugin_activated', 'success', [
-                'version' => CREATOR_CORE_VERSION,
-            ]);
-        }
     }
 
     /**
