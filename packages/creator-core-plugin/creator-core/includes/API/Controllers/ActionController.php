@@ -78,6 +78,11 @@ class ActionController extends BaseController {
 	/**
 	 * Execute an action (context request or code execution)
 	 *
+	 * Supports the universal PHP engine pattern where AI generates executable code.
+	 * Only two action categories are supported:
+	 * 1. Context requests (get_plugin_details, get_acf_details, etc.)
+	 * 2. Code execution (execute_code) - The universal PHP engine
+	 *
 	 * @param \WP_REST_Request $request Request object.
 	 * @return \WP_REST_Response|\WP_Error
 	 */
@@ -95,7 +100,7 @@ class ActionController extends BaseController {
 
 		$type = $action['type'] ?? '';
 
-		// Handle context request actions (lazy-load)
+		// Handle context request actions (lazy-load for discovery phase)
 		$context_types = [
 			'get_plugin_details',
 			'get_acf_details',
@@ -124,10 +129,17 @@ class ActionController extends BaseController {
 			}
 		}
 
-		// Handle code execution actions
-		if ( ! empty( $action['code'] ) ) {
+		// Universal PHP Engine: Handle execute_code action
+		// Code can be in $action['code'] or $action['details']['code'] (new format)
+		$code = $this->extract_code_from_action( $action );
+
+		if ( ! empty( $code ) ) {
 			try {
-				$result = $this->chat_interface->execute_action_code( $action, $chat_id );
+				// Normalize action structure for CodeExecutor
+				// CodeExecutor expects: content, title, description, language, auto_execute
+				$normalized_action = $this->normalize_code_action( $action, $code );
+
+				$result = $this->chat_interface->execute_action_code( $normalized_action, $chat_id );
 
 				return $this->success( $result );
 			} catch ( \Throwable $e ) {
@@ -140,8 +152,8 @@ class ActionController extends BaseController {
 		}
 
 		return $this->error(
-			'unknown_action_type',
-			sprintf( __( 'Unknown action type: %s', 'creator-core' ), $type ),
+			'invalid_action',
+			__( 'Action must be a context request or contain executable code (execute_code type)', 'creator-core' ),
 			400
 		);
 	}
@@ -172,6 +184,10 @@ class ActionController extends BaseController {
 	/**
 	 * Validate action object structure
 	 *
+	 * With the Universal PHP Engine pattern, we only validate:
+	 * 1. Action is an object
+	 * 2. Has a type (context request) OR has code (execute_code)
+	 *
 	 * @param mixed            $value   The action value.
 	 * @param \WP_REST_Request $request Request object.
 	 * @param string           $key     Parameter key.
@@ -186,40 +202,27 @@ class ActionController extends BaseController {
 			);
 		}
 
-		// Must have a type
-		if ( empty( $value['type'] ) || ! is_string( $value['type'] ) ) {
-			return new \WP_Error(
-				'missing_action_type',
-				__( 'Action must have a valid type', 'creator-core' ),
-				[ 'status' => 400 ]
-			);
-		}
+		$type = $value['type'] ?? '';
+		$code = $value['code'] ?? ( $value['details']['code'] ?? '' );
 
-		// Validate type is from allowed list
-		$allowed_types = [
-			// Context request types
+		// Context request types (for discovery phase)
+		$context_types = [
 			'get_plugin_details',
 			'get_acf_details',
 			'get_cpt_details',
 			'get_taxonomy_details',
 			'get_wp_functions',
-			// Code execution types
-			'execute_code',
-			'create_snippet',
-			'modify_file',
-			// Elementor types
-			'create_elementor_page',
-			'update_elementor_page',
 		];
 
-		if ( ! in_array( $value['type'], $allowed_types, true ) ) {
+		// Valid if: it's a context request OR it's execute_code with code OR it has code directly
+		$is_context_request = in_array( $type, $context_types, true );
+		$is_code_execution  = ( $type === 'execute_code' && ! empty( $code ) );
+		$has_code_directly  = ! empty( $code );
+
+		if ( ! $is_context_request && ! $is_code_execution && ! $has_code_directly ) {
 			return new \WP_Error(
-				'invalid_action_type',
-				sprintf(
-					/* translators: %s: action type */
-					__( 'Unknown action type: %s', 'creator-core' ),
-					sanitize_text_field( $value['type'] )
-				),
+				'invalid_action',
+				__( 'Action must be a context request (get_plugin_details, etc.) or contain executable code (type: execute_code with code)', 'creator-core' ),
 				[ 'status' => 400 ]
 			);
 		}
@@ -286,5 +289,62 @@ class ActionController extends BaseController {
 		}
 
 		return $sanitized;
+	}
+
+	/**
+	 * Extract code from action object
+	 *
+	 * Supports multiple formats:
+	 * - New format: $action['details']['code'] (Universal PHP Engine)
+	 * - Legacy format: $action['code'] (string or array with 'content')
+	 *
+	 * @param array $action Action object.
+	 * @return string PHP code or empty string.
+	 */
+	private function extract_code_from_action( array $action ): string {
+		// New Universal PHP Engine format: details.code
+		if ( ! empty( $action['details']['code'] ) ) {
+			return $action['details']['code'];
+		}
+
+		// Legacy format: code as string
+		if ( ! empty( $action['code'] ) && is_string( $action['code'] ) ) {
+			return $action['code'];
+		}
+
+		// Legacy format: code as array with content
+		if ( ! empty( $action['code']['content'] ) ) {
+			return $action['code']['content'];
+		}
+
+		// Legacy format: content directly
+		if ( ! empty( $action['content'] ) ) {
+			return $action['content'];
+		}
+
+		return '';
+	}
+
+	/**
+	 * Normalize action to CodeExecutor expected format
+	 *
+	 * CodeExecutor expects: content, title, description, language, auto_execute
+	 *
+	 * @param array  $action Original action object.
+	 * @param string $code   Extracted PHP code.
+	 * @return array Normalized action for CodeExecutor.
+	 */
+	private function normalize_code_action( array $action, string $code ): array {
+		$details = $action['details'] ?? [];
+
+		return [
+			'content'      => $code,
+			'title'        => $details['description'] ?? $action['title'] ?? 'AI Generated Code',
+			'description'  => $details['description'] ?? $action['description'] ?? '',
+			'language'     => 'php',
+			'auto_execute' => true,
+			'risk'         => $details['estimated_risk'] ?? $action['risk'] ?? 'medium',
+			'type'         => 'execute_code',
+		];
 	}
 }
