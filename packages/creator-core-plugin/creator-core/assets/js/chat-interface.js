@@ -67,6 +67,40 @@
             // Plan confirmation buttons
             $(document).on('click', '.creator-confirm-plan', this.handleConfirmPlan.bind(this));
             $(document).on('click', '.creator-cancel-plan', this.handleCancelPlan.bind(this));
+
+            // Roadmap confirmation buttons
+            $(document).on('click', '.creator-confirm-roadmap', this.handleConfirmRoadmap.bind(this));
+            $(document).on('click', '.creator-cancel-roadmap', this.handleCancelRoadmap.bind(this));
+        },
+
+        /**
+         * Handle roadmap confirmation
+         */
+        handleConfirmRoadmap: function(e) {
+            const $container = $(e.currentTarget).closest('.creator-roadmap-confirm');
+            const roadmapId = $container.data('roadmap-id');
+
+            // Hide confirmation buttons
+            $container.find('.creator-roadmap-actions').hide();
+            $container.find('.creator-roadmap-status').text('Esecuzione in corso...').show();
+
+            // Send confirmation message
+            this.sendMessage('Procedi con la roadmap.');
+        },
+
+        /**
+         * Handle roadmap cancellation
+         */
+        handleCancelRoadmap: function(e) {
+            const $container = $(e.currentTarget).closest('.creator-roadmap-confirm');
+            $container.remove();
+
+            // Notify user
+            this.addMessage({
+                role: 'assistant',
+                content: 'Roadmap annullata. Come posso aiutarti?',
+                timestamp: new Date().toISOString()
+            });
         },
 
         /**
@@ -318,6 +352,31 @@
                         if (aiResponse.type === 'plan' && aiResponse.requires_confirmation) {
                             self.showPlanConfirmation(aiResponse);
                         }
+
+                        // Handle roadmap confirmation
+                        if (aiResponse.type === 'roadmap' && aiResponse.requires_confirmation) {
+                            self.showRoadmapConfirmation(aiResponse);
+                        }
+
+                        // Handle checkpoint - update roadmap step status
+                        if (aiResponse.type === 'checkpoint' && aiResponse.data) {
+                            const completedStep = aiResponse.data.completed_step;
+                            if (completedStep) {
+                                self.updateRoadmapStep(completedStep, 'completed');
+                            }
+                            const nextStep = aiResponse.data.next_step;
+                            if (nextStep) {
+                                self.updateRoadmapStep(nextStep, 'executing');
+                            }
+                        }
+
+                        // Handle execute_step - show which step is being executed
+                        if (aiResponse.type === 'execute_step' && aiResponse.data) {
+                            const stepIndex = aiResponse.data.step_index;
+                            if (stepIndex) {
+                                self.updateRoadmapStep(stepIndex, 'executing');
+                            }
+                        }
                     } else {
                         const errorMsg = response.message || 'Failed to send message';
                         self.showError(errorMsg, self.isLicenseError(errorMsg));
@@ -357,6 +416,94 @@
 
             $messages.append(confirmHtml);
             this.scrollToBottom();
+        },
+
+        /**
+         * Show roadmap confirmation UI with steps list
+         */
+        showRoadmapConfirmation: function(response) {
+            const self = this;
+            const $messages = $('.creator-chat-messages');
+            const data = response.data || {};
+            const steps = data.steps || [];
+            const roadmapId = data.roadmap_id || 'roadmap-' + Date.now();
+
+            // Build steps HTML
+            let stepsHtml = '';
+            steps.forEach(function(step, index) {
+                stepsHtml += `
+                    <div class="creator-roadmap-step" data-step-index="${step.index || index + 1}">
+                        <div class="creator-roadmap-step-number">${step.index || index + 1}</div>
+                        <div class="creator-roadmap-step-content">
+                            <div class="creator-roadmap-step-title">${self.escapeHtml(step.title)}</div>
+                            <div class="creator-roadmap-step-desc">${self.escapeHtml(step.description)}</div>
+                        </div>
+                        <div class="creator-roadmap-step-status">
+                            <span class="dashicons dashicons-clock"></span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            const confirmHtml = `
+                <div class="creator-roadmap-confirm" data-chat-id="${this.chatId}" data-roadmap-id="${roadmapId}">
+                    <div class="creator-roadmap-header">
+                        <span class="creator-roadmap-icon">🗺️</span>
+                        <span class="creator-roadmap-title">${this.escapeHtml(data.title || 'Task Roadmap')}</span>
+                        <span class="creator-roadmap-meta">${steps.length} step${steps.length > 1 ? 's' : ''} • ${this.escapeHtml(data.estimated_time || '1-2 min')}</span>
+                    </div>
+                    <div class="creator-roadmap-steps">
+                        ${stepsHtml}
+                    </div>
+                    <div class="creator-roadmap-status" style="display: none;"></div>
+                    <div class="creator-roadmap-actions">
+                        <button class="creator-btn creator-btn-primary creator-confirm-roadmap">
+                            <span class="dashicons dashicons-controls-play"></span> Avvia Roadmap
+                        </button>
+                        <button class="creator-btn creator-btn-secondary creator-cancel-roadmap">
+                            Annulla
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            $messages.append(confirmHtml);
+            this.scrollToBottom();
+        },
+
+        /**
+         * Update roadmap step status
+         */
+        updateRoadmapStep: function(stepIndex, status, message) {
+            const $step = $(`.creator-roadmap-step[data-step-index="${stepIndex}"]`);
+            if (!$step.length) return;
+
+            const $statusIcon = $step.find('.creator-roadmap-step-status');
+
+            // Remove old status classes
+            $step.removeClass('step-pending step-executing step-completed step-failed');
+
+            switch (status) {
+                case 'executing':
+                    $step.addClass('step-executing');
+                    $statusIcon.html('<span class="dashicons dashicons-update creator-spin"></span>');
+                    break;
+                case 'completed':
+                    $step.addClass('step-completed');
+                    $statusIcon.html('<span class="dashicons dashicons-yes-alt"></span>');
+                    break;
+                case 'failed':
+                    $step.addClass('step-failed');
+                    $statusIcon.html('<span class="dashicons dashicons-dismiss"></span>');
+                    break;
+                default:
+                    $step.addClass('step-pending');
+                    $statusIcon.html('<span class="dashicons dashicons-clock"></span>');
+            }
+
+            if (message) {
+                $step.find('.creator-roadmap-step-desc').text(message);
+            }
         },
 
         /**
