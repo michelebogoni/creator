@@ -40,6 +40,13 @@ class Loader {
     private ?Chat\ChatController $chat_controller = null;
 
     /**
+     * Debug controller instance
+     *
+     * @var Debug\DebugController|null
+     */
+    private ?Debug\DebugController $debug_controller = null;
+
+    /**
      * Run the plugin
      *
      * @return void
@@ -89,8 +96,11 @@ class Loader {
      * @return void
      */
     private function init_rest_api(): void {
-        $this->chat_controller = new Chat\ChatController();
+        $this->chat_controller  = new Chat\ChatController();
+        $this->debug_controller = new Debug\DebugController();
+
         add_action( 'rest_api_init', [ $this->chat_controller, 'register_routes' ] );
+        add_action( 'rest_api_init', [ $this->debug_controller, 'register_routes' ] );
     }
 
     /**
