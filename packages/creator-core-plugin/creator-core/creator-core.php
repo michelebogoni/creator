@@ -35,18 +35,20 @@ define( 'CREATOR_DEBUG', defined( 'WP_DEBUG' ) && WP_DEBUG );
 define( 'CREATOR_MIN_PHP_VERSION', '7.4' );
 define( 'CREATOR_MIN_WP_VERSION', '5.8' );
 
-// Show setup reminder notice if wizard not completed
+// Show license reminder notice if not configured
 add_action( 'admin_notices', function() {
-    if ( get_option( 'creator_setup_completed' ) ) {
+    // Skip if license is already configured
+    if ( ! empty( get_option( 'creator_license_key' ) ) ) {
         return;
     }
+    // Skip on Creator pages
     $page = isset( $_GET['page'] ) ? (string) $_GET['page'] : '';
     if ( $page !== '' && strpos( $page, 'creator-' ) === 0 ) {
         return;
     }
-    $url = admin_url( 'admin.php?page=creator-setup' );
+    $url = admin_url( 'admin.php?page=creator-settings' );
     echo '<div class="notice notice-info"><p><strong>Creator:</strong> ';
-    echo 'Please complete the <a href="' . esc_url( $url ) . '">setup wizard</a> to get started.</p></div>';
+    echo 'Please configure your <a href="' . esc_url( $url ) . '">license key</a> to get started.</p></div>';
 });
 
 /**
@@ -148,7 +150,7 @@ function creator_core_activate(): void {
 register_activation_hook( __FILE__, 'creator_core_activate' );
 
 /**
- * Redirect to setup wizard after plugin activation
+ * Redirect to settings page after plugin activation
  * Follows official WordPress documentation pattern
  *
  * @see https://developer.wordpress.org/reference/functions/register_activation_hook/
@@ -164,30 +166,25 @@ function creator_core_activation_redirect() {
             return;
         }
 
-        // Don't redirect if setup already completed
-        if ( get_option( 'creator_setup_completed' ) ) {
-            return;
-        }
-
-        // Redirect to setup wizard
-        wp_safe_redirect( admin_url( 'admin.php?page=creator-setup' ) );
+        // Redirect to settings page
+        wp_safe_redirect( admin_url( 'admin.php?page=creator-settings' ) );
         exit;
     }
 }
 add_action( 'admin_init', 'creator_core_activation_redirect' );
 
 /**
- * Show admin notice with setup wizard link if redirect didn't work
+ * Show admin notice with settings link if license not configured
  * This is a fallback mechanism
  */
 function creator_core_activation_notice() {
-    // Only show if setup not completed and we're not on setup page
-    if ( get_option( 'creator_setup_completed' ) ) {
+    // Only show if license not configured
+    if ( ! empty( get_option( 'creator_license_key' ) ) ) {
         return;
     }
 
-    // Don't show on setup page
-    if ( isset( $_GET['page'] ) && $_GET['page'] === 'creator-setup' ) {
+    // Don't show on Creator pages
+    if ( isset( $_GET['page'] ) && strpos( $_GET['page'], 'creator-' ) === 0 ) {
         return;
     }
 
@@ -196,14 +193,14 @@ function creator_core_activation_notice() {
         return;
     }
 
-    $setup_url = admin_url( 'admin.php?page=creator-setup' );
+    $settings_url = admin_url( 'admin.php?page=creator-settings' );
     ?>
     <div class="notice notice-info is-dismissible">
         <p>
             <strong><?php esc_html_e( 'Creator', 'creator-core' ); ?>:</strong>
-            <?php esc_html_e( 'Thank you for installing Creator! Please complete the setup wizard to get started.', 'creator-core' ); ?>
-            <a href="<?php echo esc_url( $setup_url ); ?>" class="button button-primary" style="margin-left: 10px;">
-                <?php esc_html_e( 'Start Setup Wizard', 'creator-core' ); ?>
+            <?php esc_html_e( 'Thank you for installing Creator! Please configure your license key to get started.', 'creator-core' ); ?>
+            <a href="<?php echo esc_url( $settings_url ); ?>" class="button button-primary" style="margin-left: 10px;">
+                <?php esc_html_e( 'Configure License', 'creator-core' ); ?>
             </a>
         </p>
     </div>
@@ -231,16 +228,11 @@ function creator_core_activation_redirect_js() {
     // Delete the option
     delete_option( 'creator_do_activation_redirect' );
 
-    // Don't redirect if setup completed
-    if ( get_option( 'creator_setup_completed' ) ) {
-        return;
-    }
-
-    $setup_url = admin_url( 'admin.php?page=creator-setup' );
+    $settings_url = admin_url( 'admin.php?page=creator-settings' );
     ?>
     <script type="text/javascript">
         (function() {
-            window.location.href = '<?php echo esc_js( $setup_url ); ?>';
+            window.location.href = '<?php echo esc_js( $settings_url ); ?>';
         })();
     </script>
     <?php

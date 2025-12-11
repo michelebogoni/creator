@@ -346,11 +346,8 @@ class Activator {
      * @return void
      */
     private static function set_activation_redirect(): void {
-        // Only redirect if not already completed setup
-        if ( ! get_option( 'creator_setup_completed' ) ) {
-            // Use update_option to ensure value is always written (add_option won't overwrite)
-            update_option( 'creator_do_activation_redirect', 'yes' );
-        }
+        // Always redirect to settings page after activation
+        update_option( 'creator_do_activation_redirect', 'yes' );
     }
 
     /**
