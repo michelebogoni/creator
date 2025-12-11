@@ -254,12 +254,25 @@ export const routeRequest = onRequest(
       );
 
       // Debug: Log context received from WordPress
+      const contextKeys = body.context ? Object.keys(body.context) : [];
+      const wpVersion = (body.context?.wordpress as Record<string, unknown>)?.version || "NOT_RECEIVED";
+      const phpVersion = (body.context?.environment as Record<string, unknown>)?.php_version || "NOT_RECEIVED";
+      const themeName = (body.context?.theme as Record<string, unknown>)?.name || "NOT_RECEIVED";
+
       logger.info("Context from WordPress", {
         has_context: !!body.context,
         context_type: typeof body.context,
-        context_keys: body.context ? Object.keys(body.context) : [],
-        context_sample: body.context ? JSON.stringify(body.context).substring(0, 500) : "null",
+        context_keys: contextKeys,
+        wp_version: wpVersion,
+        php_version: phpVersion,
+        theme: themeName,
       });
+
+      // Debug headers to verify context reception (visible in WordPress response)
+      res.setHeader("X-Debug-Context-Keys", contextKeys.join(",") || "NONE");
+      res.setHeader("X-Debug-WP-Version", String(wpVersion));
+      res.setHeader("X-Debug-PHP-Version", String(phpVersion));
+      res.setHeader("X-Debug-Theme", String(themeName));
 
       // Extract files from body.files or body.options.files (backwards compatibility)
       const files = body.files || body.options?.files;
