@@ -183,46 +183,46 @@ function buildContextAwarePrompt(
   }
 
   // Build WordPress environment summary
+  // ContextLoader sends: wordpress, theme, plugins, environment
   const wpInfo = context.wordpress as Record<string, unknown> | undefined;
-  const phpInfo = context.php as Record<string, unknown> | undefined;
-  const mysqlInfo = context.mysql as Record<string, unknown> | undefined;
+  const envInfo = context.environment as Record<string, unknown> | undefined;
   const themeInfo = context.theme as Record<string, unknown> | undefined;
   const pluginsInfo = context.plugins as Array<Record<string, unknown>> | undefined;
 
-  let envSummary = "\n\nCURRENT WORDPRESS ENVIRONMENT:";
+  let envSummary = "\n\n## CURRENT WORDPRESS ENVIRONMENT:";
 
   if (wpInfo) {
     envSummary += `\n- WordPress Version: ${wpInfo.version || "unknown"}`;
-    if (wpInfo.locale) envSummary += `\n- Locale: ${wpInfo.locale}`;
-    if (wpInfo.multisite) envSummary += `\n- Multisite: ${wpInfo.multisite}`;
+    if (wpInfo.language) envSummary += `\n- Language: ${wpInfo.language}`;
+    if (wpInfo.is_multisite) envSummary += `\n- Multisite: Yes`;
     if (wpInfo.site_url) envSummary += `\n- Site URL: ${wpInfo.site_url}`;
   }
 
-  if (phpInfo?.version) {
-    envSummary += `\n- PHP Version: ${phpInfo.version}`;
-  }
-
-  if (mysqlInfo?.version) {
-    envSummary += `\n- MySQL Version: ${mysqlInfo.version}`;
+  if (envInfo) {
+    if (envInfo.php_version) envSummary += `\n- PHP Version: ${envInfo.php_version}`;
+    if (envInfo.mysql_version) envSummary += `\n- MySQL Version: ${envInfo.mysql_version}`;
+    if (envInfo.memory_limit) envSummary += `\n- Memory Limit: ${envInfo.memory_limit}`;
+    if (envInfo.debug_mode) envSummary += `\n- Debug Mode: Enabled`;
   }
 
   if (themeInfo) {
     envSummary += `\n- Active Theme: ${themeInfo.name || "unknown"}`;
     if (themeInfo.version) envSummary += ` (v${themeInfo.version})`;
-    if (themeInfo.parent) envSummary += ` - Child of: ${themeInfo.parent}`;
-  }
-
-  if (pluginsInfo && Array.isArray(pluginsInfo)) {
-    const activePlugins = pluginsInfo.filter((p) => p.active);
-    if (activePlugins.length > 0) {
-      envSummary += "\n- Active Plugins:";
-      activePlugins.forEach((plugin) => {
-        envSummary += `\n  - ${plugin.name} (v${plugin.version})`;
-      });
+    if (themeInfo.is_child && themeInfo.parent) {
+      const parentInfo = themeInfo.parent as Record<string, unknown>;
+      envSummary += ` - Child of: ${parentInfo.name || "unknown"}`;
     }
   }
 
-  envSummary += "\n\nUse this environment information when answering questions about the site configuration.";
+  if (pluginsInfo && Array.isArray(pluginsInfo) && pluginsInfo.length > 0) {
+    envSummary += "\n- Active Plugins:";
+    pluginsInfo.forEach((plugin) => {
+      envSummary += `\n  - ${plugin.name}`;
+      if (plugin.version) envSummary += ` (v${plugin.version})`;
+    });
+  }
+
+  envSummary += "\n\nUSE THIS INFORMATION to answer questions about the site. When asked about WordPress version, PHP version, theme, plugins, etc., use the data above to provide accurate answers.";
 
   return basePrompt + envSummary;
 }
