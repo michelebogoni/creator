@@ -45,20 +45,22 @@ class Loader {
      * @return void
      */
     public function run(): void {
-        // Only load in admin
+        // Always register REST API endpoints (permission is checked per-request)
+        $this->init_rest_api();
+
+        // Only load admin UI components in admin context
         if ( ! is_admin() ) {
             return;
         }
 
-        // Check user capability
+        // Check user capability for admin UI
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
 
-        // Initialize components
+        // Initialize admin components
         $this->init_admin();
         $this->init_chat();
-        $this->init_rest_api();
     }
 
     /**
