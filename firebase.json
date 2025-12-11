@@ -36,6 +36,31 @@
         "region": "us-central1"
       },
       {
+        "source": "/api/plugin-docs/research",
+        "function": "researchPluginDocsApi",
+        "region": "us-central1"
+      },
+      {
+        "source": "/api/plugin-docs/stats",
+        "function": "getPluginDocsStatsApi",
+        "region": "us-central1"
+      },
+      {
+        "source": "/api/plugin-docs/sync",
+        "function": "syncPluginDocsApi",
+        "region": "us-central1"
+      },
+      {
+        "source": "/api/plugin-docs/all/**",
+        "function": "getPluginDocsAllVersionsApi",
+        "region": "us-central1"
+      },
+      {
+        "source": "/api/plugin-docs/**",
+        "function": "getPluginDocsApi",
+        "region": "us-central1"
+      },
+      {
         "source": "/api/tasks/submit",
         "function": "submitTask",
         "region": "us-central1"
