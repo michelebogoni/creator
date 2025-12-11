@@ -278,6 +278,13 @@ export const routeRequest = onRequest(
       // Extract files from body.files or body.options.files (backwards compatibility)
       const files = body.files || body.options?.files;
 
+      // Log conversation history info for debugging
+      if (body.conversation_history && body.conversation_history.length > 0) {
+        logger.info("Conversation history received", {
+          message_count: body.conversation_history.length,
+        });
+      }
+
       const result = await modelService.generate({
         model: selectedModel,
         prompt: sanitizedPrompt,
@@ -287,6 +294,8 @@ export const routeRequest = onRequest(
         temperature: body.temperature,
         max_tokens: body.max_tokens,
         files: files,
+        conversation_history: body.conversation_history,
+        documentation: body.documentation,
       });
 
       // 6. Handle result

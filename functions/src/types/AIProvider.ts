@@ -40,6 +40,16 @@ export interface FileAttachment {
 }
 
 /**
+ * Message in conversation history
+ */
+export interface ConversationMessage {
+  /** Role of the message sender */
+  role: "user" | "assistant" | "system";
+  /** Content of the message */
+  content: string;
+}
+
+/**
  * Options for AI generation requests
  *
  * @interface GenerateOptions
@@ -75,6 +85,12 @@ export interface GenerateOptions {
    * Supports images (JPEG, PNG, GIF, WebP), PDFs, and documents
    */
   files?: FileAttachment[];
+
+  /**
+   * Conversation history for multi-turn conversations
+   * Contains previous messages in the conversation
+   */
+  conversation_history?: ConversationMessage[];
 }
 
 /**
