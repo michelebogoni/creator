@@ -16,6 +16,7 @@ defined( 'ABSPATH' ) || exit;
 use CreatorCore\Context\ContextLoader;
 use CreatorCore\Proxy\ProxyClient;
 use CreatorCore\Response\ResponseHandler;
+use CreatorCore\Conversation\ConversationManager;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -40,6 +41,13 @@ class ChatController {
      * @var int
      */
     private const MAX_LOOP_ITERATIONS = 20;
+
+    /**
+     * Maximum retry attempts for failed executions
+     *
+     * @var int
+     */
+    private const MAX_RETRY_ATTEMPTS = 3;
 
     /**
      * Register REST routes
@@ -210,6 +218,7 @@ class ChatController {
      * Execute the multi-step AI loop
      *
      * Continues automatically when response has continue_automatically = true.
+     * Includes retry logic for failed executions (up to MAX_RETRY_ATTEMPTS).
      *
      * @param string          $message              Initial user message.
      * @param array           $context              WordPress context.
@@ -232,6 +241,7 @@ class ChatController {
         $current_message  = $message;
         $all_steps        = [];
         $last_result      = null;
+        $retry_count      = 0;
 
         while ( $iteration < self::MAX_LOOP_ITERATIONS ) {
             $iteration++;
@@ -267,22 +277,23 @@ class ChatController {
 
             // Track all steps for debugging.
             $all_steps[] = [
-                'iteration' => $iteration,
-                'type'      => $processed['type'],
-                'step'      => $processed['step'] ?? '',
-                'status'    => $processed['status'] ?? '',
+                'iteration'   => $iteration,
+                'type'        => $processed['type'],
+                'step'        => $processed['step'] ?? '',
+                'status'      => $processed['status'] ?? '',
+                'retry_count' => $retry_count,
             ];
 
             // Handle request_docs type - fetch documentation and continue.
             if ( 'request_docs' === $processed['type'] ) {
                 $documentation = $processed['documentation'] ?? [];
-                $current_message = json_encode( [
+                $current_message = wp_json_encode( [
                     'type'   => 'documentation_provided',
                     'docs'   => array_keys( $documentation ),
                 ] );
                 $conversation_history[] = [
                     'role'    => 'assistant',
-                    'content' => json_encode( $processed ),
+                    'content' => wp_json_encode( $processed ),
                 ];
                 $conversation_history[] = [
                     'role'    => 'user',
@@ -294,6 +305,39 @@ class ChatController {
             // Store execution/verification results for next iteration.
             if ( isset( $processed['execution_result'] ) ) {
                 $last_result = $processed['execution_result'];
+
+                // Check if execution failed and we should retry.
+                if ( ! empty( $last_result ) && empty( $last_result['success'] ) ) {
+                    if ( $this->should_retry_execution( $last_result, $retry_count ) ) {
+                        $retry_count++;
+
+                        // Build retry message with error details.
+                        $retry_message = wp_json_encode( [
+                            'type'        => 'execution_failed',
+                            'error'       => $last_result['error'] ?? 'Unknown error',
+                            'output'      => $last_result['output'] ?? '',
+                            'retry_count' => $retry_count,
+                            'max_retries' => self::MAX_RETRY_ATTEMPTS,
+                            'instruction' => 'The previous code execution failed. Please analyze the error and try a different approach.',
+                        ] );
+
+                        $current_message = $retry_message;
+
+                        // Add to conversation history.
+                        $conversation_history[] = [
+                            'role'    => 'assistant',
+                            'content' => wp_json_encode( $processed ),
+                        ];
+                        $conversation_history[] = [
+                            'role'    => 'user',
+                            'content' => $current_message,
+                        ];
+                        continue;
+                    }
+                } else {
+                    // Reset retry count on successful execution.
+                    $retry_count = 0;
+                }
             } elseif ( isset( $processed['verification_result'] ) ) {
                 $last_result = $processed['verification_result'];
             }
@@ -305,12 +349,12 @@ class ChatController {
                     'type'   => 'execution_result',
                     'result' => $last_result,
                 ];
-                $current_message = json_encode( $continuation );
+                $current_message = wp_json_encode( $continuation );
 
                 // Add to conversation history.
                 $conversation_history[] = [
                     'role'    => 'assistant',
-                    'content' => json_encode( $processed ),
+                    'content' => wp_json_encode( $processed ),
                 ];
                 $conversation_history[] = [
                     'role'    => 'user',
@@ -333,6 +377,38 @@ class ChatController {
             'data'    => [],
             'steps'   => $all_steps,
         ];
+    }
+
+    /**
+     * Determine if a failed execution should be retried
+     *
+     * @param array $execution_result The execution result.
+     * @param int   $current_retry    Current retry count.
+     * @return bool Whether to retry.
+     */
+    private function should_retry_execution( array $execution_result, int $current_retry ): bool {
+        // Check max retries.
+        if ( $current_retry >= self::MAX_RETRY_ATTEMPTS ) {
+            return false;
+        }
+
+        $error = $execution_result['error'] ?? '';
+
+        // Non-retryable security errors.
+        $non_retryable = [
+            'Forbidden function',
+            'Base64 decode is not allowed',
+            'Backtick execution',
+            'superglobal access',
+        ];
+
+        foreach ( $non_retryable as $pattern ) {
+            if ( stripos( $error, $pattern ) !== false ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
