@@ -99,7 +99,7 @@ export const routeRequest = onRequest(
     secrets: [jwtSecret, geminiApiKey, claudeApiKey],
     cors: true,
     maxInstances: 100,
-    timeoutSeconds: 120, // Increased for longer model responses
+    timeoutSeconds: 120, // Increased for longer model responses (v2)
     serviceAccount: "757337256338-compute@developer.gserviceaccount.com",
   },
   async (req: Request, res: Response) => {
