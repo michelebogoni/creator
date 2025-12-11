@@ -64,18 +64,53 @@ class ResponseHandler {
             );
         }
 
+        // Get raw content.
+        $raw_content = $proxy_response['content'] ?? '';
+
+        // If content is empty, return error.
+        if ( empty( $raw_content ) ) {
+            return $this->create_error_response(
+                __( 'Empty response from AI service.', 'creator-core' ),
+                [ 'proxy_response' => $proxy_response ]
+            );
+        }
+
         // Parse the AI response content (should be JSON).
-        $ai_response = $this->parse_ai_content( $proxy_response['content'] ?? '' );
+        $ai_response = $this->parse_ai_content( $raw_content );
 
         if ( ! $ai_response ) {
-            return $this->create_error_response(
-                __( 'Failed to parse AI response.', 'creator-core' ),
-                [ 'raw_content' => $proxy_response['content'] ?? '' ]
-            );
+            // If JSON parsing failed, try to extract meaningful text and return as a simple message.
+            // This handles cases where AI doesn't follow JSON format strictly.
+            $clean_content = $this->extract_text_content( $raw_content );
+
+            return [
+                'type'                   => 'complete',
+                'step'                   => 'discovery',
+                'status'                 => __( 'Response', 'creator-core' ),
+                'message'                => $clean_content,
+                'data'                   => [],
+                'requires_confirmation'  => false,
+                'continue_automatically' => false,
+            ];
         }
 
         // Process based on response type.
         return $this->process_response_type( $ai_response, $context );
+    }
+
+    /**
+     * Extract text content from non-JSON AI response
+     *
+     * @param string $content The raw AI response.
+     * @return string Cleaned text content.
+     */
+    private function extract_text_content( string $content ): string {
+        // Remove markdown code blocks if present.
+        $content = preg_replace( '/```[\w]*\n?/', '', $content );
+        $content = str_replace( '```', '', $content );
+
+        // Trim whitespace.
+        return trim( $content );
     }
 
     /**
