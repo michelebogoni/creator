@@ -3,6 +3,8 @@
  * Chat Controller
  *
  * REST endpoint POST /creator/v1/chat per gestire i messaggi.
+ * Implementa il loop multi-step per task complessi seguendo le specifiche:
+ * Discovery -> Strategy -> Implementation -> Verification
  *
  * @package CreatorCore
  */
@@ -14,7 +16,6 @@ defined( 'ABSPATH' ) || exit;
 use CreatorCore\Context\ContextLoader;
 use CreatorCore\Proxy\ProxyClient;
 use CreatorCore\Response\ResponseHandler;
-use CreatorCore\Executor\CodeExecutor;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -22,7 +23,7 @@ use WP_Error;
 /**
  * Class ChatController
  *
- * Handles REST API endpoints for chat functionality
+ * Handles REST API endpoints for chat functionality with multi-step support
  */
 class ChatController {
 
@@ -34,12 +35,19 @@ class ChatController {
     private string $namespace = 'creator/v1';
 
     /**
+     * Maximum loop iterations to prevent infinite loops
+     *
+     * @var int
+     */
+    private const MAX_LOOP_ITERATIONS = 20;
+
+    /**
      * Register REST routes
      *
      * @return void
      */
     public function register_routes(): void {
-        // POST /creator/v1/chat - Send a message
+        // POST /creator/v1/chat - Send a message (main endpoint).
         register_rest_route(
             $this->namespace,
             '/chat',
@@ -52,7 +60,7 @@ class ChatController {
                         'required'          => true,
                         'type'              => 'string',
                         'sanitize_callback' => 'sanitize_textarea_field',
-                        'validate_callback' => function( $value ) {
+                        'validate_callback' => function ( $value ) {
                             return ! empty( trim( $value ) );
                         },
                     ],
@@ -61,11 +69,16 @@ class ChatController {
                         'type'              => 'integer',
                         'sanitize_callback' => 'absint',
                     ],
+                    'confirm_plan' => [
+                        'required'          => false,
+                        'type'              => 'boolean',
+                        'default'           => false,
+                    ],
                 ],
             ]
         );
 
-        // GET /creator/v1/chat/history - Get chat history
+        // GET /creator/v1/chat/history - Get chat history.
         register_rest_route(
             $this->namespace,
             '/chat/history',
@@ -89,7 +102,7 @@ class ChatController {
             ]
         );
 
-        // POST /creator/v1/chat/new - Create new chat
+        // POST /creator/v1/chat/new - Create new chat.
         register_rest_route(
             $this->namespace,
             '/chat/new',
@@ -119,16 +132,17 @@ class ChatController {
     }
 
     /**
-     * Handle incoming chat message
+     * Handle incoming chat message with multi-step loop support
      *
      * @param WP_REST_Request $request The REST request object.
      * @return WP_REST_Response|WP_Error
      */
     public function handle_chat_message( WP_REST_Request $request ) {
-        $message = $request->get_param( 'message' );
-        $chat_id = $request->get_param( 'chat_id' );
+        $message      = $request->get_param( 'message' );
+        $chat_id      = $request->get_param( 'chat_id' );
+        $confirm_plan = $request->get_param( 'confirm_plan' );
 
-        // Validate license
+        // Validate license.
         $site_token = get_option( 'creator_site_token', '' );
         if ( empty( $site_token ) ) {
             return new WP_Error(
@@ -139,43 +153,46 @@ class ChatController {
         }
 
         try {
-            // Get or create chat
+            // Get or create chat.
             $chat_id = $this->get_or_create_chat( $chat_id );
 
-            // Save user message
+            // Save user message.
             $this->save_message( $chat_id, 'user', $message );
 
-            // Gather WordPress context
-            $context_loader = new ContextLoader();
+            // Initialize components.
+            $context_loader   = new ContextLoader();
+            $proxy_client     = new ProxyClient();
+            $response_handler = new ResponseHandler();
+
+            // Gather WordPress context.
             $context = $context_loader->get_context();
 
-            // Send to proxy
-            $proxy = new ProxyClient();
-            $proxy_response = $proxy->send_message( $message, $context, $chat_id );
+            // Get conversation history.
+            $conversation_history = $this->get_conversation_history_for_ai( $chat_id );
 
-            if ( is_wp_error( $proxy_response ) ) {
-                return $proxy_response;
+            // If confirming a plan, modify the message.
+            if ( $confirm_plan ) {
+                $message = 'Procedi con il piano.';
             }
 
-            // Parse response
-            $response_handler = new ResponseHandler();
-            $parsed_response = $response_handler->parse( $proxy_response );
+            // Execute the multi-step loop.
+            $final_response = $this->execute_loop(
+                $message,
+                $context,
+                $conversation_history,
+                $proxy_client,
+                $response_handler,
+                $chat_id
+            );
 
-            // Execute code if present
-            if ( $parsed_response['has_code'] ) {
-                $executor = new CodeExecutor();
-                $execution_result = $executor->execute( $parsed_response['code'] );
-                $parsed_response['execution_result'] = $execution_result;
-            }
-
-            // Save assistant message
-            $this->save_message( $chat_id, 'assistant', $parsed_response['text'] );
+            // Save assistant response.
+            $this->save_message( $chat_id, 'assistant', $final_response['message'] ?? '' );
 
             return new WP_REST_Response(
                 [
                     'success'  => true,
                     'chat_id'  => $chat_id,
-                    'response' => $parsed_response,
+                    'response' => $final_response,
                 ],
                 200
             );
@@ -187,6 +204,172 @@ class ChatController {
                 [ 'status' => 500 ]
             );
         }
+    }
+
+    /**
+     * Execute the multi-step AI loop
+     *
+     * Continues automatically when response has continue_automatically = true.
+     *
+     * @param string          $message              Initial user message.
+     * @param array           $context              WordPress context.
+     * @param array           $conversation_history Previous messages.
+     * @param ProxyClient     $proxy_client         Proxy client instance.
+     * @param ResponseHandler $response_handler     Response handler instance.
+     * @param int             $chat_id              Chat ID.
+     * @return array Final response after loop completes.
+     */
+    private function execute_loop(
+        string $message,
+        array $context,
+        array $conversation_history,
+        ProxyClient $proxy_client,
+        ResponseHandler $response_handler,
+        int $chat_id
+    ): array {
+        $iteration        = 0;
+        $documentation    = null;
+        $current_message  = $message;
+        $all_steps        = [];
+        $last_result      = null;
+
+        while ( $iteration < self::MAX_LOOP_ITERATIONS ) {
+            $iteration++;
+
+            // Build context with last execution result.
+            $loop_context = $context;
+            if ( $last_result !== null ) {
+                $loop_context['last_result'] = $last_result;
+            }
+
+            // Call the AI.
+            $proxy_response = $proxy_client->send_message(
+                $current_message,
+                $loop_context,
+                $conversation_history,
+                $documentation
+            );
+
+            // Handle proxy errors.
+            if ( is_wp_error( $proxy_response ) ) {
+                return [
+                    'type'    => 'error',
+                    'step'    => 'implementation',
+                    'status'  => __( 'Error', 'creator-core' ),
+                    'message' => $proxy_response->get_error_message(),
+                    'data'    => [],
+                    'steps'   => $all_steps,
+                ];
+            }
+
+            // Process the response.
+            $processed = $response_handler->handle( $proxy_response, $loop_context );
+
+            // Track all steps for debugging.
+            $all_steps[] = [
+                'iteration' => $iteration,
+                'type'      => $processed['type'],
+                'step'      => $processed['step'] ?? '',
+                'status'    => $processed['status'] ?? '',
+            ];
+
+            // Handle request_docs type - fetch documentation and continue.
+            if ( 'request_docs' === $processed['type'] ) {
+                $documentation = $processed['documentation'] ?? [];
+                $current_message = json_encode( [
+                    'type'   => 'documentation_provided',
+                    'docs'   => array_keys( $documentation ),
+                ] );
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => json_encode( $processed ),
+                ];
+                $conversation_history[] = [
+                    'role'    => 'user',
+                    'content' => $current_message,
+                ];
+                continue;
+            }
+
+            // Store execution/verification results for next iteration.
+            if ( isset( $processed['execution_result'] ) ) {
+                $last_result = $processed['execution_result'];
+            } elseif ( isset( $processed['verification_result'] ) ) {
+                $last_result = $processed['verification_result'];
+            }
+
+            // Check if we should continue automatically.
+            if ( ! empty( $processed['continue_automatically'] ) ) {
+                // Build continuation message with result.
+                $continuation = [
+                    'type'   => 'execution_result',
+                    'result' => $last_result,
+                ];
+                $current_message = json_encode( $continuation );
+
+                // Add to conversation history.
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => json_encode( $processed ),
+                ];
+                $conversation_history[] = [
+                    'role'    => 'user',
+                    'content' => $current_message,
+                ];
+                continue;
+            }
+
+            // Loop complete - return the final response.
+            $processed['steps'] = $all_steps;
+            return $processed;
+        }
+
+        // Max iterations reached.
+        return [
+            'type'    => 'error',
+            'step'    => 'implementation',
+            'status'  => __( 'Error', 'creator-core' ),
+            'message' => __( 'Maximum loop iterations reached. Task may be too complex.', 'creator-core' ),
+            'data'    => [],
+            'steps'   => $all_steps,
+        ];
+    }
+
+    /**
+     * Get conversation history formatted for the AI
+     *
+     * @param int $chat_id The chat ID.
+     * @return array Messages formatted for AI.
+     */
+    private function get_conversation_history_for_ai( int $chat_id ): array {
+        global $wpdb;
+
+        $table    = $wpdb->prefix . 'creator_messages';
+        $messages = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT role, content FROM {$table}
+                 WHERE chat_id = %d
+                 ORDER BY created_at ASC
+                 LIMIT 20",
+                $chat_id
+            ),
+            ARRAY_A
+        );
+
+        if ( ! $messages ) {
+            return [];
+        }
+
+        // Format for AI - map 'assistant' to expected format.
+        return array_map(
+            function ( $msg ) {
+                return [
+                    'role'    => $msg['role'],
+                    'content' => $msg['content'],
+                ];
+            },
+            $messages
+        );
     }
 
     /**
@@ -205,9 +388,9 @@ class ChatController {
         $table_messages = $wpdb->prefix . 'creator_messages';
         $table_chats    = $wpdb->prefix . 'creator_chats';
 
-        // If chat_id is provided, get messages for that chat
+        // If chat_id is provided, get messages for that chat.
         if ( $chat_id ) {
-            // Verify chat belongs to user
+            // Verify chat belongs to user.
             $chat = $wpdb->get_row(
                 $wpdb->prepare(
                     "SELECT * FROM {$table_chats} WHERE id = %d AND user_id = %d",
@@ -243,7 +426,7 @@ class ChatController {
             );
         }
 
-        // Otherwise, get list of user's chats
+        // Otherwise, get list of user's chats.
         $chats = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT id, title, status, created_at, updated_at FROM {$table_chats}
@@ -281,7 +464,7 @@ class ChatController {
                 'user_id'    => $user_id,
                 'title'      => __( 'New Chat', 'creator-core' ),
                 'status'     => 'active',
-                'ai_model'   => 'gemini',
+                'ai_model'   => get_option( 'creator_default_model', 'gemini' ),
                 'created_at' => current_time( 'mysql' ),
                 'updated_at' => current_time( 'mysql' ),
             ],
@@ -319,7 +502,7 @@ class ChatController {
         $user_id = get_current_user_id();
         $table   = $wpdb->prefix . 'creator_chats';
 
-        // If chat_id provided, verify it exists and belongs to user
+        // If chat_id provided, verify it exists and belongs to user.
         if ( $chat_id ) {
             $exists = $wpdb->get_var(
                 $wpdb->prepare(
@@ -330,7 +513,7 @@ class ChatController {
             );
 
             if ( $exists ) {
-                // Update timestamp
+                // Update timestamp.
                 $wpdb->update(
                     $table,
                     [ 'updated_at' => current_time( 'mysql' ) ],
@@ -343,14 +526,14 @@ class ChatController {
             }
         }
 
-        // Create new chat
+        // Create new chat.
         $wpdb->insert(
             $table,
             [
                 'user_id'    => $user_id,
                 'title'      => __( 'New Chat', 'creator-core' ),
                 'status'     => 'active',
-                'ai_model'   => 'gemini',
+                'ai_model'   => get_option( 'creator_default_model', 'gemini' ),
                 'created_at' => current_time( 'mysql' ),
                 'updated_at' => current_time( 'mysql' ),
             ],
@@ -386,7 +569,7 @@ class ChatController {
             [ '%d', '%d', '%s', '%s', '%s', '%s' ]
         );
 
-        // Update chat title if this is the first user message
+        // Update chat title if this is the first user message.
         if ( 'user' === $role ) {
             $this->maybe_update_chat_title( $chat_id, $content );
         }
@@ -406,7 +589,7 @@ class ChatController {
 
         $table = $wpdb->prefix . 'creator_chats';
 
-        // Check if title is still default
+        // Check if title is still default.
         $current_title = $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT title FROM {$table} WHERE id = %d",
@@ -415,7 +598,7 @@ class ChatController {
         );
 
         if ( __( 'New Chat', 'creator-core' ) === $current_title ) {
-            // Generate title from first message (first 50 chars)
+            // Generate title from first message (first 50 chars).
             $title = wp_trim_words( $content, 8, '...' );
             $title = substr( $title, 0, 50 );
 

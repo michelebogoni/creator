@@ -32,24 +32,29 @@ class ProxyClient {
      *
      * @var int
      */
-    private int $timeout = 60;
+    private int $timeout = 120;
 
     /**
      * Constructor
      */
     public function __construct() {
-        $this->proxy_url = defined( 'CREATOR_PROXY_URL' ) ? CREATOR_PROXY_URL : 'https://creator-ai-proxy.firebaseapp.com';
+        $this->proxy_url = defined( 'CREATOR_PROXY_URL' )
+            ? CREATOR_PROXY_URL
+            : 'https://creator-ai-proxy.web.app';
     }
 
     /**
      * Send a chat message to the AI proxy
      *
-     * @param string   $message  The user message.
-     * @param array    $context  The WordPress context data.
-     * @param int|null $chat_id  Optional chat ID for conversation continuity.
+     * Uses the /api/ai/route-request endpoint which returns structured JSON responses.
+     *
+     * @param string      $message              The user message.
+     * @param array       $context              The WordPress context data.
+     * @param array       $conversation_history Previous messages in the conversation.
+     * @param array|null  $documentation        Optional plugin documentation.
      * @return array|WP_Error The response data or error.
      */
-    public function send_message( string $message, array $context, ?int $chat_id = null ) {
+    public function send_message( string $message, array $context, array $conversation_history = [], ?array $documentation = null ) {
         $site_token = get_option( 'creator_site_token', '' );
 
         if ( empty( $site_token ) ) {
@@ -59,15 +64,25 @@ class ProxyClient {
             );
         }
 
-        $endpoint = $this->proxy_url . '/api/chat';
+        $endpoint = $this->proxy_url . '/api/ai/route-request';
 
+        // Build request body following the Firebase routeRequest format.
         $body = [
-            'message'    => $message,
-            'context'    => $context,
-            'site_token' => $site_token,
-            'chat_id'    => $chat_id,
-            'model'      => get_option( 'creator_default_model', 'gemini' ),
+            'task_type' => 'CODE_GEN',
+            'prompt'    => $message,
+            'context'   => $context,
+            'model'     => get_option( 'creator_default_model', 'gemini' ),
         ];
+
+        // Add conversation history if present.
+        if ( ! empty( $conversation_history ) ) {
+            $body['conversation_history'] = $conversation_history;
+        }
+
+        // Add documentation if present.
+        if ( ! empty( $documentation ) ) {
+            $body['documentation'] = $documentation;
+        }
 
         $response = wp_remote_post(
             $endpoint,
@@ -88,21 +103,24 @@ class ProxyClient {
         }
 
         $status_code = wp_remote_retrieve_response_code( $response );
-        $body        = wp_remote_retrieve_body( $response );
+        $body_raw    = wp_remote_retrieve_body( $response );
 
         if ( $status_code !== 200 ) {
+            $error_data = json_decode( $body_raw, true );
+            $error_msg  = $error_data['error'] ?? sprintf(
+                /* translators: %d: HTTP status code */
+                __( 'Proxy returned error status: %d', 'creator-core' ),
+                $status_code
+            );
+
             return new WP_Error(
                 'proxy_error',
-                sprintf(
-                    /* translators: %d: HTTP status code */
-                    __( 'Proxy returned error status: %d', 'creator-core' ),
-                    $status_code
-                ),
-                [ 'status' => $status_code, 'body' => $body ]
+                $error_msg,
+                [ 'status' => $status_code, 'body' => $body_raw ]
             );
         }
 
-        $data = json_decode( $body, true );
+        $data = json_decode( $body_raw, true );
 
         if ( json_last_error() !== JSON_ERROR_NONE ) {
             return new WP_Error(
@@ -115,13 +133,57 @@ class ProxyClient {
     }
 
     /**
+     * Get plugin documentation from the proxy
+     *
+     * @param string      $plugin_slug The plugin slug.
+     * @param string|null $version     Optional plugin version.
+     * @return string|null The documentation or null if not found.
+     */
+    public function get_plugin_docs( string $plugin_slug, ?string $version = null ): ?string {
+        $site_token = get_option( 'creator_site_token', '' );
+
+        if ( empty( $site_token ) ) {
+            return null;
+        }
+
+        $endpoint = $this->proxy_url . '/getPluginDocs?slug=' . urlencode( $plugin_slug );
+        if ( $version ) {
+            $endpoint .= '&version=' . urlencode( $version );
+        }
+
+        $response = wp_remote_get(
+            $endpoint,
+            [
+                'timeout' => 30,
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $site_token,
+                ],
+            ]
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return null;
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+        if ( $status_code !== 200 ) {
+            return null;
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        return $data['documentation'] ?? null;
+    }
+
+    /**
      * Validate a license key with the proxy
      *
      * @param string $license_key The license key to validate.
      * @return array{valid: bool, message: string, site_token?: string}
      */
     public function validate_license( string $license_key ): array {
-        $endpoint = $this->proxy_url . '/api/license/validate';
+        $endpoint = $this->proxy_url . '/api/auth/validate-license';
 
         $body = [
             'license_key' => $license_key,
