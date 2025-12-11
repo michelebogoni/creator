@@ -202,8 +202,9 @@ class ChatController {
                 $debug_logger
             );
 
-            // Save assistant response.
-            $this->save_message( $chat_id, 'assistant', $final_response['message'] ?? '' );
+            // Save assistant response - save FULL JSON for AI context, not just message.
+            // This ensures the AI sees the plan details when user says "Procedi".
+            $this->save_message( $chat_id, 'assistant', wp_json_encode( $final_response ) );
 
             return new WP_REST_Response(
                 [
