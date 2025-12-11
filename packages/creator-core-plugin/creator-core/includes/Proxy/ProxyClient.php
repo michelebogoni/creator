@@ -159,45 +159,72 @@ class ProxyClient {
     /**
      * Get plugin documentation from the proxy
      *
+     * Uses the /api/plugin-docs/research endpoint which:
+     * 1. Checks the cache first
+     * 2. Uses AI to research if not cached
+     * 3. Saves to cache for future use
+     *
      * @param string      $plugin_slug The plugin slug.
      * @param string|null $version     Optional plugin version.
-     * @return string|null The documentation or null if not found.
+     * @param string|null $plugin_name Optional plugin name for better research.
+     * @return array|null The documentation data or null if not found.
      */
-    public function get_plugin_docs( string $plugin_slug, ?string $version = null ): ?string {
+    public function get_plugin_docs( string $plugin_slug, ?string $version = null, ?string $plugin_name = null ): ?array {
         $site_token = get_option( 'creator_site_token', '' );
 
         if ( empty( $site_token ) ) {
             return null;
         }
 
-        $endpoint = $this->proxy_url . '/getPluginDocs?slug=' . urlencode( $plugin_slug );
-        if ( $version ) {
-            $endpoint .= '&version=' . urlencode( $version );
+        // Use the research endpoint which handles cache + AI research.
+        $endpoint = $this->proxy_url . '/api/plugin-docs/research';
+
+        $body = [
+            'plugin_slug'    => $plugin_slug,
+            'plugin_version' => $version ?? 'latest',
+        ];
+
+        if ( $plugin_name ) {
+            $body['plugin_name'] = $plugin_name;
         }
 
-        $response = wp_remote_get(
+        $response = wp_remote_post(
             $endpoint,
             [
-                'timeout' => 30,
-                'headers' => [
+                'timeout'     => 60, // Longer timeout for AI research.
+                'headers'     => [
+                    'Content-Type'  => 'application/json',
                     'Authorization' => 'Bearer ' . $site_token,
                 ],
+                'body'        => wp_json_encode( $body ),
+                'data_format' => 'body',
             ]
         );
 
         if ( is_wp_error( $response ) ) {
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[Creator Debug] Plugin docs fetch error: ' . $response->get_error_message() );
+            }
             return null;
         }
 
         $status_code = wp_remote_retrieve_response_code( $response );
-        if ( $status_code !== 200 ) {
+        $body_raw    = wp_remote_retrieve_body( $response );
+        $data        = json_decode( $body_raw, true );
+
+        if ( $status_code !== 200 && $status_code !== 201 ) {
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[Creator Debug] Plugin docs HTTP error: ' . $status_code );
+            }
             return null;
         }
 
-        $body = wp_remote_retrieve_body( $response );
-        $data = json_decode( $body, true );
+        if ( empty( $data['success'] ) ) {
+            return null;
+        }
 
-        return $data['documentation'] ?? null;
+        // Return the full documentation data.
+        return $data['data'] ?? null;
     }
 
     /**

@@ -318,19 +318,31 @@ class ResponseHandler {
      * Handle request_docs response type
      *
      * Fetches documentation for requested plugins.
+     * Tries to get version info from installed plugins for better accuracy.
      *
      * @param array $ai_response The AI response.
      * @return array Response with fetched documentation.
      */
     private function handle_request_docs_response( array $ai_response ): array {
-        $plugins_needed = $ai_response['data']['plugins_needed'] ?? [];
-        $documentation  = [];
+        $plugins_needed   = $ai_response['data']['plugins_needed'] ?? [];
+        $documentation    = [];
+        $installed_plugins = $this->get_installed_plugins_info();
 
         foreach ( $plugins_needed as $plugin_slug ) {
-            $doc = $this->proxy_client->get_plugin_docs( $plugin_slug );
+            // Try to get version from installed plugins.
+            $version     = $installed_plugins[ $plugin_slug ]['version'] ?? null;
+            $plugin_name = $installed_plugins[ $plugin_slug ]['name'] ?? null;
+
+            $doc = $this->proxy_client->get_plugin_docs( $plugin_slug, $version, $plugin_name );
             if ( $doc ) {
                 $documentation[ $plugin_slug ] = $doc;
             }
+        }
+
+        // Log documentation fetch results.
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( '[Creator Debug] Documentation fetched for: ' . implode( ', ', array_keys( $documentation ) ) );
+            error_log( '[Creator Debug] Documentation missing for: ' . implode( ', ', array_diff( $plugins_needed, array_keys( $documentation ) ) ) );
         }
 
         return [
@@ -343,6 +355,38 @@ class ResponseHandler {
             'requires_confirmation'  => false,
             'continue_automatically' => true,
         ];
+    }
+
+    /**
+     * Get installed plugins info (slug => name, version)
+     *
+     * @return array Plugin info indexed by slug.
+     */
+    private function get_installed_plugins_info(): array {
+        if ( ! function_exists( 'get_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $plugins = get_plugins();
+        $active  = get_option( 'active_plugins', [] );
+        $info    = [];
+
+        foreach ( $active as $plugin_file ) {
+            if ( isset( $plugins[ $plugin_file ] ) ) {
+                // Extract slug from plugin file path.
+                $slug = dirname( $plugin_file );
+                if ( '.' === $slug ) {
+                    $slug = basename( $plugin_file, '.php' );
+                }
+
+                $info[ $slug ] = [
+                    'name'    => $plugins[ $plugin_file ]['Name'] ?? '',
+                    'version' => $plugins[ $plugin_file ]['Version'] ?? '',
+                ];
+            }
+        }
+
+        return $info;
     }
 
     /**
