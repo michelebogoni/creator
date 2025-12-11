@@ -8,6 +8,7 @@
  */
 
 import { AIProvider, AI_MODELS, isValidModel, isValidProvider, getPrimaryModel, MODEL_IDS } from "../config/models";
+import { ConversationMessage } from "./Route";
 
 // ============================================================================
 // RE-EXPORTS FROM CONFIG/MODELS
@@ -75,6 +76,12 @@ export interface ModelRequest {
 
   /** File attachments for multimodal */
   files?: FileAttachment[];
+
+  /** Conversation history for multi-turn conversations */
+  conversation_history?: ConversationMessage[];
+
+  /** Plugin documentation for the current request */
+  documentation?: Record<string, unknown>;
 }
 
 /**

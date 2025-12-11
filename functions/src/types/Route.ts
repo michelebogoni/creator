@@ -10,6 +10,16 @@
 import { ProviderName, FileAttachment } from "./AIProvider";
 
 /**
+ * Message in a conversation history
+ */
+export interface ConversationMessage {
+  /** Role of the message sender */
+  role: "user" | "assistant" | "system";
+  /** Content of the message */
+  content: string;
+}
+
+/**
  * Supported task types for AI routing
  *
  * @description
@@ -86,6 +96,17 @@ export interface RouteRequest {
     files?: FileAttachment[];
     [key: string]: unknown;
   };
+
+  /**
+   * Conversation history for multi-turn conversations
+   * Contains previous messages in the conversation for context
+   */
+  conversation_history?: ConversationMessage[];
+
+  /**
+   * Plugin documentation for the current request
+   */
+  documentation?: Record<string, unknown>;
 }
 
 /**

@@ -125,12 +125,34 @@ export class ClaudeProvider implements IAIProvider {
         // Build message content with text and optional file attachments
         const messageContent = this.buildMessageContent(prompt, options?.files);
 
+        // Build messages array: conversation history + current message
+        const messages: Anthropic.MessageParam[] = [];
+
+        // Add conversation history if provided
+        if (options?.conversation_history && options.conversation_history.length > 0) {
+          for (const msg of options.conversation_history) {
+            // Claude only accepts 'user' and 'assistant' roles in messages
+            if (msg.role === "user" || msg.role === "assistant") {
+              messages.push({
+                role: msg.role,
+                content: msg.content,
+              });
+            }
+          }
+          this.logger.debug("Added conversation history", {
+            message_count: messages.length,
+          });
+        }
+
+        // Add current user message
+        messages.push({ role: "user", content: messageContent });
+
         const response = await this.client.messages.create({
           model,
           max_tokens: maxTokens,
           temperature,
           system: options?.system_prompt,
-          messages: [{ role: "user", content: messageContent }],
+          messages,
         });
 
         const latencyMs = Date.now() - startTime;

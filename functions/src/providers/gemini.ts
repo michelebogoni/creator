@@ -180,9 +180,32 @@ export class GeminiProvider implements IAIProvider {
 
         // Build content parts - text first, then files
         const contentParts = this.buildContentParts(prompt, options?.files);
-        const result = await model.generateContent(contentParts);
-        const response = result.response;
-        const content = response.text();
+
+        let content: string;
+        let response;
+
+        // Use chat interface if conversation history is provided
+        if (options?.conversation_history && options.conversation_history.length > 0) {
+          // Convert conversation history to Gemini format
+          const history = options.conversation_history.map(msg => ({
+            role: msg.role === "assistant" ? "model" : "user" as const,
+            parts: [{ text: msg.content }],
+          }));
+
+          this.logger.debug("Starting chat with history", {
+            message_count: history.length,
+          });
+
+          const chat = model.startChat({ history });
+          const result = await chat.sendMessage(contentParts);
+          response = result.response;
+          content = response.text();
+        } else {
+          // Single-turn generation
+          const result = await model.generateContent(contentParts);
+          response = result.response;
+          content = response.text();
+        }
 
         const latencyMs = Date.now() - startTime;
 

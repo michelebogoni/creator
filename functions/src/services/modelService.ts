@@ -377,6 +377,7 @@ export class ModelService {
           max_tokens: request.max_tokens ?? 8000,
           system_prompt: systemPrompt,
           files: request.files,
+          conversation_history: request.conversation_history,
         });
       } else {
         const provider = new ClaudeProvider(this.keys.claude, modelId);
@@ -385,6 +386,7 @@ export class ModelService {
           max_tokens: request.max_tokens ?? 8000,
           system_prompt: systemPrompt,
           files: request.files,
+          conversation_history: request.conversation_history,
         });
       }
 
