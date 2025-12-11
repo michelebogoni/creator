@@ -243,6 +243,18 @@ class DebugLogger {
             return;
         }
 
+        // Calculate doc sizes - handle both string and array formats.
+        $doc_sizes = [];
+        foreach ( $docs_received as $slug => $doc ) {
+            if ( is_string( $doc ) ) {
+                $doc_sizes[ $slug ] = strlen( $doc );
+            } elseif ( is_array( $doc ) ) {
+                $doc_sizes[ $slug ] = strlen( wp_json_encode( $doc ) );
+            } else {
+                $doc_sizes[ $slug ] = 0;
+            }
+        }
+
         $entry = [
             'session_id'        => $this->session_id,
             'timestamp'         => current_time( 'mysql' ),
@@ -250,7 +262,57 @@ class DebugLogger {
             'iteration'         => $iteration,
             'plugins_requested' => $plugins_requested,
             'docs_received'     => array_keys( $docs_received ),
-            'doc_sizes'         => array_map( 'strlen', $docs_received ),
+            'doc_sizes'         => $doc_sizes,
+            'doc_preview'       => $this->get_doc_preview( $docs_received ),
+        ];
+
+        $this->write_log( $entry );
+    }
+
+    /**
+     * Get a preview of documentation content
+     *
+     * @param array $docs_received The documentation received.
+     * @return array Preview of each doc.
+     */
+    private function get_doc_preview( array $docs_received ): array {
+        $preview = [];
+        foreach ( $docs_received as $slug => $doc ) {
+            if ( is_string( $doc ) ) {
+                $preview[ $slug ] = substr( $doc, 0, 200 ) . '...';
+            } elseif ( is_array( $doc ) ) {
+                $preview[ $slug ] = $doc;
+            }
+        }
+        return $preview;
+    }
+
+    /**
+     * Log plugin documentation HTTP request/response
+     *
+     * @param string $plugin_slug     The plugin slug.
+     * @param string $endpoint        The endpoint URL.
+     * @param array  $request_body    The request body.
+     * @param mixed  $response        The HTTP response.
+     * @param int    $status_code     The HTTP status code.
+     * @return void
+     */
+    public function log_plugin_docs_http( string $plugin_slug, string $endpoint, array $request_body, $response, int $status_code ): void {
+        if ( ! $this->enabled ) {
+            return;
+        }
+
+        $entry = [
+            'session_id'   => $this->session_id,
+            'timestamp'    => current_time( 'mysql' ),
+            'type'         => 'PLUGIN_DOCS_HTTP',
+            'plugin_slug'  => $plugin_slug,
+            'endpoint'     => $endpoint,
+            'request_body' => $request_body,
+            'status_code'  => $status_code,
+            'response'     => is_wp_error( $response )
+                ? [ 'error' => $response->get_error_message() ]
+                : ( is_string( $response ) ? substr( $response, 0, 500 ) : $response ),
         ];
 
         $this->write_log( $entry );

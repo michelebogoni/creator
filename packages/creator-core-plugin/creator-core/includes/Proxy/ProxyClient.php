@@ -173,6 +173,7 @@ class ProxyClient {
         $site_token = get_option( 'creator_site_token', '' );
 
         if ( empty( $site_token ) ) {
+            $this->log_plugin_docs_debug( $plugin_slug, 'No site token configured' );
             return null;
         }
 
@@ -188,6 +189,11 @@ class ProxyClient {
             $body['plugin_name'] = $plugin_name;
         }
 
+        $this->log_plugin_docs_debug( $plugin_slug, 'Requesting docs', [
+            'endpoint' => $endpoint,
+            'body'     => $body,
+        ] );
+
         $response = wp_remote_post(
             $endpoint,
             [
@@ -202,9 +208,7 @@ class ProxyClient {
         );
 
         if ( is_wp_error( $response ) ) {
-            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[Creator Debug] Plugin docs fetch error: ' . $response->get_error_message() );
-            }
+            $this->log_plugin_docs_debug( $plugin_slug, 'HTTP error: ' . $response->get_error_message() );
             return null;
         }
 
@@ -212,19 +216,73 @@ class ProxyClient {
         $body_raw    = wp_remote_retrieve_body( $response );
         $data        = json_decode( $body_raw, true );
 
+        $this->log_plugin_docs_debug( $plugin_slug, 'Response received', [
+            'status_code'        => $status_code,
+            'body_length'        => strlen( $body_raw ),
+            'body_preview'       => substr( $body_raw, 0, 500 ),
+            'parsed_success'     => $data['success'] ?? 'NOT_SET',
+            'parsed_data_exists' => isset( $data['data'] ) ? 'YES' : 'NO',
+        ] );
+
         if ( $status_code !== 200 && $status_code !== 201 ) {
-            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[Creator Debug] Plugin docs HTTP error: ' . $status_code );
-            }
+            $this->log_plugin_docs_debug( $plugin_slug, 'Non-success status code: ' . $status_code );
             return null;
         }
 
         if ( empty( $data['success'] ) ) {
+            $this->log_plugin_docs_debug( $plugin_slug, 'Response success=false', [
+                'error' => $data['error'] ?? 'No error message',
+            ] );
             return null;
         }
 
+        if ( empty( $data['data'] ) ) {
+            $this->log_plugin_docs_debug( $plugin_slug, 'Response data is empty' );
+            return null;
+        }
+
+        $this->log_plugin_docs_debug( $plugin_slug, 'Documentation fetched successfully', [
+            'docs_url'        => $data['data']['docs_url'] ?? 'N/A',
+            'functions_count' => count( $data['data']['main_functions'] ?? [] ),
+        ] );
+
         // Return the full documentation data.
         return $data['data'] ?? null;
+    }
+
+    /**
+     * Log plugin docs debug information
+     *
+     * Writes to both error_log and a dedicated plugin-docs debug file.
+     *
+     * @param string $plugin_slug Plugin slug.
+     * @param string $message     Debug message.
+     * @param array  $data        Additional data.
+     * @return void
+     */
+    private function log_plugin_docs_debug( string $plugin_slug, string $message, array $data = [] ): void {
+        $log_entry = sprintf(
+            '[Creator Plugin Docs] [%s] %s%s',
+            $plugin_slug,
+            $message,
+            $data ? ' | ' . wp_json_encode( $data ) : ''
+        );
+
+        // Always log to error_log.
+        error_log( $log_entry );
+
+        // Also write to dedicated debug file.
+        $upload_dir = wp_upload_dir();
+        $debug_dir  = $upload_dir['basedir'] . '/creator-debug';
+        $debug_file = $debug_dir . '/plugin-docs-debug.log';
+
+        if ( ! file_exists( $debug_dir ) ) {
+            wp_mkdir_p( $debug_dir );
+        }
+
+        $timestamp = current_time( 'mysql' );
+        $line      = "[{$timestamp}] {$log_entry}\n";
+        file_put_contents( $debug_file, $line, FILE_APPEND | LOCK_EX );
     }
 
     /**
