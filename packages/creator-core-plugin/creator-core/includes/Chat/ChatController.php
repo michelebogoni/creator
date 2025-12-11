@@ -323,9 +323,12 @@ class ChatController {
                     $iteration
                 );
 
+                // Build message that includes the original task reminder.
                 $current_message = wp_json_encode( [
-                    'type'   => 'documentation_provided',
-                    'docs'   => array_keys( $documentation ),
+                    'type'          => 'documentation_provided',
+                    'docs'          => array_keys( $documentation ),
+                    'original_task' => $message, // Include original user request.
+                    'instruction'   => 'Documentation has been loaded. Now proceed with the original task. Generate the code to execute.',
                 ] );
                 $conversation_history[] = [
                     'role'    => 'assistant',
