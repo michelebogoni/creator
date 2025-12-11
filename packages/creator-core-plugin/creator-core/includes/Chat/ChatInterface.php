@@ -203,31 +203,57 @@ class ChatInterface {
 
                 <!-- Chat Messages Area -->
                 <div id="creator-chat-messages" class="creator-chat-messages">
-                    <div class="creator-chat-welcome">
-                        <p><?php esc_html_e( 'Welcome to Creator! How can I help you today?', 'creator-core' ); ?></p>
+                    <div class="creator-welcome-message">
+                        <div class="creator-welcome-icon">
+                            <span class="dashicons dashicons-format-chat"></span>
+                        </div>
+                        <h2><?php esc_html_e( 'Welcome to Creator!', 'creator-core' ); ?></h2>
+                        <p><?php esc_html_e( 'I\'m your AI assistant for WordPress development. How can I help you today?', 'creator-core' ); ?></p>
+                        <div class="creator-suggestions">
+                            <button type="button" class="creator-suggestion"><?php esc_html_e( 'What WordPress version am I running?', 'creator-core' ); ?></button>
+                            <button type="button" class="creator-suggestion"><?php esc_html_e( 'List my active plugins', 'creator-core' ); ?></button>
+                            <button type="button" class="creator-suggestion"><?php esc_html_e( 'What theme is active?', 'creator-core' ); ?></button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Chat Input Area -->
-                <div class="creator-chat-input-area">
+                <div class="creator-input-container">
+                    <!-- Attachment Preview Area -->
+                    <div id="creator-attachment-preview" class="creator-attachment-preview" style="display: none;">
+                        <div class="creator-attachment-list"></div>
+                    </div>
+
                     <form id="creator-chat-form" class="creator-chat-form">
-                        <textarea
-                            id="creator-chat-input"
-                            class="creator-chat-input"
-                            placeholder="<?php esc_attr_e( 'Type your message...', 'creator-core' ); ?>"
-                            rows="3"
-                        ></textarea>
-                        <button type="submit" id="creator-send-btn" class="button button-primary">
-                            <?php esc_html_e( 'Send', 'creator-core' ); ?>
-                        </button>
+                        <div class="creator-input-wrapper">
+                            <!-- File Attachment Button -->
+                            <button type="button" id="creator-attach-btn" class="creator-attach-btn" title="<?php esc_attr_e( 'Attach files', 'creator-core' ); ?>">
+                                <span class="dashicons dashicons-paperclip"></span>
+                            </button>
+                            <input type="file" id="creator-file-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.json,.php,.js,.css,.html" style="display: none;">
+
+                            <textarea
+                                id="creator-message-input"
+                                class="creator-message-input"
+                                placeholder="<?php esc_attr_e( 'Type your message...', 'creator-core' ); ?>"
+                                rows="1"
+                            ></textarea>
+
+                            <button type="submit" class="creator-send-btn button button-primary">
+                                <span class="dashicons dashicons-arrow-right-alt"></span>
+                                <span class="creator-send-text"><?php esc_html_e( 'Send', 'creator-core' ); ?></span>
+                            </button>
+                        </div>
+
+                        <div class="creator-input-info">
+                            <span class="creator-attachment-info" style="display: none;">
+                                <span class="dashicons dashicons-paperclip"></span>
+                                <span class="creator-attachment-count">0</span> <?php esc_html_e( 'files attached', 'creator-core' ); ?>
+                            </span>
+                        </div>
                     </form>
                 </div>
 
-                <!-- Loading Indicator -->
-                <div id="creator-chat-loading" class="creator-chat-loading" style="display: none;">
-                    <span class="spinner is-active"></span>
-                    <span><?php esc_html_e( 'Thinking...', 'creator-core' ); ?></span>
-                </div>
             </div>
         </div>
         <?php
