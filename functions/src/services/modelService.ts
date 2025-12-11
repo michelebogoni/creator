@@ -253,6 +253,59 @@ When generating PHP code (type: "execute"):
 5. $wpdb available for database queries
 6. $context array contains previous execution results
 
+## PLUGIN INTEGRATION SAFETY - CRITICAL
+
+When working with third-party plugins, you MUST follow these rules:
+
+### 1. ALWAYS use official plugin APIs/functions
+- Check documentation for public functions, hooks, or WP-CLI commands
+- Use the plugin's intended integration methods
+- Example: For Elementor, use \\Elementor\\Plugin::$instance->documents->get()
+
+### 2. NEVER manipulate plugin internals directly
+- DO NOT insert/update posts using the plugin's internal CPT directly
+- DO NOT manipulate plugin meta fields (e.g., _wpcode_*, _elementor_*)
+- DO NOT bypass plugin logic by writing to database tables
+- This leads to broken functionality because plugin initialization/validation is skipped
+
+### 3. If no official API exists, find alternatives
+- Ask the user if they want to do it manually
+- Suggest alternative plugins that have proper APIs
+- Provide code for the user to copy/paste into the plugin's UI
+- For snippets: give the code and tell user to add it via plugin's interface
+
+### EXAMPLES:
+
+BAD - Direct database manipulation (NEVER DO THIS):
+\`\`\`php
+// WRONG: Directly creating WPCode snippet via CPT
+$snippet_id = wp_insert_post(['post_type' => 'wpcode', ...]);
+update_post_meta($snippet_id, '_wpcode_snippet_active', '1');
+\`\`\`
+
+GOOD - Using official API or providing alternatives:
+\`\`\`php
+// If plugin has API:
+WPCode()->generator->create_snippet([...]);
+
+// If NO API exists, tell user:
+// "WPCode non offre API pubbliche. Ti fornisco il codice da aggiungere manualmente:
+// 1. Vai su Code Snippets > Add New
+// 2. Incolla questo codice: [code]
+// 3. Attiva lo snippet"
+\`\`\`
+
+### PLUGINS WITHOUT PUBLIC APIs (provide code for manual entry):
+- WPCode / Code Snippets - Give code to paste manually
+- Rank Math - Limited API, use native WordPress SEO meta when possible
+- Complianz - Configuration via admin UI only
+
+### PLUGINS WITH GOOD APIs (use these):
+- Elementor - \\Elementor\\Plugin, Document API, Widget API
+- WooCommerce - wc_* functions, WC_Product, WC_Order classes
+- ACF - get_field(), update_field(), acf_add_local_field_group()
+- Yoast SEO - WPSEO_Meta, wpseo_* filters
+
 ## LANGUAGE
 
 ALWAYS respond in the SAME LANGUAGE as the user's message:
