@@ -223,10 +223,11 @@ class ProxyClient {
             ];
         }
 
-        if ( ! isset( $data['valid'] ) || ! $data['valid'] ) {
+        // Firebase returns success: true/false, not valid: true/false
+        if ( empty( $data['success'] ) ) {
             return [
                 'valid'   => false,
-                'message' => $data['message'] ?? __( 'Invalid license key.', 'creator-core' ),
+                'message' => $data['error'] ?? $data['message'] ?? __( 'Invalid license key.', 'creator-core' ),
             ];
         }
 
@@ -234,6 +235,8 @@ class ProxyClient {
             'valid'      => true,
             'message'    => $data['message'] ?? __( 'License validated successfully.', 'creator-core' ),
             'site_token' => $data['site_token'] ?? '',
+            'expires_at' => $data['reset_date'] ?? '',
+            'plan'       => $data['plan'] ?? 'standard',
         ];
     }
 
