@@ -346,6 +346,134 @@ class ChatController {
                 continue;
             }
 
+            // Handle roadmap type - return to user for confirmation.
+            if ( 'roadmap' === $processed['type'] ) {
+                $processed['steps'] = $all_steps;
+                $debug_logger->end_session( $processed, $iteration );
+                return $processed;
+            }
+
+            // Handle checkpoint type - pass accumulated context to next iteration.
+            if ( 'checkpoint' === $processed['type'] ) {
+                $accumulated_context = $processed['data']['accumulated_context'] ?? [];
+
+                // Merge accumulated context into loop context for next iteration.
+                if ( ! empty( $accumulated_context ) ) {
+                    $context['accumulated'] = array_merge(
+                        $context['accumulated'] ?? [],
+                        $accumulated_context
+                    );
+                }
+
+                // Build continuation message with checkpoint data.
+                $current_message = wp_json_encode( [
+                    'type'                => 'checkpoint_confirmed',
+                    'completed_step'      => $processed['data']['completed_step'] ?? 0,
+                    'total_steps'         => $processed['data']['total_steps'] ?? 0,
+                    'next_step'           => $processed['data']['next_step'] ?? null,
+                    'accumulated_context' => $context['accumulated'] ?? [],
+                    'instruction'         => 'Checkpoint confirmed. Continue with the next step.',
+                ] );
+
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+                $conversation_history[] = [
+                    'role'    => 'user',
+                    'content' => $current_message,
+                ];
+                continue;
+            }
+
+            // Handle compress_history type - compress old messages and continue.
+            if ( 'compress_history' === $processed['type'] ) {
+                $conversation_history = $this->compress_conversation_history(
+                    $conversation_history,
+                    $processed['data']['summary'] ?? '',
+                    $processed['data']['key_facts'] ?? [],
+                    $processed['data']['preserve_last_messages'] ?? 4
+                );
+
+                // Continue with a confirmation.
+                $current_message = wp_json_encode( [
+                    'type'        => 'history_compressed',
+                    'instruction' => 'Conversation history has been compressed. Continue with the current task.',
+                ] );
+
+                continue;
+            }
+
+            // Handle execute_step type - similar to execute but with step tracking.
+            if ( 'execute_step' === $processed['type'] ) {
+                if ( isset( $processed['execution_result'] ) ) {
+                    $last_result = $processed['execution_result'];
+
+                    // Log the execution.
+                    $debug_logger->log_execution(
+                        $processed['data']['code'] ?? '',
+                        $last_result,
+                        $iteration
+                    );
+
+                    // Check if execution failed and we should retry.
+                    if ( ! empty( $last_result ) && empty( $last_result['success'] ) ) {
+                        if ( $this->should_retry_execution( $last_result, $retry_count ) ) {
+                            $retry_count++;
+
+                            // Log the retry.
+                            $debug_logger->log_retry( $last_result, $retry_count, $iteration );
+
+                            // Build retry message with error details and step context.
+                            $retry_message = wp_json_encode( [
+                                'type'        => 'step_execution_failed',
+                                'step_index'  => $processed['data']['step_index'] ?? 0,
+                                'step_title'  => $processed['data']['step_title'] ?? '',
+                                'error'       => $last_result['error'] ?? 'Unknown error',
+                                'output'      => $last_result['output'] ?? '',
+                                'retry_count' => $retry_count,
+                                'max_retries' => self::MAX_RETRY_ATTEMPTS,
+                                'instruction' => 'Step execution failed. Please analyze the error and try a different approach for this step.',
+                            ] );
+
+                            $current_message = $retry_message;
+
+                            $conversation_history[] = [
+                                'role'    => 'assistant',
+                                'content' => wp_json_encode( $processed ),
+                            ];
+                            $conversation_history[] = [
+                                'role'    => 'user',
+                                'content' => $current_message,
+                            ];
+                            continue;
+                        }
+                    } else {
+                        // Reset retry count on successful execution.
+                        $retry_count = 0;
+                    }
+                }
+
+                // Build continuation message with step result.
+                $current_message = wp_json_encode( [
+                    'type'        => 'step_execution_result',
+                    'step_index'  => $processed['data']['step_index'] ?? 0,
+                    'total_steps' => $processed['data']['total_steps'] ?? 0,
+                    'result'      => $last_result,
+                    'instruction' => 'Step executed. Report checkpoint with accumulated context, then continue to next step.',
+                ] );
+
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+                $conversation_history[] = [
+                    'role'    => 'user',
+                    'content' => $current_message,
+                ];
+                continue;
+            }
+
             // Store execution/verification results for next iteration.
             if ( isset( $processed['execution_result'] ) ) {
                 $last_result = $processed['execution_result'];
@@ -715,6 +843,64 @@ class ChatController {
         }
 
         return $wpdb->insert_id;
+    }
+
+    /**
+     * Compress conversation history to reduce token usage
+     *
+     * Replaces old messages with a summary while preserving recent messages.
+     *
+     * @param array  $history                 The conversation history.
+     * @param string $summary                 Summary of old conversation.
+     * @param array  $key_facts               Key facts to preserve.
+     * @param int    $preserve_last_messages  Number of recent messages to keep intact.
+     * @return array Compressed conversation history.
+     */
+    private function compress_conversation_history(
+        array $history,
+        string $summary,
+        array $key_facts,
+        int $preserve_last_messages = 4
+    ): array {
+        $total_messages = count( $history );
+
+        // If history is small enough, don't compress.
+        if ( $total_messages <= $preserve_last_messages + 2 ) {
+            return $history;
+        }
+
+        // Build compressed summary message.
+        $compressed_content = "=== CONVERSATION SUMMARY ===\n";
+        $compressed_content .= $summary . "\n\n";
+
+        if ( ! empty( $key_facts ) ) {
+            $compressed_content .= "KEY FACTS:\n";
+            foreach ( $key_facts as $fact ) {
+                $key   = $fact['key'] ?? '';
+                $value = $fact['value'] ?? '';
+                $desc  = $fact['description'] ?? '';
+                $compressed_content .= "- {$key}: {$value}";
+                if ( $desc ) {
+                    $compressed_content .= " ({$desc})";
+                }
+                $compressed_content .= "\n";
+            }
+        }
+        $compressed_content .= "=== END SUMMARY ===";
+
+        // Create new history with summary at the beginning.
+        $new_history = [
+            [
+                'role'    => 'system',
+                'content' => $compressed_content,
+            ],
+        ];
+
+        // Add the last N messages unchanged.
+        $preserved = array_slice( $history, -$preserve_last_messages );
+        $new_history = array_merge( $new_history, $preserved );
+
+        return $new_history;
     }
 
     /**
