@@ -361,12 +361,15 @@ export class ModelService {
     // Enhance system prompt with WordPress context if available
     const systemPrompt = buildContextAwarePrompt(baseSystemPrompt, request.context);
 
+    // Also enhance user prompt with context summary for better visibility
+    const userPrompt = this.buildUserPromptWithContext(request.prompt, request.context);
+
     try {
       let response;
 
       if (model === "gemini") {
         const provider = new GeminiProvider(this.keys.gemini, modelId);
-        response = await provider.generate(request.prompt, {
+        response = await provider.generate(userPrompt, {
           temperature: request.temperature ?? 0.7,
           max_tokens: request.max_tokens ?? 8000,
           system_prompt: systemPrompt,
@@ -374,7 +377,7 @@ export class ModelService {
         });
       } else {
         const provider = new ClaudeProvider(this.keys.claude, modelId);
-        response = await provider.generate(request.prompt, {
+        response = await provider.generate(userPrompt, {
           temperature: request.temperature ?? 0.7,
           max_tokens: request.max_tokens ?? 8000,
           system_prompt: systemPrompt,
@@ -432,5 +435,58 @@ export class ModelService {
         error_code: "PROVIDER_ERROR",
       };
     }
+  }
+
+  /**
+   * Build user prompt with context summary prepended
+   *
+   * This ensures the AI definitely sees the context information
+   * even if there are issues with the system prompt.
+   *
+   * @param prompt - Original user prompt
+   * @param context - WordPress context
+   * @returns Enhanced prompt with context
+   */
+  private buildUserPromptWithContext(
+    prompt: string,
+    context?: Record<string, unknown>
+  ): string {
+    if (!context || Object.keys(context).length === 0) {
+      return prompt;
+    }
+
+    const wpInfo = context.wordpress as Record<string, unknown> | undefined;
+    const envInfo = context.environment as Record<string, unknown> | undefined;
+    const themeInfo = context.theme as Record<string, unknown> | undefined;
+    const pluginsInfo = context.plugins as Array<Record<string, unknown>> | undefined;
+
+    // Build a compact context header
+    let contextHeader = "[SITE INFO: ";
+    const parts: string[] = [];
+
+    if (wpInfo?.version) {
+      parts.push(`WP ${wpInfo.version}`);
+    }
+    if (envInfo?.php_version) {
+      parts.push(`PHP ${envInfo.php_version}`);
+    }
+    if (themeInfo?.name) {
+      parts.push(`Theme: ${themeInfo.name}`);
+    }
+    if (pluginsInfo && Array.isArray(pluginsInfo)) {
+      parts.push(`${pluginsInfo.length} plugins`);
+    }
+
+    if (parts.length === 0) {
+      return prompt;
+    }
+
+    contextHeader += parts.join(" | ") + "]\n\n";
+
+    this.logger.debug("User prompt enhanced with context header", {
+      context_header: contextHeader,
+    });
+
+    return contextHeader + prompt;
   }
 }
