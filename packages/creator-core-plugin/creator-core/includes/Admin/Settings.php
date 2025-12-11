@@ -40,6 +40,47 @@ class Settings {
     public function init(): void {
         add_action( 'admin_menu', [ $this, 'add_menu_page' ], 15 );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
+        add_action( 'admin_init', [ $this, 'maybe_generate_site_token' ] );
+        add_action( 'update_option_creator_license_key', [ $this, 'on_license_key_updated' ], 10, 2 );
+    }
+
+    /**
+     * Generate site token if license key exists but token is missing
+     *
+     * This handles existing installations where license was saved
+     * before the auto-generation feature was added.
+     *
+     * @return void
+     */
+    public function maybe_generate_site_token(): void {
+        $license_key = get_option( 'creator_license_key', '' );
+        $site_token  = get_option( 'creator_site_token', '' );
+
+        if ( ! empty( $license_key ) && empty( $site_token ) ) {
+            $this->on_license_key_updated( '', $license_key );
+        }
+    }
+
+    /**
+     * Handle license key update - auto-generate site token
+     *
+     * @param mixed $old_value Old option value.
+     * @param mixed $new_value New option value.
+     * @return void
+     */
+    public function on_license_key_updated( $old_value, $new_value ): void {
+        if ( empty( $new_value ) ) {
+            // Clear site token if license key is removed
+            delete_option( 'creator_site_token' );
+            return;
+        }
+
+        // Generate a deterministic site token from license key + site URL
+        // This allows the site to be identified uniquely without calling the proxy
+        $site_url   = get_site_url();
+        $site_token = hash( 'sha256', $new_value . '|' . $site_url . '|creator-mvp' );
+
+        update_option( 'creator_site_token', $site_token );
     }
 
     /**
