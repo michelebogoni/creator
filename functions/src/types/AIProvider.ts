@@ -39,15 +39,8 @@ export interface FileAttachment {
   base64: string;
 }
 
-/**
- * Message in conversation history
- */
-export interface ConversationMessage {
-  /** Role of the message sender */
-  role: "user" | "assistant" | "system";
-  /** Content of the message */
-  content: string;
-}
+// ConversationMessage is imported from Route.ts to avoid duplicate exports
+import { ConversationMessage } from "./Route";
 
 /**
  * Options for AI generation requests
@@ -366,7 +359,7 @@ export function calculateCost(
 /**
  * Default generation options
  */
-export const DEFAULT_GENERATE_OPTIONS: Required<Omit<GenerateOptions, "system_prompt" | "model" | "files">> = {
+export const DEFAULT_GENERATE_OPTIONS: Required<Omit<GenerateOptions, "system_prompt" | "model" | "files" | "conversation_history">> = {
   temperature: 0.7,
   max_tokens: 4096,
 };
