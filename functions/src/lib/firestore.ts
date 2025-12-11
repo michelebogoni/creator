@@ -715,18 +715,27 @@ export async function savePluginDocs(
   const docId = getPluginDocsDocId(data.plugin_slug, data.plugin_version);
   const docRef = db.collection(COLLECTIONS.PLUGIN_DOCS_CACHE).doc(docId);
 
+  // Build entry with only defined values (Firestore doesn't accept undefined)
   const entry: PluginDocsEntry = {
     plugin_slug: data.plugin_slug,
     plugin_version: data.plugin_version,
     docs_url: data.docs_url,
     main_functions: data.main_functions,
-    api_reference: data.api_reference,
-    version_notes: data.version_notes,
     cached_at: Timestamp.now(),
-    cached_by: data.cached_by,
     cache_hits: 0,
     source: data.source || "ai_research",
   };
+
+  // Only add optional fields if they have values
+  if (data.api_reference !== undefined) {
+    entry.api_reference = data.api_reference;
+  }
+  if (data.version_notes !== undefined) {
+    entry.version_notes = data.version_notes;
+  }
+  if (data.cached_by !== undefined) {
+    entry.cached_by = data.cached_by;
+  }
 
   await docRef.set(entry);
 
