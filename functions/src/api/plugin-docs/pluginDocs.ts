@@ -354,7 +354,10 @@ export const getPluginDocsAllVersionsApi = functions
  */
 export const researchPluginDocsApi = functions
   .region("us-central1")
-  .runWith({ secrets: [geminiApiKey, claudeApiKey] })
+  .runWith({
+    secrets: [geminiApiKey, claudeApiKey],
+    serviceAccount: "757337256338-compute@developer.gserviceaccount.com",
+  })
   .https.onRequest(async (req, res) => {
     // Set CORS headers
     res.set("Access-Control-Allow-Origin", "*");
