@@ -74,6 +74,15 @@ class ProxyClient {
             'model'     => get_option( 'creator_default_model', 'gemini' ),
         ];
 
+        // Debug: Log context being sent to Firebase.
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( '[Creator Debug] Context keys being sent: ' . implode( ', ', array_keys( $context ) ) );
+            error_log( '[Creator Debug] WordPress version in context: ' . ( $context['wordpress']['version'] ?? 'NOT SET' ) );
+            error_log( '[Creator Debug] PHP version in context: ' . ( $context['environment']['php_version'] ?? 'NOT SET' ) );
+            error_log( '[Creator Debug] Theme in context: ' . ( $context['theme']['name'] ?? 'NOT SET' ) );
+            error_log( '[Creator Debug] Plugins count in context: ' . ( is_array( $context['plugins'] ) ? count( $context['plugins'] ) : 'NOT SET' ) );
+        }
+
         // Add conversation history if present.
         if ( ! empty( $conversation_history ) ) {
             $body['conversation_history'] = $conversation_history;
