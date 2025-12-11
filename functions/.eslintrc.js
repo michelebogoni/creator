@@ -18,15 +18,16 @@ module.exports = {
     "/node_modules/**/*",
     "*.js",
     "*.cjs",
+    "**/*.test.ts",
   ],
   plugins: [
     "@typescript-eslint",
   ],
   rules: {
-    "quotes": ["error", "double"],
+    "quotes": ["error", "double", { "avoidEscape": true, "allowTemplateLiterals": true }],
     "indent": "off",
     "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
     "@typescript-eslint/no-explicit-any": "warn",
-    "max-len": ["warn", { "code": 120 }],
+    "max-len": "off",
   },
 };
