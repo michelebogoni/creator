@@ -17,6 +17,7 @@ use CreatorCore\Context\ContextLoader;
 use CreatorCore\Proxy\ProxyClient;
 use CreatorCore\Response\ResponseHandler;
 use CreatorCore\Conversation\ConversationManager;
+use CreatorCore\Debug\DebugLogger;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -171,9 +172,16 @@ class ChatController {
             $context_loader   = new ContextLoader();
             $proxy_client     = new ProxyClient();
             $response_handler = new ResponseHandler();
+            $debug_logger     = new DebugLogger();
+
+            // Start debug session.
+            $debug_logger->start_session( $message, $chat_id );
 
             // Gather WordPress context.
             $context = $context_loader->get_context();
+
+            // Log the context.
+            $debug_logger->log_context( $context );
 
             // Get conversation history.
             $conversation_history = $this->get_conversation_history_for_ai( $chat_id );
@@ -190,7 +198,8 @@ class ChatController {
                 $conversation_history,
                 $proxy_client,
                 $response_handler,
-                $chat_id
+                $chat_id,
+                $debug_logger
             );
 
             // Save assistant response.
@@ -226,6 +235,7 @@ class ChatController {
      * @param ProxyClient     $proxy_client         Proxy client instance.
      * @param ResponseHandler $response_handler     Response handler instance.
      * @param int             $chat_id              Chat ID.
+     * @param DebugLogger     $debug_logger         Debug logger instance.
      * @return array Final response after loop completes.
      */
     private function execute_loop(
@@ -234,7 +244,8 @@ class ChatController {
         array $conversation_history,
         ProxyClient $proxy_client,
         ResponseHandler $response_handler,
-        int $chat_id
+        int $chat_id,
+        DebugLogger $debug_logger
     ): array {
         $iteration        = 0;
         $documentation    = null;
@@ -252,6 +263,15 @@ class ChatController {
                 $loop_context['last_result'] = $last_result;
             }
 
+            // Log AI request.
+            $debug_logger->log_ai_request(
+                $current_message,
+                $loop_context,
+                $conversation_history,
+                $documentation,
+                $iteration
+            );
+
             // Call the AI.
             $proxy_response = $proxy_client->send_message(
                 $current_message,
@@ -260,9 +280,12 @@ class ChatController {
                 $documentation
             );
 
+            // Log AI response.
+            $debug_logger->log_ai_response( $proxy_response, $iteration );
+
             // Handle proxy errors.
             if ( is_wp_error( $proxy_response ) ) {
-                return [
+                $error_response = [
                     'type'    => 'error',
                     'step'    => 'implementation',
                     'status'  => __( 'Error', 'creator-core' ),
@@ -270,10 +293,15 @@ class ChatController {
                     'data'    => [],
                     'steps'   => $all_steps,
                 ];
+                $debug_logger->end_session( $error_response, $iteration );
+                return $error_response;
             }
 
             // Process the response.
             $processed = $response_handler->handle( $proxy_response, $loop_context );
+
+            // Log processed response.
+            $debug_logger->log_processed_response( $processed, $iteration );
 
             // Track all steps for debugging.
             $all_steps[] = [
@@ -287,6 +315,14 @@ class ChatController {
             // Handle request_docs type - fetch documentation and continue.
             if ( 'request_docs' === $processed['type'] ) {
                 $documentation = $processed['documentation'] ?? [];
+
+                // Log documentation fetch.
+                $debug_logger->log_documentation(
+                    $processed['data']['plugins_needed'] ?? [],
+                    $documentation,
+                    $iteration
+                );
+
                 $current_message = wp_json_encode( [
                     'type'   => 'documentation_provided',
                     'docs'   => array_keys( $documentation ),
@@ -306,10 +342,20 @@ class ChatController {
             if ( isset( $processed['execution_result'] ) ) {
                 $last_result = $processed['execution_result'];
 
+                // Log the execution.
+                $debug_logger->log_execution(
+                    $processed['data']['code'] ?? '',
+                    $last_result,
+                    $iteration
+                );
+
                 // Check if execution failed and we should retry.
                 if ( ! empty( $last_result ) && empty( $last_result['success'] ) ) {
                     if ( $this->should_retry_execution( $last_result, $retry_count ) ) {
                         $retry_count++;
+
+                        // Log the retry.
+                        $debug_logger->log_retry( $last_result, $retry_count, $iteration );
 
                         // Build retry message with error details.
                         $retry_message = wp_json_encode( [
@@ -340,6 +386,13 @@ class ChatController {
                 }
             } elseif ( isset( $processed['verification_result'] ) ) {
                 $last_result = $processed['verification_result'];
+
+                // Log verification as execution.
+                $debug_logger->log_execution(
+                    $processed['data']['code'] ?? '',
+                    $last_result,
+                    $iteration
+                );
             }
 
             // Check if we should continue automatically.
@@ -365,11 +418,12 @@ class ChatController {
 
             // Loop complete - return the final response.
             $processed['steps'] = $all_steps;
+            $debug_logger->end_session( $processed, $iteration );
             return $processed;
         }
 
         // Max iterations reached.
-        return [
+        $max_iter_response = [
             'type'    => 'error',
             'step'    => 'implementation',
             'status'  => __( 'Error', 'creator-core' ),
@@ -377,6 +431,8 @@ class ChatController {
             'data'    => [],
             'steps'   => $all_steps,
         ];
+        $debug_logger->end_session( $max_iter_response, $iteration );
+        return $max_iter_response;
     }
 
     /**

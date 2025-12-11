@@ -54,6 +54,9 @@ $is_new_chat = empty( $chat_id );
                         <span class="creator-model-badge-label"><?php echo esc_html( $models_info[ $current_model ]['label'] ?? '' ); ?></span>
                     </div>
                 <?php endif; ?>
+                <button type="button" class="creator-header-btn creator-debug-btn" id="creator-debug-btn" title="<?php esc_attr_e( 'Debug Logs', 'creator-core' ); ?>">
+                    <span class="dashicons dashicons-admin-tools"></span>
+                </button>
                 <a href="<?php echo esc_url( admin_url( 'admin.php?page=creator-settings' ) ); ?>" class="creator-header-btn" title="<?php esc_attr_e( 'Settings', 'creator-core' ); ?>">
                     <span class="dashicons dashicons-admin-generic"></span>
                 </a>
@@ -224,6 +227,43 @@ $is_new_chat = empty( $chat_id );
                     </span>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Debug Panel Modal -->
+    <div id="creator-debug-panel" class="creator-debug-panel" style="display: none;">
+        <div class="creator-debug-panel-overlay"></div>
+        <div class="creator-debug-panel-content">
+            <div class="creator-debug-panel-header">
+                <h2><?php esc_html_e( 'Debug Logs', 'creator-core' ); ?></h2>
+                <div class="creator-debug-panel-actions">
+                    <button type="button" class="button" id="creator-debug-refresh">
+                        <span class="dashicons dashicons-update"></span>
+                        <?php esc_html_e( 'Refresh', 'creator-core' ); ?>
+                    </button>
+                    <button type="button" class="button" id="creator-debug-clear">
+                        <span class="dashicons dashicons-trash"></span>
+                        <?php esc_html_e( 'Clear Logs', 'creator-core' ); ?>
+                    </button>
+                    <button type="button" class="creator-debug-close" id="creator-debug-close">
+                        <span class="dashicons dashicons-no-alt"></span>
+                    </button>
+                </div>
+            </div>
+            <div class="creator-debug-panel-body">
+                <div class="creator-debug-sessions">
+                    <h3><?php esc_html_e( 'Sessions', 'creator-core' ); ?></h3>
+                    <div id="creator-debug-sessions-list" class="creator-debug-sessions-list">
+                        <p class="loading"><?php esc_html_e( 'Loading sessions...', 'creator-core' ); ?></p>
+                    </div>
+                </div>
+                <div class="creator-debug-logs">
+                    <h3><?php esc_html_e( 'Log Details', 'creator-core' ); ?></h3>
+                    <div id="creator-debug-logs-content" class="creator-debug-logs-content">
+                        <p class="placeholder"><?php esc_html_e( 'Select a session to view logs', 'creator-core' ); ?></p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
