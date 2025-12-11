@@ -278,11 +278,16 @@
 }
 
 /* Chat Input */
+.creator-input-container,
 .creator-chat-input-container {
     padding: 16px 20px;
     background: white;
     border-top: 1px solid var(--creator-gray-200);
     flex-shrink: 0;
+}
+
+.creator-send-text {
+    display: none;
 }
 
 .creator-chat-form {
