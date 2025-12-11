@@ -114,6 +114,21 @@ class ProxyClient {
         $status_code = wp_remote_retrieve_response_code( $response );
         $body_raw    = wp_remote_retrieve_body( $response );
 
+        // Debug: Log what Firebase received (from response headers).
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            $debug_context_keys = wp_remote_retrieve_header( $response, 'x-debug-context-keys' );
+            $debug_wp_version   = wp_remote_retrieve_header( $response, 'x-debug-wp-version' );
+            $debug_php_version  = wp_remote_retrieve_header( $response, 'x-debug-php-version' );
+            $debug_theme        = wp_remote_retrieve_header( $response, 'x-debug-theme' );
+
+            error_log( '[Creator Debug] === FIREBASE RECEIVED ===' );
+            error_log( '[Creator Debug] Context keys: ' . ( $debug_context_keys ?: 'HEADER NOT PRESENT' ) );
+            error_log( '[Creator Debug] WP version: ' . ( $debug_wp_version ?: 'HEADER NOT PRESENT' ) );
+            error_log( '[Creator Debug] PHP version: ' . ( $debug_php_version ?: 'HEADER NOT PRESENT' ) );
+            error_log( '[Creator Debug] Theme: ' . ( $debug_theme ?: 'HEADER NOT PRESENT' ) );
+            error_log( '[Creator Debug] === END FIREBASE RECEIVED ===' );
+        }
+
         if ( $status_code !== 200 ) {
             $error_data = json_decode( $body_raw, true );
             $error_msg  = $error_data['error'] ?? sprintf(
