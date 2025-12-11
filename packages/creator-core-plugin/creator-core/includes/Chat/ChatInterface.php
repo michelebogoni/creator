@@ -99,23 +99,34 @@ class ChatInterface {
         );
 
         // Localize script with data
+        $current_user = wp_get_current_user();
         wp_localize_script(
             'creator-chat-interface',
             'creatorChat',
             [
-                'restUrl'     => rest_url( 'creator/v1/' ),
-                'nonce'       => wp_create_nonce( 'wp_rest' ),
-                'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
-                'userId'      => get_current_user_id(),
-                'pluginUrl'   => CREATOR_CORE_URL,
-                'isDebug'     => CREATOR_DEBUG,
-                'i18n'        => [
+                'restUrl'          => rest_url( 'creator/v1/' ),
+                'restNonce'        => wp_create_nonce( 'wp_rest' ),
+                'ajaxUrl'          => admin_url( 'admin-ajax.php' ),
+                'adminUrl'         => admin_url( 'admin.php' ),
+                'settingsUrl'      => admin_url( 'admin.php?page=creator-settings' ),
+                'userId'           => get_current_user_id(),
+                'userName'         => $current_user->display_name,
+                'userAvatar'       => get_avatar_url( $current_user->ID, [ 'size' => 64 ] ),
+                'pluginUrl'        => CREATOR_CORE_URL,
+                'isDebug'          => defined( 'CREATOR_DEBUG' ) && CREATOR_DEBUG,
+                'chatId'           => isset( $_GET['chat'] ) ? absint( $_GET['chat'] ) : null,
+                'maxFilesPerMessage' => 3,
+                'maxFileSize'      => 10 * 1024 * 1024, // 10MB
+                'i18n'             => [
                     'sendMessage'    => __( 'Send', 'creator-core' ),
                     'thinking'       => __( 'Thinking...', 'creator-core' ),
                     'error'          => __( 'An error occurred. Please try again.', 'creator-core' ),
                     'placeholder'    => __( 'Type your message...', 'creator-core' ),
                     'newChat'        => __( 'New Chat', 'creator-core' ),
                     'clearHistory'   => __( 'Clear History', 'creator-core' ),
+                    'goToSettings'   => __( 'Go to Settings', 'creator-core' ),
+                    'maxFilesError'  => __( 'Maximum 3 files allowed per message.', 'creator-core' ),
+                    'fileTooLarge'   => __( 'File too large:', 'creator-core' ),
                 ],
             ]
         );

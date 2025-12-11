@@ -63,6 +63,36 @@
             $('#creator-attach-btn').on('click', this.handleAttachClick.bind(this));
             $('#creator-file-input').on('change', this.handleFileSelect.bind(this));
             $(document).on('click', '.creator-attachment-remove', this.handleAttachmentRemove.bind(this));
+
+            // Plan confirmation buttons
+            $(document).on('click', '.creator-confirm-plan', this.handleConfirmPlan.bind(this));
+            $(document).on('click', '.creator-cancel-plan', this.handleCancelPlan.bind(this));
+        },
+
+        /**
+         * Handle plan confirmation
+         */
+        handleConfirmPlan: function(e) {
+            const $container = $(e.currentTarget).closest('.creator-plan-confirm');
+            $container.remove();
+
+            // Send confirmation message
+            this.sendMessage('Procedi con il piano.');
+        },
+
+        /**
+         * Handle plan cancellation
+         */
+        handleCancelPlan: function(e) {
+            const $container = $(e.currentTarget).closest('.creator-plan-confirm');
+            $container.remove();
+
+            // Notify user
+            this.addMessage({
+                role: 'assistant',
+                content: 'Piano annullato. Come posso aiutarti?',
+                timestamp: new Date().toISOString()
+            });
         },
 
         /**
@@ -219,69 +249,29 @@
 
         /**
          * Create a new chat and send the first message
+         * Uses the unified /creator/v1/chat endpoint which handles chat creation automatically
          */
         createChatAndSendMessage: function(message) {
-            const self = this;
-            const selectedModel = this.getSelectedModel();
-
-            $.ajax({
-                url: creatorChat.restUrl + 'chats',
-                type: 'POST',
-                contentType: 'application/json',
-                timeout: 30000, // 30 second timeout for chat creation
-                headers: {
-                    'X-WP-Nonce': creatorChat.restNonce
-                },
-                data: JSON.stringify({
-                    title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
-                    ai_model: selectedModel
-                }),
-                success: function(response) {
-                    if (response.success && response.chat && response.chat.id) {
-                        self.chatId = response.chat.id;
-                        self.updateUrl(response.chat.id);
-
-                        // Hide model toggle after chat is created (model is now locked)
-                        $('.creator-model-toggle').fadeOut(function() {
-                            // Show model badge instead
-                            const modelBadge = '<div class="creator-model-badge">' +
-                                '<span class="creator-model-badge-icon">' + (selectedModel === 'gemini' ? '🔷' : '🟠') + '</span>' +
-                                '<span class="creator-model-badge-label">' + (selectedModel === 'gemini' ? 'Gemini 3 Pro' : 'Claude Sonnet 4') + '</span>' +
-                            '</div>';
-                            $(this).replaceWith(modelBadge);
-                        });
-
-                        self.sendMessageToChat(response.chat.id, message);
-                    } else {
-                        self.hideTypingIndicator();
-                        const errorMsg = response.message || response.error || 'Failed to create chat';
-                        self.showError(errorMsg, self.isLicenseError(errorMsg));
-                    }
-                },
-                error: function(xhr, status, error) {
-                    self.hideTypingIndicator();
-                    let errorMsg;
-                    if (status === 'timeout') {
-                        errorMsg = 'Request timed out. Please try again.';
-                    } else {
-                        errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Failed to create chat';
-                    }
-                    console.error('[CreatorChat] Create chat error:', { status, error, xhr: xhr.status });
-                    self.showError(errorMsg, self.isLicenseError(errorMsg));
-                }
-            });
+            // Just send the message - ChatController will create the chat automatically
+            this.sendMessageToChat(null, message);
         },
 
         /**
-         * Send message to an existing chat
+         * Send message to an existing or new chat
+         * Uses the unified /creator/v1/chat endpoint
          */
         sendMessageToChat: function(chatId, message) {
             const self = this;
 
             // Build request data
             const requestData = {
-                content: message || ''
+                message: message || ''
             };
+
+            // Include chat_id if we have one
+            if (chatId) {
+                requestData.chat_id = chatId;
+            }
 
             // Include files if present
             if (this.pendingFiles && this.pendingFiles.length > 0) {
@@ -290,9 +280,10 @@
             }
 
             $.ajax({
-                url: creatorChat.restUrl + 'chats/' + chatId + '/messages',
+                url: creatorChat.restUrl + 'chat',
                 type: 'POST',
                 contentType: 'application/json',
+                timeout: 120000, // 2 minute timeout to match server
                 headers: {
                     'X-WP-Nonce': creatorChat.restNonce
                 },
@@ -301,35 +292,71 @@
                     self.hideTypingIndicator();
 
                     if (response.success) {
-                        // Update chat ID if new chat
+                        // Update chat ID (always returned from the endpoint)
                         if (response.chat_id) {
                             self.chatId = response.chat_id;
                             self.updateUrl(response.chat_id);
                         }
 
+                        // Extract message from structured response
+                        const aiResponse = response.response || {};
+                        const messageContent = aiResponse.message || 'No response message';
+
                         // Add AI response
                         self.addMessage({
                             role: 'assistant',
-                            content: response.response,
+                            content: messageContent,
                             timestamp: new Date().toISOString(),
-                            actions: response.actions || []
+                            responseType: aiResponse.type || 'complete',
+                            step: aiResponse.step || 'complete',
+                            status: aiResponse.status || '',
+                            data: aiResponse.data || {},
+                            steps: aiResponse.steps || []
                         });
 
-                        // Process any actions
-                        if (response.actions && response.actions.length > 0) {
-                            self.processActions(response.actions);
+                        // Handle plan confirmation
+                        if (aiResponse.type === 'plan' && aiResponse.requires_confirmation) {
+                            self.showPlanConfirmation(aiResponse);
                         }
                     } else {
                         const errorMsg = response.message || 'Failed to send message';
                         self.showError(errorMsg, self.isLicenseError(errorMsg));
                     }
                 },
-                error: function(xhr) {
+                error: function(xhr, status, error) {
                     self.hideTypingIndicator();
-                    const error = xhr.responseJSON?.message || 'Failed to send message';
-                    self.showError(error, self.isLicenseError(error));
+                    let errorMsg;
+                    if (status === 'timeout') {
+                        errorMsg = 'Request timed out. The AI service may be busy. Please try again.';
+                    } else {
+                        errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Failed to send message';
+                    }
+                    console.error('[CreatorChat] Send message error:', { status, error, xhr: xhr.status });
+                    self.showError(errorMsg, self.isLicenseError(errorMsg));
                 }
             });
+        },
+
+        /**
+         * Show plan confirmation UI
+         */
+        showPlanConfirmation: function(response) {
+            const self = this;
+            const $messages = $('.creator-chat-messages');
+
+            const confirmHtml = `
+                <div class="creator-plan-confirm" data-chat-id="${this.chatId}">
+                    <button class="creator-btn creator-btn-primary creator-confirm-plan">
+                        <span class="dashicons dashicons-yes"></span> Proceed with Plan
+                    </button>
+                    <button class="creator-btn creator-btn-secondary creator-cancel-plan">
+                        Cancel
+                    </button>
+                </div>
+            `;
+
+            $messages.append(confirmHtml);
+            this.scrollToBottom();
         },
 
         /**
@@ -1562,115 +1589,6 @@
     CreatorChat.hideTypingIndicator = function() {
         originalHideTypingIndicator.call(this);
         // Don't hide thinking panel immediately - let it stay visible
-    };
-
-    // Handle thinking data from response with SSE streaming support
-    const originalSendMessageToChat = CreatorChat.sendMessageToChat;
-    CreatorChat.sendMessageToChat = function(chatId, message) {
-        const self = this;
-
-        // Start SSE streaming for real-time thinking updates
-        // This will display thinking logs as they're generated
-        if (chatId) {
-            CreatorThinking.startStreaming(chatId);
-        } else {
-            // For new chats, just show loading until we get the chat ID
-            CreatorThinking.showLoading();
-        }
-
-        // Build request data
-        const requestData = {
-            content: message || ''
-        };
-
-        // Include files if present
-        if (this.pendingFiles && this.pendingFiles.length > 0) {
-            requestData.files = this.pendingFiles;
-            this.pendingFiles = [];
-        }
-
-        $.ajax({
-            url: creatorChat.restUrl + 'chats/' + chatId + '/messages',
-            type: 'POST',
-            contentType: 'application/json',
-            timeout: 90000, // 90 second timeout (slightly less than server's 120s)
-            headers: {
-                'X-WP-Nonce': creatorChat.restNonce
-            },
-            data: JSON.stringify(requestData),
-            success: function(response) {
-                self.hideTypingIndicator();
-
-                if (response.success) {
-                    // Update chat ID if new chat
-                    if (response.chat_id) {
-                        self.chatId = response.chat_id;
-                        self.updateUrl(response.chat_id);
-
-                        // If this was a new chat, start streaming now that we have the ID
-                        if (!chatId && response.chat_id) {
-                            CreatorThinking.startStreaming(response.chat_id);
-                        }
-                    }
-
-                    // Stop streaming since response is complete
-                    CreatorThinking.stopStreaming();
-
-                    // Handle thinking logs if present (fallback if SSE didn't get them)
-                    if (response.thinking && response.thinking.length > 0) {
-                        // Only add logs if we didn't receive them via SSE
-                        if (CreatorThinking.logs.length === 0) {
-                            CreatorThinking.addLogs(response.thinking);
-                        }
-                        CreatorThinking.hide();
-                    } else if (CreatorThinking.logs.length > 0) {
-                        // We got logs via SSE, just hide the panel
-                        CreatorThinking.hide();
-                    } else {
-                        // No logs at all, remove panel
-                        CreatorThinking.remove();
-                    }
-
-                    // Add AI response
-                    self.addMessage({
-                        role: 'assistant',
-                        content: response.response,
-                        timestamp: new Date().toISOString(),
-                        actions: response.actions || []
-                    });
-
-                    // Process any actions
-                    if (response.actions && response.actions.length > 0) {
-                        self.processActions(response.actions);
-                    }
-                } else {
-                    CreatorThinking.stopStreaming();
-                    CreatorThinking.remove();
-                    const errorMsg = response.message || response.error || 'Failed to send message';
-                    self.showError(errorMsg, self.isLicenseError(errorMsg));
-                }
-            },
-            error: function(xhr, status, error) {
-                self.hideTypingIndicator();
-                CreatorThinking.stopStreaming();
-                CreatorThinking.remove();
-
-                // Handle different error types
-                let errorMsg;
-                if (status === 'timeout') {
-                    errorMsg = 'Request timed out. The AI service may be overloaded. Please try again.';
-                } else if (status === 'abort') {
-                    errorMsg = 'Request was cancelled.';
-                } else if (xhr.status === 0) {
-                    errorMsg = 'Network error. Please check your connection and try again.';
-                } else {
-                    errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || error || 'Failed to send message';
-                }
-
-                console.error('[CreatorChat] AJAX error:', { status, error, xhr: xhr.status, response: xhr.responseText });
-                self.showError(errorMsg, self.isLicenseError(errorMsg));
-            }
-        });
     };
 
     // Initialize on document ready

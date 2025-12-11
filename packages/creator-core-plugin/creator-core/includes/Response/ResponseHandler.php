@@ -2,7 +2,10 @@
 /**
  * Response Handler
  *
- * Parsa le risposte dal servizio AI.
+ * Gestisce le risposte strutturate dal servizio AI.
+ * Segue il formato JSON definito nelle specifiche:
+ * - step: discovery | strategy | implementation | verification
+ * - type: question | plan | execute | verify | complete | error | request_docs
  *
  * @package CreatorCore
  */
@@ -11,272 +14,463 @@ namespace CreatorCore\Response;
 
 defined( 'ABSPATH' ) || exit;
 
+use CreatorCore\Executor\CodeExecutor;
+use CreatorCore\Proxy\ProxyClient;
+
 /**
  * Class ResponseHandler
  *
- * Parses and processes AI responses
+ * Parses and processes structured AI responses
  */
 class ResponseHandler {
 
     /**
-     * Parse AI response
+     * Code executor instance
      *
-     * @param array $response The raw response from the proxy.
-     * @return array{text: string, has_code: bool, code?: string, code_language?: string, actions?: array}
+     * @var CodeExecutor
      */
-    public function parse( array $response ): array {
-        $result = [
-            'text'     => '',
-            'has_code' => false,
-            'code'     => null,
-            'actions'  => [],
-        ];
+    private CodeExecutor $code_executor;
 
-        // Extract text content
-        if ( isset( $response['text'] ) ) {
-            $result['text'] = $response['text'];
-        } elseif ( isset( $response['content'] ) ) {
-            $result['text'] = $response['content'];
-        } elseif ( isset( $response['message'] ) ) {
-            $result['text'] = $response['message'];
-        }
+    /**
+     * Proxy client for fetching documentation
+     *
+     * @var ProxyClient
+     */
+    private ProxyClient $proxy_client;
 
-        // Extract code blocks
-        $code_blocks = $this->extract_code_blocks( $result['text'] );
-        if ( ! empty( $code_blocks ) ) {
-            $result['has_code'] = true;
-            $result['code'] = $code_blocks[0]['code'];
-            $result['code_language'] = $code_blocks[0]['language'];
-            $result['all_code_blocks'] = $code_blocks;
-        }
-
-        // Extract actions if present
-        if ( isset( $response['actions'] ) && is_array( $response['actions'] ) ) {
-            $result['actions'] = $this->parse_actions( $response['actions'] );
-        }
-
-        // Check for structured response format
-        if ( isset( $response['structured'] ) ) {
-            $result = array_merge( $result, $this->parse_structured( $response['structured'] ) );
-        }
-
-        return $result;
+    /**
+     * Constructor
+     */
+    public function __construct() {
+        $this->code_executor = new CodeExecutor();
+        $this->proxy_client  = new ProxyClient();
     }
 
     /**
-     * Extract code blocks from text
+     * Handle AI response from the proxy
      *
-     * @param string $text The text to extract code from.
-     * @return array Array of code blocks with language and code.
+     * Parses the structured JSON response and executes actions based on type.
+     *
+     * @param array $proxy_response The response from the proxy (contains 'success', 'content', etc.).
+     * @param array $context        The WordPress context data.
+     * @return array Processed response with type, message, and any execution results.
      */
-    public function extract_code_blocks( string $text ): array {
-        $blocks = [];
-
-        // Match fenced code blocks with optional language
-        $pattern = '/```(\w*)\n([\s\S]*?)```/';
-
-        if ( preg_match_all( $pattern, $text, $matches, PREG_SET_ORDER ) ) {
-            foreach ( $matches as $match ) {
-                $blocks[] = [
-                    'language' => ! empty( $match[1] ) ? $match[1] : 'text',
-                    'code'     => trim( $match[2] ),
-                ];
-            }
+    public function handle( array $proxy_response, array $context = [] ): array {
+        // Check if proxy request was successful.
+        if ( ! isset( $proxy_response['success'] ) || ! $proxy_response['success'] ) {
+            return $this->create_error_response(
+                $proxy_response['error'] ?? __( 'Unknown error from AI service.', 'creator-core' ),
+                $proxy_response
+            );
         }
 
-        return $blocks;
+        // Parse the AI response content (should be JSON).
+        $ai_response = $this->parse_ai_content( $proxy_response['content'] ?? '' );
+
+        if ( ! $ai_response ) {
+            return $this->create_error_response(
+                __( 'Failed to parse AI response.', 'creator-core' ),
+                [ 'raw_content' => $proxy_response['content'] ?? '' ]
+            );
+        }
+
+        // Process based on response type.
+        return $this->process_response_type( $ai_response, $context );
     }
 
     /**
-     * Extract only PHP code from text
+     * Parse AI content which should be JSON
      *
-     * @param string $text The text to extract PHP code from.
-     * @return string|null The PHP code or null if not found.
+     * @param string $content The AI response content.
+     * @return array|null Parsed JSON or null on failure.
      */
-    public function extract_php_code( string $text ): ?string {
-        $blocks = $this->extract_code_blocks( $text );
-
-        foreach ( $blocks as $block ) {
-            if ( in_array( strtolower( $block['language'] ), [ 'php', 'php5', 'php7', 'php8' ], true ) ) {
-                return $block['code'];
-            }
+    private function parse_ai_content( string $content ): ?array {
+        if ( empty( $content ) ) {
+            return null;
         }
 
-        // Try to find inline PHP code if no fenced block found
-        if ( preg_match( '/<\?php([\s\S]*?)(?:\?>|$)/', $text, $match ) ) {
-            return '<?php' . $match[1];
+        // Try to decode as JSON directly.
+        $decoded = json_decode( $content, true );
+
+        if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
+            return $decoded;
+        }
+
+        // Sometimes the AI wraps JSON in markdown code blocks.
+        $content = $this->extract_json_from_markdown( $content );
+
+        $decoded = json_decode( $content, true );
+
+        if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
+            return $decoded;
         }
 
         return null;
     }
 
     /**
-     * Parse action instructions from response
+     * Extract JSON from markdown code blocks
      *
-     * @param array $actions Raw actions from response.
-     * @return array Parsed actions.
+     * @param string $content Content that may contain JSON in markdown.
+     * @return string Extracted JSON or original content.
      */
-    private function parse_actions( array $actions ): array {
-        $parsed = [];
-
-        foreach ( $actions as $action ) {
-            if ( ! isset( $action['type'] ) ) {
-                continue;
-            }
-
-            $parsed_action = [
-                'type'        => sanitize_key( $action['type'] ),
-                'target'      => $action['target'] ?? '',
-                'description' => $action['description'] ?? '',
-                'params'      => $action['params'] ?? [],
-            ];
-
-            // Validate action type
-            if ( $this->is_valid_action_type( $parsed_action['type'] ) ) {
-                $parsed[] = $parsed_action;
-            }
+    private function extract_json_from_markdown( string $content ): string {
+        // Match ```json ... ``` blocks.
+        if ( preg_match( '/```(?:json)?\s*\n([\s\S]*?)```/', $content, $matches ) ) {
+            return trim( $matches[1] );
         }
 
-        return $parsed;
+        return $content;
     }
 
     /**
-     * Check if action type is valid
+     * Process response based on type
      *
-     * @param string $type The action type.
-     * @return bool
+     * @param array $ai_response The parsed AI response.
+     * @param array $context     The WordPress context.
+     * @return array Processed response.
      */
-    private function is_valid_action_type( string $type ): bool {
-        $valid_types = [
-            'execute_code',
-            'create_file',
-            'modify_file',
-            'delete_file',
-            'install_plugin',
-            'activate_plugin',
-            'deactivate_plugin',
-            'update_option',
-            'create_post',
-            'update_post',
-            'delete_post',
-            'run_wp_cli',
+    private function process_response_type( array $ai_response, array $context ): array {
+        $type = $ai_response['type'] ?? 'unknown';
+
+        switch ( $type ) {
+            case 'question':
+            case 'complete':
+                return $this->handle_message_response( $ai_response );
+
+            case 'plan':
+                return $this->handle_plan_response( $ai_response );
+
+            case 'execute':
+                return $this->handle_execute_response( $ai_response, $context );
+
+            case 'verify':
+                return $this->handle_verify_response( $ai_response, $context );
+
+            case 'request_docs':
+                return $this->handle_request_docs_response( $ai_response );
+
+            case 'error':
+                return $this->handle_error_response( $ai_response );
+
+            default:
+                return $this->create_error_response(
+                    sprintf(
+                        /* translators: %s: unknown response type */
+                        __( 'Unknown response type: %s', 'creator-core' ),
+                        $type
+                    ),
+                    [ 'ai_response' => $ai_response ]
+                );
+        }
+    }
+
+    /**
+     * Handle question or complete response types
+     *
+     * These just display a message to the user.
+     *
+     * @param array $ai_response The AI response.
+     * @return array Response for the frontend.
+     */
+    private function handle_message_response( array $ai_response ): array {
+        return [
+            'type'                   => $ai_response['type'],
+            'step'                   => $ai_response['step'] ?? 'discovery',
+            'status'                 => $ai_response['status'] ?? '',
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $ai_response['data'] ?? [],
+            'requires_confirmation'  => $ai_response['requires_confirmation'] ?? false,
+            'continue_automatically' => false,
         ];
-
-        return in_array( $type, $valid_types, true );
     }
 
     /**
-     * Parse structured response format
+     * Handle plan response type
      *
-     * @param array $structured The structured response data.
-     * @return array Parsed structured data.
+     * Shows the action plan to the user.
+     *
+     * @param array $ai_response The AI response.
+     * @return array Response for the frontend.
      */
-    private function parse_structured( array $structured ): array {
-        $result = [];
-
-        if ( isset( $structured['explanation'] ) ) {
-            $result['explanation'] = sanitize_textarea_field( $structured['explanation'] );
-        }
-
-        if ( isset( $structured['code'] ) ) {
-            $result['has_code'] = true;
-            $result['code'] = $structured['code'];
-            $result['code_language'] = $structured['language'] ?? 'php';
-        }
-
-        if ( isset( $structured['warnings'] ) && is_array( $structured['warnings'] ) ) {
-            $result['warnings'] = array_map( 'sanitize_text_field', $structured['warnings'] );
-        }
-
-        if ( isset( $structured['suggestions'] ) && is_array( $structured['suggestions'] ) ) {
-            $result['suggestions'] = array_map( 'sanitize_text_field', $structured['suggestions'] );
-        }
-
-        return $result;
+    private function handle_plan_response( array $ai_response ): array {
+        return [
+            'type'                   => 'plan',
+            'step'                   => $ai_response['step'] ?? 'strategy',
+            'status'                 => $ai_response['status'] ?? __( 'Plan ready', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $ai_response['data'] ?? [],
+            'requires_confirmation'  => $ai_response['requires_confirmation'] ?? true,
+            'continue_automatically' => false,
+        ];
     }
 
     /**
-     * Remove code blocks from text
+     * Handle execute response type
      *
-     * @param string $text The text to clean.
-     * @return string Text without code blocks.
+     * Executes PHP code and returns the result.
+     *
+     * @param array $ai_response The AI response.
+     * @param array $context     The WordPress context.
+     * @return array Response with execution result.
      */
-    public function remove_code_blocks( string $text ): string {
-        // Remove fenced code blocks
-        $text = preg_replace( '/```\w*\n[\s\S]*?```/', '', $text );
+    private function handle_execute_response( array $ai_response, array $context ): array {
+        $code = $ai_response['data']['code'] ?? '';
 
-        // Clean up extra whitespace
-        $text = preg_replace( '/\n{3,}/', "\n\n", $text );
+        if ( empty( $code ) ) {
+            return $this->create_error_response(
+                __( 'No code provided for execution.', 'creator-core' ),
+                [ 'ai_response' => $ai_response ]
+            );
+        }
 
-        return trim( $text );
+        // Execute the PHP code.
+        $execution_result = $this->code_executor->execute( $code );
+
+        return [
+            'type'                   => 'execute',
+            'step'                   => $ai_response['step'] ?? 'implementation',
+            'status'                 => $ai_response['status'] ?? __( 'Executing...', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $ai_response['data'] ?? [],
+            'execution_result'       => $execution_result,
+            'requires_confirmation'  => false,
+            'continue_automatically' => $ai_response['continue_automatically'] ?? true,
+        ];
     }
 
     /**
-     * Format response for display
+     * Handle verify response type
      *
-     * @param array $parsed_response The parsed response.
-     * @return string HTML formatted response.
+     * Executes verification code.
+     *
+     * @param array $ai_response The AI response.
+     * @param array $context     The WordPress context.
+     * @return array Response with verification result.
      */
-    public function format_for_display( array $parsed_response ): string {
+    private function handle_verify_response( array $ai_response, array $context ): array {
+        $code = $ai_response['data']['code'] ?? '';
+
+        if ( empty( $code ) ) {
+            // Verification without code just passes through.
+            return [
+                'type'                   => 'verify',
+                'step'                   => $ai_response['step'] ?? 'verification',
+                'status'                 => $ai_response['status'] ?? __( 'Verified', 'creator-core' ),
+                'message'                => $ai_response['message'] ?? '',
+                'data'                   => $ai_response['data'] ?? [],
+                'requires_confirmation'  => false,
+                'continue_automatically' => $ai_response['continue_automatically'] ?? true,
+            ];
+        }
+
+        // Execute verification code.
+        $verification_result = $this->code_executor->execute( $code );
+
+        return [
+            'type'                   => 'verify',
+            'step'                   => $ai_response['step'] ?? 'verification',
+            'status'                 => $ai_response['status'] ?? __( 'Verified', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $ai_response['data'] ?? [],
+            'verification_result'    => $verification_result,
+            'requires_confirmation'  => false,
+            'continue_automatically' => $ai_response['continue_automatically'] ?? true,
+        ];
+    }
+
+    /**
+     * Handle request_docs response type
+     *
+     * Fetches documentation for requested plugins.
+     *
+     * @param array $ai_response The AI response.
+     * @return array Response with fetched documentation.
+     */
+    private function handle_request_docs_response( array $ai_response ): array {
+        $plugins_needed = $ai_response['data']['plugins_needed'] ?? [];
+        $documentation  = [];
+
+        foreach ( $plugins_needed as $plugin_slug ) {
+            $doc = $this->proxy_client->get_plugin_docs( $plugin_slug );
+            if ( $doc ) {
+                $documentation[ $plugin_slug ] = $doc;
+            }
+        }
+
+        return [
+            'type'                   => 'request_docs',
+            'step'                   => $ai_response['step'] ?? 'discovery',
+            'status'                 => $ai_response['status'] ?? __( 'Documentation fetched', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $ai_response['data'] ?? [],
+            'documentation'          => $documentation,
+            'requires_confirmation'  => false,
+            'continue_automatically' => true,
+        ];
+    }
+
+    /**
+     * Handle error response type from AI
+     *
+     * @param array $ai_response The AI error response.
+     * @return array Error response for the frontend.
+     */
+    private function handle_error_response( array $ai_response ): array {
+        return [
+            'type'                   => 'error',
+            'step'                   => $ai_response['step'] ?? 'implementation',
+            'status'                 => $ai_response['status'] ?? __( 'Error', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? __( 'An error occurred.', 'creator-core' ),
+            'data'                   => $ai_response['data'] ?? [],
+            'requires_confirmation'  => false,
+            'continue_automatically' => $ai_response['data']['recoverable'] ?? false,
+        ];
+    }
+
+    /**
+     * Create a standardized error response
+     *
+     * @param string $message Error message.
+     * @param array  $data    Additional error data.
+     * @return array Error response.
+     */
+    private function create_error_response( string $message, array $data = [] ): array {
+        return [
+            'type'                   => 'error',
+            'step'                   => 'implementation',
+            'status'                 => __( 'Error', 'creator-core' ),
+            'message'                => $message,
+            'data'                   => $data,
+            'requires_confirmation'  => false,
+            'continue_automatically' => false,
+        ];
+    }
+
+    /**
+     * Format response for display in the chat
+     *
+     * @param array $response The processed response.
+     * @return string HTML formatted message.
+     */
+    public function format_for_display( array $response ): string {
         $html = '';
 
-        // Add main text
-        if ( ! empty( $parsed_response['text'] ) ) {
-            $clean_text = $this->remove_code_blocks( $parsed_response['text'] );
-            $html .= '<div class="creator-response-text">' . wp_kses_post( wpautop( $clean_text ) ) . '</div>';
-        }
-
-        // Add code blocks
-        if ( ! empty( $parsed_response['all_code_blocks'] ) ) {
-            foreach ( $parsed_response['all_code_blocks'] as $block ) {
-                $html .= sprintf(
-                    '<div class="creator-code-block" data-language="%s"><pre><code class="language-%s">%s</code></pre></div>',
-                    esc_attr( $block['language'] ),
-                    esc_attr( $block['language'] ),
-                    esc_html( $block['code'] )
-                );
-            }
-        }
-
-        // Add execution result if present
-        if ( isset( $parsed_response['execution_result'] ) ) {
-            $result = $parsed_response['execution_result'];
-            $status_class = $result['success'] ? 'success' : 'error';
-
+        // Add status badge if present.
+        if ( ! empty( $response['status'] ) ) {
+            $status_class = $this->get_status_class( $response['type'] );
             $html .= sprintf(
-                '<div class="creator-execution-result %s">',
-                esc_attr( $status_class )
+                '<div class="creator-status-badge %s">%s</div>',
+                esc_attr( $status_class ),
+                esc_html( $response['status'] )
             );
+        }
 
-            if ( ! empty( $result['output'] ) ) {
-                $html .= '<div class="output"><pre>' . esc_html( $result['output'] ) . '</pre></div>';
-            }
-
-            if ( ! empty( $result['error'] ) ) {
-                $html .= '<div class="error">' . esc_html( $result['error'] ) . '</div>';
-            }
-
+        // Add main message.
+        if ( ! empty( $response['message'] ) ) {
+            $html .= '<div class="creator-response-message">';
+            $html .= wp_kses_post( $this->format_message_text( $response['message'] ) );
             $html .= '</div>';
+        }
+
+        // Add plan actions if present.
+        if ( 'plan' === $response['type'] && ! empty( $response['data']['actions'] ) ) {
+            $html .= $this->format_plan_actions( $response['data']['actions'] );
+        }
+
+        // Add execution result if present.
+        if ( isset( $response['execution_result'] ) ) {
+            $html .= $this->format_execution_result( $response['execution_result'] );
         }
 
         return $html;
     }
 
     /**
-     * Extract thinking/reasoning from response
+     * Get CSS class for status based on type
      *
-     * @param array $response The raw response.
-     * @return string|null The thinking content or null.
+     * @param string $type Response type.
+     * @return string CSS class.
      */
-    public function extract_thinking( array $response ): ?string {
-        if ( isset( $response['thinking'] ) ) {
-            return $response['thinking'];
+    private function get_status_class( string $type ): string {
+        $classes = [
+            'complete'     => 'status-success',
+            'error'        => 'status-error',
+            'execute'      => 'status-executing',
+            'verify'       => 'status-verifying',
+            'plan'         => 'status-planning',
+            'question'     => 'status-waiting',
+            'request_docs' => 'status-fetching',
+        ];
+
+        return $classes[ $type ] ?? 'status-default';
+    }
+
+    /**
+     * Format message text with basic markdown support
+     *
+     * @param string $text The message text.
+     * @return string Formatted HTML.
+     */
+    private function format_message_text( string $text ): string {
+        // Convert newlines to breaks.
+        $text = nl2br( esc_html( $text ) );
+
+        // Convert **bold** to <strong>.
+        $text = preg_replace( '/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text );
+
+        // Convert *italic* to <em>.
+        $text = preg_replace( '/\*(.+?)\*/', '<em>$1</em>', $text );
+
+        // Convert `code` to <code>.
+        $text = preg_replace( '/`(.+?)`/', '<code>$1</code>', $text );
+
+        return $text;
+    }
+
+    /**
+     * Format plan actions as HTML
+     *
+     * @param array $actions The plan actions.
+     * @return string HTML for actions.
+     */
+    private function format_plan_actions( array $actions ): string {
+        $html = '<div class="creator-plan-actions"><ol>';
+
+        foreach ( $actions as $action ) {
+            $html .= sprintf(
+                '<li class="creator-plan-action">%s</li>',
+                esc_html( $action['description'] ?? '' )
+            );
         }
 
-        if ( isset( $response['reasoning'] ) ) {
-            return $response['reasoning'];
+        $html .= '</ol></div>';
+
+        return $html;
+    }
+
+    /**
+     * Format execution result as HTML
+     *
+     * @param array $result The execution result.
+     * @return string HTML for result.
+     */
+    private function format_execution_result( array $result ): string {
+        $html = '<div class="creator-execution-result">';
+
+        if ( $result['success'] ) {
+            $html .= '<span class="dashicons dashicons-yes-alt creator-result-success"></span>';
+
+            if ( ! empty( $result['output'] ) ) {
+                $html .= '<pre class="creator-result-output">' . esc_html( $result['output'] ) . '</pre>';
+            }
+        } else {
+            $html .= '<span class="dashicons dashicons-warning creator-result-error"></span>';
+            $html .= '<span class="creator-error-message">' . esc_html( $result['error'] ?? 'Unknown error' ) . '</span>';
         }
 
-        return null;
+        $html .= '</div>';
+
+        return $html;
     }
 }
