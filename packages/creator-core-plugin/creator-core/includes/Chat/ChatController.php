@@ -323,9 +323,16 @@ class ChatController {
                     $iteration
                 );
 
+                // Extract the task description from AI's request_docs response.
+                // This is the AI's interpretation of what the user wants, not the raw message.
+                $task = $processed['data']['task'] ?? $processed['data']['reason'] ?? '';
+
+                // Build message that includes the task to continue.
                 $current_message = wp_json_encode( [
-                    'type'   => 'documentation_provided',
-                    'docs'   => array_keys( $documentation ),
+                    'type'        => 'documentation_provided',
+                    'docs'        => array_keys( $documentation ),
+                    'task'        => $task, // AI's understood task from conversation.
+                    'instruction' => 'Documentation has been loaded. Now proceed with the task. Generate the PHP code to execute.',
                 ] );
                 $conversation_history[] = [
                     'role'    => 'assistant',

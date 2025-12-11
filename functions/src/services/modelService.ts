@@ -119,11 +119,14 @@ Example - answering a question:
   "message": "Recupero la documentazione necessaria...",
   "data": {
     "plugins_needed": ["elementor", "woocommerce"],
-    "reason": "Per creare la pagina con Elementor"
+    "reason": "Per creare la pagina con Elementor",
+    "task": "Create a landing page with Hero section, Features grid, and Pricing table using Elementor"
   },
   "requires_confirmation": false,
   "continue_automatically": true
 }
+
+IMPORTANT: The "task" field in data MUST contain a clear, complete description of what you understood the user wants to accomplish. This is your interpretation of the full conversation, not just the last message. When you receive the documentation, you will use this task description to proceed.
 
 ### type: "error" - When something goes wrong
 {
