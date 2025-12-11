@@ -215,6 +215,7 @@ export const validateLicense = onRequest(
     region: "europe-west1",
     cors: true,
     maxInstances: 100,
+    serviceAccount: "757337256338-compute@developer.gserviceaccount.com",
   },
   handleValidateLicense
 );

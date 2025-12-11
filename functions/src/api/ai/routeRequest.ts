@@ -100,6 +100,7 @@ export const routeRequest = onRequest(
     cors: true,
     maxInstances: 100,
     timeoutSeconds: 120, // Increased for longer model responses
+    serviceAccount: "757337256338-compute@developer.gserviceaccount.com",
   },
   async (req: Request, res: Response) => {
     const requestId = uuidv4();
