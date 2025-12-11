@@ -5,7 +5,7 @@
  * Gestisce le risposte strutturate dal servizio AI.
  * Segue il formato JSON definito nelle specifiche:
  * - step: discovery | strategy | implementation | verification
- * - type: question | plan | execute | verify | complete | error | request_docs
+ * - type: question | plan | execute | verify | complete | error | request_docs | roadmap | execute_step | checkpoint | compress_history
  *
  * @package CreatorCore
  */
@@ -176,14 +176,26 @@ class ResponseHandler {
             case 'plan':
                 return $this->handle_plan_response( $ai_response );
 
+            case 'roadmap':
+                return $this->handle_roadmap_response( $ai_response );
+
             case 'execute':
                 return $this->handle_execute_response( $ai_response, $context );
+
+            case 'execute_step':
+                return $this->handle_execute_step_response( $ai_response, $context );
+
+            case 'checkpoint':
+                return $this->handle_checkpoint_response( $ai_response );
 
             case 'verify':
                 return $this->handle_verify_response( $ai_response, $context );
 
             case 'request_docs':
                 return $this->handle_request_docs_response( $ai_response );
+
+            case 'compress_history':
+                return $this->handle_compress_history_response( $ai_response );
 
             case 'error':
                 return $this->handle_error_response( $ai_response );
@@ -237,6 +249,122 @@ class ResponseHandler {
             'data'                   => $ai_response['data'] ?? [],
             'requires_confirmation'  => $ai_response['requires_confirmation'] ?? true,
             'continue_automatically' => false,
+        ];
+    }
+
+    /**
+     * Handle roadmap response type
+     *
+     * Shows a detailed step-by-step roadmap for complex tasks.
+     * Each step is atomic and can be executed independently.
+     *
+     * @param array $ai_response The AI response.
+     * @return array Response for the frontend.
+     */
+    private function handle_roadmap_response( array $ai_response ): array {
+        $data = $ai_response['data'] ?? [];
+
+        // Ensure roadmap has required fields.
+        if ( empty( $data['roadmap_id'] ) ) {
+            $data['roadmap_id'] = 'roadmap-' . time() . '-' . wp_rand( 1000, 9999 );
+        }
+
+        return [
+            'type'                   => 'roadmap',
+            'step'                   => $ai_response['step'] ?? 'strategy',
+            'status'                 => $ai_response['status'] ?? __( 'Roadmap ready', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $data,
+            'requires_confirmation'  => $ai_response['requires_confirmation'] ?? true,
+            'continue_automatically' => false,
+        ];
+    }
+
+    /**
+     * Handle execute_step response type
+     *
+     * Executes a single atomic step from the roadmap.
+     * Each step should be small and focused (< 30s execution).
+     *
+     * @param array $ai_response The AI response.
+     * @param array $context     The WordPress context.
+     * @return array Response with execution result.
+     */
+    private function handle_execute_step_response( array $ai_response, array $context ): array {
+        $code = $ai_response['data']['code'] ?? '';
+
+        if ( empty( $code ) ) {
+            return $this->create_error_response(
+                __( 'No code provided for step execution.', 'creator-core' ),
+                [ 'ai_response' => $ai_response ]
+            );
+        }
+
+        // Execute the PHP code.
+        $execution_result = $this->code_executor->execute( $code );
+
+        $data = $ai_response['data'] ?? [];
+
+        return [
+            'type'                   => 'execute_step',
+            'step'                   => $ai_response['step'] ?? 'implementation',
+            'status'                 => $ai_response['status'] ?? __( 'Executing step...', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $data,
+            'execution_result'       => $execution_result,
+            'requires_confirmation'  => false,
+            'continue_automatically' => $ai_response['continue_automatically'] ?? true,
+        ];
+    }
+
+    /**
+     * Handle checkpoint response type
+     *
+     * Reports progress after a step completes.
+     * Contains accumulated context to pass to next steps.
+     *
+     * @param array $ai_response The AI response.
+     * @return array Response for the frontend.
+     */
+    private function handle_checkpoint_response( array $ai_response ): array {
+        $data = $ai_response['data'] ?? [];
+
+        // Calculate progress percentage if not provided.
+        if ( empty( $data['progress_percentage'] ) && ! empty( $data['completed_step'] ) && ! empty( $data['total_steps'] ) ) {
+            $data['progress_percentage'] = round( ( $data['completed_step'] / $data['total_steps'] ) * 100 );
+        }
+
+        return [
+            'type'                   => 'checkpoint',
+            'step'                   => $ai_response['step'] ?? 'implementation',
+            'status'                 => $ai_response['status'] ?? __( 'Step complete', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $data,
+            'requires_confirmation'  => $ai_response['requires_confirmation'] ?? false,
+            'continue_automatically' => $ai_response['continue_automatically'] ?? true,
+        ];
+    }
+
+    /**
+     * Handle compress_history response type
+     *
+     * Compresses old conversation history to reduce token usage.
+     * Preserves key facts and recent messages.
+     *
+     * @param array $ai_response The AI response.
+     * @return array Response for the frontend.
+     */
+    private function handle_compress_history_response( array $ai_response ): array {
+        $data = $ai_response['data'] ?? [];
+
+        return [
+            'type'                   => 'compress_history',
+            'step'                   => $ai_response['step'] ?? 'discovery',
+            'status'                 => $ai_response['status'] ?? __( 'History compressed', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $data,
+            'requires_confirmation'  => false,
+            'continue_automatically' => $ai_response['continue_automatically'] ?? true,
         ];
     }
 
@@ -473,13 +601,17 @@ class ResponseHandler {
      */
     private function get_status_class( string $type ): string {
         $classes = [
-            'complete'     => 'status-success',
-            'error'        => 'status-error',
-            'execute'      => 'status-executing',
-            'verify'       => 'status-verifying',
-            'plan'         => 'status-planning',
-            'question'     => 'status-waiting',
-            'request_docs' => 'status-fetching',
+            'complete'         => 'status-success',
+            'error'            => 'status-error',
+            'execute'          => 'status-executing',
+            'execute_step'     => 'status-executing',
+            'checkpoint'       => 'status-checkpoint',
+            'verify'           => 'status-verifying',
+            'plan'             => 'status-planning',
+            'roadmap'          => 'status-roadmap',
+            'question'         => 'status-waiting',
+            'request_docs'     => 'status-fetching',
+            'compress_history' => 'status-compressing',
         ];
 
         return $classes[ $type ] ?? 'status-default';
