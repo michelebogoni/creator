@@ -61,21 +61,6 @@
         "region": "us-central1"
       },
       {
-        "source": "/api/tasks/submit",
-        "function": "submitTask",
-        "region": "us-central1"
-      },
-      {
-        "source": "/api/tasks/status/**",
-        "function": "getTaskStatus",
-        "region": "us-central1"
-      },
-      {
-        "source": "/api/analytics",
-        "function": "getAnalytics",
-        "region": "us-central1"
-      },
-      {
         "source": "/api/health",
         "function": "validateLicense",
         "region": "europe-west1"
