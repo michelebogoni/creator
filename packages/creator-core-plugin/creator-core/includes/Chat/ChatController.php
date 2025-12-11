@@ -404,6 +404,90 @@ class ChatController {
                 continue;
             }
 
+            // Handle wp_cli type - WP-CLI command execution.
+            if ( 'wp_cli' === $processed['type'] ) {
+                if ( isset( $processed['execution_result'] ) ) {
+                    $last_result = $processed['execution_result'];
+
+                    // Log the WP-CLI execution.
+                    $debug_logger->log_execution(
+                        'WP-CLI: ' . ( $processed['data']['command'] ?? 'unknown command' ),
+                        $last_result,
+                        $iteration
+                    );
+
+                    // Check if WP-CLI is not available - AI needs to use alternative.
+                    if ( ! empty( $last_result['error'] ) && strpos( $last_result['error'], 'not available' ) !== false ) {
+                        $current_message = wp_json_encode( [
+                            'type'        => 'wp_cli_not_available',
+                            'error'       => $last_result['error'],
+                            'instruction' => 'WP-CLI is not available on this server. Please use an alternative method: either provide the code for the user to add manually via the plugin UI, or use PHP API if available.',
+                        ] );
+
+                        $conversation_history[] = [
+                            'role'    => 'assistant',
+                            'content' => wp_json_encode( $processed ),
+                        ];
+                        $conversation_history[] = [
+                            'role'    => 'user',
+                            'content' => $current_message,
+                        ];
+                        continue;
+                    }
+
+                    // Check if command failed and we should retry.
+                    if ( ! empty( $last_result ) && empty( $last_result['success'] ) ) {
+                        if ( $this->should_retry_execution( $last_result, $retry_count ) ) {
+                            $retry_count++;
+
+                            $debug_logger->log_retry( $last_result, $retry_count, $iteration );
+
+                            $retry_message = wp_json_encode( [
+                                'type'        => 'wp_cli_failed',
+                                'command'     => $processed['data']['command'] ?? '',
+                                'error'       => $last_result['error'] ?? 'Unknown error',
+                                'output'      => $last_result['output'] ?? '',
+                                'retry_count' => $retry_count,
+                                'max_retries' => self::MAX_RETRY_ATTEMPTS,
+                                'instruction' => 'The WP-CLI command failed. Please analyze the error and try a different approach.',
+                            ] );
+
+                            $current_message = $retry_message;
+
+                            $conversation_history[] = [
+                                'role'    => 'assistant',
+                                'content' => wp_json_encode( $processed ),
+                            ];
+                            $conversation_history[] = [
+                                'role'    => 'user',
+                                'content' => $current_message,
+                            ];
+                            continue;
+                        }
+                    } else {
+                        $retry_count = 0;
+                    }
+                }
+
+                // Build continuation message with WP-CLI result.
+                $current_message = wp_json_encode( [
+                    'type'        => 'wp_cli_result',
+                    'command'     => $processed['data']['command'] ?? '',
+                    'result'      => $last_result,
+                    'instruction' => 'WP-CLI command executed. Continue with the task or report completion.',
+                ] );
+
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+                $conversation_history[] = [
+                    'role'    => 'user',
+                    'content' => $current_message,
+                ];
+                continue;
+            }
+
             // Handle execute_step type - similar to execute but with step tracking.
             if ( 'execute_step' === $processed['type'] ) {
                 if ( isset( $processed['execution_result'] ) ) {

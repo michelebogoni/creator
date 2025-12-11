@@ -5,7 +5,7 @@
  * Gestisce le risposte strutturate dal servizio AI.
  * Segue il formato JSON definito nelle specifiche:
  * - step: discovery | strategy | implementation | verification
- * - type: question | plan | execute | verify | complete | error | request_docs | roadmap | execute_step | checkpoint | compress_history
+ * - type: question | plan | execute | verify | complete | error | request_docs | roadmap | execute_step | checkpoint | compress_history | wp_cli
  *
  * @package CreatorCore
  */
@@ -15,6 +15,7 @@ namespace CreatorCore\Response;
 defined( 'ABSPATH' ) || exit;
 
 use CreatorCore\Executor\CodeExecutor;
+use CreatorCore\Execution\WPCLIExecutor;
 use CreatorCore\Proxy\ProxyClient;
 
 /**
@@ -32,6 +33,13 @@ class ResponseHandler {
     private CodeExecutor $code_executor;
 
     /**
+     * WP-CLI executor instance
+     *
+     * @var WPCLIExecutor
+     */
+    private WPCLIExecutor $wp_cli_executor;
+
+    /**
      * Proxy client for fetching documentation
      *
      * @var ProxyClient
@@ -42,8 +50,9 @@ class ResponseHandler {
      * Constructor
      */
     public function __construct() {
-        $this->code_executor = new CodeExecutor();
-        $this->proxy_client  = new ProxyClient();
+        $this->code_executor   = new CodeExecutor();
+        $this->wp_cli_executor = new WPCLIExecutor();
+        $this->proxy_client    = new ProxyClient();
     }
 
     /**
@@ -196,6 +205,9 @@ class ResponseHandler {
 
             case 'compress_history':
                 return $this->handle_compress_history_response( $ai_response );
+
+            case 'wp_cli':
+                return $this->handle_wp_cli_response( $ai_response );
 
             case 'error':
                 return $this->handle_error_response( $ai_response );
@@ -363,6 +375,62 @@ class ResponseHandler {
             'status'                 => $ai_response['status'] ?? __( 'History compressed', 'creator-core' ),
             'message'                => $ai_response['message'] ?? '',
             'data'                   => $data,
+            'requires_confirmation'  => false,
+            'continue_automatically' => $ai_response['continue_automatically'] ?? true,
+        ];
+    }
+
+    /**
+     * Handle wp_cli response type
+     *
+     * Executes WP-CLI commands safely using the WPCLIExecutor.
+     *
+     * @param array $ai_response The AI response.
+     * @return array Response with execution result.
+     */
+    private function handle_wp_cli_response( array $ai_response ): array {
+        $command = $ai_response['data']['command'] ?? '';
+
+        if ( empty( $command ) ) {
+            return $this->create_error_response(
+                __( 'No WP-CLI command provided.', 'creator-core' ),
+                [ 'ai_response' => $ai_response ]
+            );
+        }
+
+        // Check if WP-CLI is available.
+        if ( ! $this->wp_cli_executor->is_available() ) {
+            return [
+                'type'                   => 'wp_cli',
+                'step'                   => $ai_response['step'] ?? 'implementation',
+                'status'                 => __( 'WP-CLI not available', 'creator-core' ),
+                'message'                => __( 'WP-CLI is not available on this server. The AI will need to use an alternative method.', 'creator-core' ),
+                'data'                   => $ai_response['data'] ?? [],
+                'execution_result'       => [
+                    'success' => false,
+                    'error'   => 'WP-CLI not available',
+                    'output'  => '',
+                ],
+                'requires_confirmation'  => false,
+                'continue_automatically' => true,
+            ];
+        }
+
+        // Execute the WP-CLI command.
+        $execution_result = $this->wp_cli_executor->execute( $command );
+
+        $data            = $ai_response['data'] ?? [];
+        $data['command'] = $command;
+
+        return [
+            'type'                   => 'wp_cli',
+            'step'                   => $ai_response['step'] ?? 'implementation',
+            'status'                 => $execution_result['success']
+                ? __( 'WP-CLI command executed', 'creator-core' )
+                : __( 'WP-CLI command failed', 'creator-core' ),
+            'message'                => $ai_response['message'] ?? '',
+            'data'                   => $data,
+            'execution_result'       => $execution_result,
             'requires_confirmation'  => false,
             'continue_automatically' => $ai_response['continue_automatically'] ?? true,
         ];
@@ -605,6 +673,7 @@ class ResponseHandler {
             'error'            => 'status-error',
             'execute'          => 'status-executing',
             'execute_step'     => 'status-executing',
+            'wp_cli'           => 'status-executing',
             'checkpoint'       => 'status-checkpoint',
             'verify'           => 'status-verifying',
             'plan'             => 'status-planning',
