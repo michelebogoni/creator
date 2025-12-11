@@ -224,6 +224,9 @@ function buildContextAwarePrompt(
 
   envSummary += "\n\nUSE THIS INFORMATION to answer questions about the site. When asked about WordPress version, PHP version, theme, plugins, etc., use the data above to provide accurate answers.";
 
+  // Debug: Log what context was added to the prompt
+  console.log("[DEBUG] Context environment summary:", envSummary);
+
   return basePrompt + envSummary;
 }
 
@@ -260,10 +263,23 @@ export class ModelService {
     const primaryModel = request.model;
     const fallbackModel = getFallbackModel(primaryModel);
 
+    // Debug: Log context received
     this.logger.info("Starting model generation", {
       model: primaryModel,
       prompt_length: request.prompt.length,
+      has_context: !!request.context,
+      context_keys: request.context ? Object.keys(request.context) : [],
     });
+
+    // Debug: Log detailed context if present
+    if (request.context) {
+      this.logger.debug("Context received", {
+        wordpress: request.context.wordpress ? "present" : "missing",
+        theme: request.context.theme ? "present" : "missing",
+        plugins: request.context.plugins ? "present" : "missing",
+        environment: request.context.environment ? "present" : "missing",
+      });
+    }
 
     // Try primary model
     const primaryResult = await this.callModel(primaryModel, request);

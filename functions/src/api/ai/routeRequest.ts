@@ -253,6 +253,14 @@ export const routeRequest = onRequest(
         logger
       );
 
+      // Debug: Log context received from WordPress
+      logger.info("Context from WordPress", {
+        has_context: !!body.context,
+        context_type: typeof body.context,
+        context_keys: body.context ? Object.keys(body.context) : [],
+        context_sample: body.context ? JSON.stringify(body.context).substring(0, 500) : "null",
+      });
+
       // Extract files from body.files or body.options.files (backwards compatibility)
       const files = body.files || body.options?.files;
 
