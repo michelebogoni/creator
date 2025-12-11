@@ -103,6 +103,10 @@ nvm use 20
 ```bash
 cd /Users/michele/creator-ai-proxy
 
+# Sync the main
+git checkout main
+git pull origin main
+
 # Fetch the branch you're working on
 git fetch origin <branch-name>
 
