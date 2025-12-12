@@ -149,35 +149,3 @@ export function sendAuthErrorResponse(
   });
 }
 
-/**
- * Authentication middleware factory
- *
- * @param {string} jwtSecret - The JWT secret for verification
- * @returns {Function} Middleware function
- *
- * @example
- * ```typescript
- * const authenticate = createAuthMiddleware(jwtSecret.value());
- *
- * // In your handler:
- * const authResult = await authenticate(req, res, logger);
- * if (!authResult.continue) return;
- * const { claims } = authResult;
- * ```
- */
-export function createAuthMiddleware(jwtSecret: string) {
-  return async (
-    req: Request,
-    res: Response,
-    logger: Logger
-  ): Promise<{ continue: boolean; claims?: JWTClaims }> => {
-    const authResult = await authenticateRequest(req, jwtSecret, logger);
-
-    if (!authResult.authenticated) {
-      sendAuthErrorResponse(res, authResult);
-      return { continue: false };
-    }
-
-    return { continue: true, claims: authResult.claims };
-  };
-}

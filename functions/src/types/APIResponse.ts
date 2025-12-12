@@ -1,48 +1,7 @@
 /**
- * @fileoverview Generic API response type definitions
+ * @fileoverview API response type definitions
  * @module types/APIResponse
  */
-
-/**
- * Base success response structure
- *
- * @interface APISuccessResponse
- * @template T - Type of the data payload
- */
-export interface APISuccessResponse<T = unknown> {
-  /** Always true for success */
-  success: true;
-
-  /** Response data payload */
-  data: T;
-
-  /** Optional message */
-  message?: string;
-}
-
-/**
- * Base error response structure
- *
- * @interface APIErrorResponse
- */
-export interface APIErrorResponse {
-  /** Always false for errors */
-  success: false;
-
-  /** Human-readable error message */
-  error: string;
-
-  /** Machine-readable error code */
-  code: string;
-
-  /** Additional error details (only in development) */
-  details?: unknown;
-}
-
-/**
- * Union type for all API responses
- */
-export type APIResponse<T = unknown> = APISuccessResponse<T> | APIErrorResponse;
 
 /**
  * Audit log entry structure

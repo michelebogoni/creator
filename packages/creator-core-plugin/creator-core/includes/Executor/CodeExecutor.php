@@ -58,36 +58,6 @@ class CodeExecutor {
     ];
 
     /**
-     * Allowed WordPress functions for safe execution
-     *
-     * @var array
-     */
-    private array $allowed_wp_functions = [
-        'get_option',
-        'update_option',
-        'delete_option',
-        'add_option',
-        'get_post',
-        'get_posts',
-        'wp_insert_post',
-        'wp_update_post',
-        'wp_delete_post',
-        'get_user_by',
-        'get_users',
-        'get_terms',
-        'get_term',
-        'wp_get_attachment_url',
-        'get_permalink',
-        'home_url',
-        'site_url',
-        'admin_url',
-        'get_bloginfo',
-        'is_admin',
-        'current_user_can',
-        'get_current_user_id',
-    ];
-
-    /**
      * Execute PHP code safely
      *
      * @param string $code The PHP code to execute.
@@ -245,15 +215,6 @@ class CodeExecutor {
      */
     public function get_forbidden_functions(): array {
         return $this->forbidden_functions;
-    }
-
-    /**
-     * Get list of allowed WordPress functions
-     *
-     * @return array
-     */
-    public function get_allowed_wp_functions(): array {
-        return $this->allowed_wp_functions;
     }
 
     /**

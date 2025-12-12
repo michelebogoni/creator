@@ -84,19 +84,6 @@ export interface License {
 }
 
 /**
- * License data for creating a new license (without auto-generated fields)
- */
-export interface CreateLicenseData {
-  license_key: string;
-  site_url: string;
-  user_id: string;
-  plan: LicensePlan;
-  tokens_limit: number;
-  expires_at: Date;
-  reset_date: Date;
-}
-
-/**
  * License update data (partial update)
  */
 export interface UpdateLicenseData {

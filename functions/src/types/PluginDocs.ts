@@ -117,14 +117,6 @@ export interface PluginDocsStats {
 }
 
 /**
- * Request body for getting plugin docs
- */
-export interface GetPluginDocsRequest {
-  plugin_slug: string;
-  plugin_version: string;
-}
-
-/**
  * Request body for saving plugin docs
  */
 export interface SavePluginDocsRequest {
