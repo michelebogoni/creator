@@ -52,13 +52,18 @@ class Dashboard {
 	 * @return void
 	 */
 	public function register_page(): void {
+		// Custom SVG icon: bold left chevron "<" with rounded stroke
+		// Per DESIGN_SYSTEM: "Simbolo geometrico a metà tra 'C' e '<', in grassetto"
+		$icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L6 10L12 16"/></svg>';
+		$icon_base64 = 'data:image/svg+xml;base64,' . base64_encode( $icon_svg );
+
 		$this->hook_suffix = add_menu_page(
 			__( 'Creator Dashboard', 'creator-core' ),
 			__( 'Creator', 'creator-core' ),
 			'manage_options',
 			$this->page_slug,
 			[ $this, 'render_page' ],
-			'dashicons-format-chat',
+			$icon_base64,
 			30
 		);
 
@@ -251,7 +256,7 @@ class Dashboard {
 					<div class="creator-card-header">
 						<h2><?php esc_html_e( 'Chat History', 'creator-core' ); ?></h2>
 						<a href="<?php echo esc_url( admin_url( 'admin.php?page=creator-chat' ) ); ?>" class="button button-primary creator-start-chat-btn">
-							<span class="dashicons dashicons-star-filled"></span>
+							<span class="creator-icon-plus">+</span>
 							<?php esc_html_e( 'Start New Chat', 'creator-core' ); ?>
 						</a>
 					</div>
