@@ -159,8 +159,6 @@ class Dashboard {
 		$license_key = get_option( 'creator_license_key', '' );
 		?>
 		<div class="wrap creator-dashboard-wrap">
-			<h1 class="creator-dashboard-title"><?php esc_html_e( 'Creator Dashboard', 'creator-core' ); ?></h1>
-
 			<div id="creator-dashboard-app">
 				<!-- Top row: License & Usage cards -->
 				<div class="creator-dashboard-top-row">

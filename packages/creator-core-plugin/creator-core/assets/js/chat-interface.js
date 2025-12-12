@@ -1056,7 +1056,7 @@
          * Show error message
          */
         showError: function(message, showSettingsLink) {
-            const settingsUrl = creatorChat.settingsUrl || (creatorChat.adminUrl + '?page=creator-settings');
+            const settingsUrl = creatorChat.settingsUrl || (creatorChat.adminUrl + '?page=creator-dashboard');
             let errorContent = '**' + message + '**';
 
             if (showSettingsLink) {

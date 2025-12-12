@@ -346,7 +346,7 @@ class Activator {
      * @return void
      */
     private static function set_activation_redirect(): void {
-        // Always redirect to settings page after activation
+        // Always redirect to dashboard page after activation
         update_option( 'creator_do_activation_redirect', 'yes' );
     }
 
