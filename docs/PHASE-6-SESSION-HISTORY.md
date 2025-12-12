@@ -287,12 +287,45 @@ Documentation shows public API/WP-CLI?
 
 ---
 
+## Richiesta 6: Raffinamento Decision Flow
+
+**Richiesta utente**:
+> "Se sono presenti delle API o WP-CLI documentate per svolgere per determinato compito, allora le usiamo... Se invece il plugin non offre delle API o WP-CLI pubbliche... informiamo l'utente proponendogli due strade... Se invece abbiamo un caso intermedio..."
+
+**Problema identificato**: Il decision flow precedente era troppo semplice (solo YES/NO), non gestiva il caso intermedio dove le API coprono solo PARTE del task.
+
+### Fix: Decision Flow a 3 Scenari
+
+**File**: `functions/src/services/modelService.ts`
+
+Riscritta completamente la sezione decisionale con 3 scenari:
+
+**SCENARIO A - Full Coverage**: Le API/WP-CLI coprono TUTTO il task
+→ Usa API/WP-CLI e completa automaticamente
+
+**SCENARIO B - No Coverage**: Nessuna API/WP-CLI per il task
+→ Proponi 2 opzioni all'utente:
+  1. Approccio alternativo (senza quel plugin)
+  2. Istruzioni manuali per la UI del plugin
+
+**SCENARIO C - Partial Coverage**: API/WP-CLI coprono solo PARTE del task
+→ Approccio misto:
+  1. Completa automaticamente le parti supportate
+  2. Istruzioni manuali o alternativa per il resto
+
+**Esempi aggiunti**:
+- Scenario A: "List all WooCommerce products" → WP-CLI completo
+- Scenario B: "Create snippet" (plugin senza API) → 2 opzioni all'utente
+- Scenario C: "Create product with custom meta" → mix automatico + manuale
+
+---
+
 ## Stato Attuale
 
 **Completato**:
 - Sistema micro-step (backend)
 - UI roadmap (frontend)
-- Plugin Integration Safety dinamico
+- Plugin Integration Safety dinamico (con 3 scenari)
 - WPCLIExecutor con sicurezza
 
 **Da testare**:
