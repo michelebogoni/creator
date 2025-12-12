@@ -19,11 +19,18 @@ defined( 'ABSPATH' ) || exit;
 class Loader {
 
     /**
-     * Admin settings instance
+     * Admin dashboard instance
      *
-     * @var Admin\Settings|null
+     * @var Admin\Dashboard|null
      */
-    private ?Admin\Settings $settings = null;
+    private ?Admin\Dashboard $dashboard = null;
+
+    /**
+     * Dashboard API instance
+     *
+     * @var Admin\DashboardAPI|null
+     */
+    private ?Admin\DashboardAPI $dashboard_api = null;
 
     /**
      * Chat interface instance
@@ -76,8 +83,8 @@ class Loader {
      * @return void
      */
     private function init_admin(): void {
-        $this->settings = new Admin\Settings();
-        $this->settings->init();
+        $this->dashboard = new Admin\Dashboard();
+        $this->dashboard->init();
     }
 
     /**
@@ -98,18 +105,29 @@ class Loader {
     private function init_rest_api(): void {
         $this->chat_controller  = new Chat\ChatController();
         $this->debug_controller = new Debug\DebugController();
+        $this->dashboard_api    = new Admin\DashboardAPI();
 
         add_action( 'rest_api_init', [ $this->chat_controller, 'register_routes' ] );
         add_action( 'rest_api_init', [ $this->debug_controller, 'register_routes' ] );
+        add_action( 'rest_api_init', [ $this->dashboard_api, 'register_routes' ] );
     }
 
     /**
-     * Get settings instance
+     * Get dashboard instance
      *
-     * @return Admin\Settings|null
+     * @return Admin\Dashboard|null
      */
-    public function get_settings(): ?Admin\Settings {
-        return $this->settings;
+    public function get_dashboard(): ?Admin\Dashboard {
+        return $this->dashboard;
+    }
+
+    /**
+     * Get dashboard API instance
+     *
+     * @return Admin\DashboardAPI|null
+     */
+    public function get_dashboard_api(): ?Admin\DashboardAPI {
+        return $this->dashboard_api;
     }
 
     /**
