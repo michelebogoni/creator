@@ -1,28 +1,19 @@
-# Creator MVP - Roadmap e Specifiche Tecniche
+# Creator - Documentazione Completa del Progetto
 
-**Versione**: 3.0.0-MVP  
-**Data**: Dicembre 2025  
-**Stato**: Da Implementare
+**Versione:** 3.0.0-MVP  
+**Ultimo Aggiornamento:** Dicembre 2025  
+**Ambiente:** WordPress Plugin + Firebase Cloud Functions
 
 ---
 
 ## Indice
 
 1. [Cos'è Creator](#cosè-creator)
-2. [Obiettivi MVP](#obiettivi-mvp)
-3. [Principi Fondamentali](#principi-fondamentali)
-4. [Architettura del Sistema](#architettura-del-sistema)
-5. [Cosa Tenere e Cosa Eliminare](#cosa-tenere-e-cosa-eliminare)
-6. [Struttura File - WordPress Plugin](#struttura-file---wordpress-plugin)
-7. [Struttura File - Firebase Functions](#struttura-file---firebase-functions)
-8. [Formato Comunicazione AI](#formato-comunicazione-ai)
-9. [Flusso di Orchestrazione (4 Step)](#flusso-di-orchestrazione-4-step)
-10. [Sistema Documentazione Plugin](#sistema-documentazione-plugin)
-11. [System Prompt AI](#system-prompt-ai)
-12. [Specifiche Componenti WordPress](#specifiche-componenti-wordpress)
-13. [Specifiche Componenti Firebase](#specifiche-componenti-firebase)
-14. [Piano di Sviluppo](#piano-di-sviluppo)
-15. [Test di Validazione](#test-di-validazione)
+2. [Architettura Generale](#architettura-generale)
+3. [Firebase Cloud Functions](#firebase-cloud-functions)
+4. [Plugin WordPress](#plugin-wordpress)
+5. [Guida Deployment](#guida-deployment)
+6. [Stato Attuale del Progetto](#stato-attuale-del-progetto)
 
 ---
 
@@ -30,1862 +21,788 @@
 
 ### La Missione
 
-**Creator** è un plugin WordPress alimentato da intelligenza artificiale progettato per **sostituire un'intera agenzia di sviluppo e gestione siti web WordPress**.
+**Creator** è un plugin WordPress basato su intelligenza artificiale (Gemini e Claude) progettato con un obiettivo ambizioso: **sostituire un'intera agenzia di creazione siti web WordPress**.
 
-Non è un semplice chatbot che risponde a domande. Creator è un sistema operativo AI completo che:
+Non si tratta di un semplice assistente che risponde a domande o genera contenuti isolati. Creator è un sistema operativo AI completo, capace di comprendere richieste complesse, pianificare strategie di implementazione e **eseguire direttamente modifiche** sul sito WordPress dell'utente.
 
-1. **Comprende** richieste complesse in linguaggio naturale
-2. **Pianifica** strategie di implementazione
-3. **Esegue** direttamente modifiche sul sito WordPress
-4. **Verifica** che le modifiche siano state applicate correttamente
-5. **Corregge** eventuali errori autonomamente
+### Caratteristica Chiave: Universal PHP Engine
 
-### Cosa Può Fare Creator
+> **Elemento Critico**: Creator utilizza un **Universal PHP Engine** dove l'AI genera direttamente **codice PHP eseguibile**.
 
-Creator può eseguire **qualsiasi operazione** che un esperto WordPress potrebbe fare:
+Invece di un sistema con azioni hardcoded (es. `create_page`, `update_post`), l'AI genera codice PHP che utilizza le API native di WordPress (es. `wp_insert_post()`, `update_option()`). Questo approccio elimina completamente il mapping action→handler e offre flessibilità illimitata.
 
-| Categoria | Esempi di Operazioni |
-|-----------|---------------------|
-| **Contenuti** | Creare pagine, articoli, prodotti WooCommerce |
-| **Design** | Costruire layout completi con Elementor, stilizzare con CSS |
-| **Configurazione** | Settare plugin di cache, SEO, sicurezza |
-| **Sviluppo** | Scrivere snippet PHP, modificare functions.php |
-| **Manutenzione** | Aggiornare plugin, ottimizzare database |
-| **E-commerce** | Configurare WooCommerce, creare prodotti, gestire ordini |
+Quando un utente chiede "Crea una landing page per il mio prodotto con sezione hero, testimonianze e call-to-action", Creator:
 
-### Esempio di Task Complesso
+1. **Analizza** la richiesta e il contesto del sito
+2. **Genera codice PHP** che usa funzioni WordPress native
+3. **Valida la sicurezza** del codice (26+ funzioni pericolose bloccate)
+4. **Esegue** il codice in ambiente sandboxed con output buffering
+5. **Ritorna** risultato strutturato con output, return value, e eventuali errori
 
-Un utente può chiedere:
+### Capacità Operative
 
-```
-"Crea la homepage del sito usando Elementor con:
-- Hero Section con video background
-- Sezione Features a 3 colonne
-- Testimonials carousel
-- Pricing table
-- FAQ accordion
-- Footer con form contatto"
-```
+Creator può operare su molteplici aspetti di un sito WordPress:
 
-Creator analizzerà la richiesta, creerà un piano, eseguirà ogni sezione una alla volta, e verificherà il risultato finale.
+| Categoria | Operazioni Supportate |
+|-----------|----------------------|
+| **File System** | Scrittura/modifica di temi, child themes, `functions.php`, CSS personalizzati |
+| **Contenuti** | Creazione articoli, pagine, prodotti WooCommerce con contenuti completi |
+| **Page Building** | Generazione pagine code-based o Elementor-based con layout e design completi |
+| **Configurazione** | Setup plugin, impostazioni tema, configurazione ACF, RankMath SEO |
+| **Design** | Sviluppo completo dell'aspetto grafico tramite Elementor o CSS custom |
 
-### Caratteristica Chiave: Nessun Limite Hardcoded
+### Come Funziona: Apprendimento Contestuale
 
-Creator **NON** ha azioni predefinite. Non esiste una lista di "cose che può fare".
+Creator non opera "al buio". Prima di ogni operazione:
 
-L'AI genera direttamente **codice PHP** che viene eseguito su WordPress. Questo significa:
+1. **Riceve informazioni sull'ecosistema attuale** del sito (tema attivo, plugin installati, struttura esistente)
+2. **Consulta la documentazione** dei plugin in un repository dedicato per capire come utilizzare gli strumenti disponibili
+3. **Si integra perfettamente** con l'ecosistema specifico dell'utente, senza basarsi su sistemi predefiniti
 
-- Nessun limite alle operazioni possibili
-- Compatibilità con qualsiasi plugin (presente e futuro)
-- Adattamento automatico all'ecosistema dell'utente
+Questo approccio permette a Creator di:
+- Lavorare con qualsiasi combinazione di plugin WordPress
+- Adattarsi a configurazioni custom esistenti
+- Rispettare convenzioni e stili già presenti nel sito
 
----
+### Sistema Micro-Step per Operazioni Complesse
 
-## Obiettivi MVP
+Per task complessi, Creator utilizza un approccio a micro-step:
 
-### Obiettivo Primario
+1. **Analisi della complessità** - Determina se il task richiede una roadmap
+2. **Generazione roadmap** - Crea una sequenza di step numerati
+3. **Conferma utente** - L'utente approva o modifica la roadmap
+4. **Esecuzione step-by-step** - Ogni step viene eseguito con checkpoint
+5. **Verifica progressiva** - Accumula contesto e verifica risultati
+6. **Compressione history** - Ottimizza la conversazione per evitare limiti di token
 
-Creare un sistema funzionante end-to-end dove:
-
-1. L'utente scrive una richiesta nella chat
-2. Creator comprende, pianifica, esegue
-3. Le modifiche appaiono su WordPress
-
-### Obiettivi Specifici
-
-| # | Obiettivo | Priorità |
-|---|-----------|----------|
-| 1 | Chat funzionante con risposta AI | CRITICO |
-| 2 | Esecuzione codice PHP su WordPress | CRITICO |
-| 3 | Loop multi-step per task complessi | CRITICO |
-| 4 | Recupero documentazione plugin on-demand | ALTO |
-| 5 | Debug conversazione visibile | MEDIO |
-| 6 | Status log nella chat | MEDIO |
-
-### Non-Obiettivi MVP (Esclusi)
-
-- Sistema di backup/rollback
-- Integrazioni hardcoded con plugin specifici
-- Job queue per task asincroni
-- Analytics dettagliati
-- Rate limiting sofisticato
-- Security hardening
-- Gestione multi-utente
+Questo sistema garantisce affidabilità del 95% anche per operazioni complesse, mantenendo il controllo dell'utente sul processo.
 
 ---
 
-## Principi Fondamentali
+## Architettura Generale
 
-### 1. Soluzione B: PHP Puro
+### Panoramica del Sistema
 
-L'AI genera codice PHP che viene eseguito direttamente via `eval()`.
-
-```
-UTENTE: "Crea una pagina chiamata Test"
-
-AI GENERA:
-{
-  "type": "execute",
-  "code": "$page_id = wp_insert_post(['post_title' => 'Test', 'post_type' => 'page', 'post_status' => 'publish']); return ['success' => true, 'page_id' => $page_id];"
-}
-
-PLUGIN ESEGUE:
-eval($code);
-
-RISULTATO:
-Pagina creata su WordPress
-```
-
-### 2. Nessuna Integrazione Hardcoded
-
-Creator non sa "nativamente" come usare Elementor o WooCommerce. Impara leggendo la documentazione.
+Creator è composto da due componenti principali che comunicano via HTTPS:
 
 ```
-SBAGLIATO: ElementorIntegration.php con metodi specifici
-CORRETTO: L'AI legge la doc Elementor e genera il codice appropriato
+┌─────────────────────────────────────────────────────────────┐
+│                      WordPress Site                          │
+├──────────────────────────────────────────────────────────────┤
+│  Creator Plugin (creator-core)                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐ │
+│  │ChatInterface│→ │ChatController│→ │ConversationManager │ │
+│  │   (UI)      │  │  (REST API)  │  │  (Orchestration)   │ │
+│  └──────────────┘  └──────────────┘  └────────────────────┘ │
+│         │                                      │              │
+│         ↓                                      ↓              │
+│  ┌──────────────┐                    ┌────────────────────┐ │
+│  │ContextLoader │                    │ ResponseHandler    │ │
+│  │(WP Context)  │                    │ (Parse & Execute)  │ │
+│  └──────────────┘                    └────────────────────┘ │
+│         │                                      │              │
+│         └──────────────┬──────────────────────┘              │
+│                        ↓                                      │
+│              ┌──────────────┐                                │
+│              │ ProxyClient  │←───── JWT Token                │
+│              │ (HTTP)       │                                │
+│              └──────────────┘                                │
+└────────────────────┬─────────────────────────────────────────┘
+                     │ HTTPS
+                     ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  Firebase Cloud Functions                    │
+├──────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐ │
+│  │validateLicense│  │ routeRequest │  │  pluginDocs APIs   │ │
+│  │  (Auth)      │  │  (AI Proxy)  │  │  (Documentation)   │ │
+│  └──────────────┘  └──────────────┘  └────────────────────┘ │
+│         │                │                                    │
+│         ↓                ↓                                    │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │                    Middleware                          │  │
+│  │  auth.ts (JWT) | rateLimit.ts (Rate Limiting)         │  │
+│  └────────────────────────────────────────────────────────┘  │
+│         │                │                                    │
+│         ↓                ↓                                    │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │                    Services                            │  │
+│  │  ModelService (Routing) | PluginDocsResearch (AI)     │  │
+│  └────────────────────────────────────────────────────────┘  │
+│         │                │                                    │
+│         ↓                ↓                                    │
+│  ┌──────────────┐  ┌──────────────┐                         │
+│  │ Gemini.ts    │  │ Claude.ts    │  ← AI Providers         │
+│  │ (Google)     │  │ (Anthropic)  │                         │
+│  └──────────────┘  └──────────────┘                         │
+│                                                               │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │                    Firestore                           │  │
+│  │  licenses | audit_logs | rate_limits | plugin_docs    │  │
+│  └────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-### 3. Documentazione On-Demand
+### Flusso Operativo Completo
 
-L'AI riceve sempre la lista dei plugin installati. Quando serve, chiede la documentazione specifica.
-
-```
-CONTESTO BASE (sempre presente):
-- WordPress 6.4.2, PHP 8.2, MySQL 8.0
-- Tema: flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor 2.1.0
-- Plugin: Elementor 3.18, WooCommerce 8.4, RankMath 1.0.2...
-
-DOCUMENTAZIONE (richiesta quando serve):
-"Ho bisogno della documentazione di Elementor per creare la pagina"
-```
-
-### 4. Loop di Orchestrazione
-
-Ogni task segue 4 step:
-
-1. **Discovery**: Comprensione della richiesta
-2. **Strategy**: Pianificazione delle azioni
-3. **Implementation**: Esecuzione del codice
-4. **Verification**: Verifica del risultato
+1. **Utente invia messaggio** via ChatInterface
+2. **ChatController** (REST API) riceve la richiesta
+3. **ContextLoader** raccoglie informazioni sul sito (tema, plugin, versioni)
+4. **ProxyClient** invia richiesta a Firebase con JWT token
+5. **Firebase valida** token, rate limit, e quota
+6. **ModelService** seleziona provider AI (Gemini o Claude con fallback automatico)
+7. **AI Provider** genera risposta (codice PHP, istruzioni, roadmap)
+8. **ResponseHandler** analizza e esegue la risposta
+9. **ConversationManager** gestisce il flusso multi-turn
+10. **Risultato** viene mostrato all'utente con azioni eseguibili
 
 ---
 
-## Architettura del Sistema
+## Firebase Cloud Functions
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         WORDPRESS PLUGIN                             │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                     Chat Interface                            │   │
-│  │  - Input messaggio utente                                     │   │
-│  │  - Display conversazione                                      │   │
-│  │  - Status log ("Thinking...", "Executing 1/3...")             │   │
-│  │  - Debug panel (collapsabile)                                 │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                              │                                       │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    Core Components                            │   │
-│  │                                                                │   │
-│  │  ContextLoader ──────→ Raccoglie info WP, tema, plugin       │   │
-│  │                                                                │   │
-│  │  ProxyClient ────────→ Comunicazione con Firebase             │   │
-│  │                                                                │   │
-│  │  ResponseHandler ────→ Parsa risposta AI, decide azione       │   │
-│  │                                                                │   │
-│  │  CodeExecutor ───────→ Esegue PHP via eval()                  │   │
-│  │                                                                │   │
-│  │  ConversationManager → Gestisce history e loop multi-step    │   │
-│  │                                                                │   │
-│  │  DebugLogger ────────→ Log conversazione raw                  │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              │ HTTPS + JWT
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         FIREBASE FUNCTIONS                           │
-│                                                                      │
-│  validateLicense ───→ Valida licenza, genera JWT                    │
-│                                                                      │
-│  routeRequest ──────→ Riceve prompt + context                       │
-│                       Costruisce system prompt                       │
-│                       Allega documentazione (se richiesta)          │
-│                       Chiama AI (Gemini/Claude)                     │
-│                       Ritorna risposta JSON                         │
-│                                                                      │
-│  pluginDocs ────────→ Repository documentazione plugin              │
-│                       Cerca/salva documentazione                     │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────────┐
-                    │     FIRESTORE       │
-                    │   - licenses        │
-                    │   - plugin_docs     │
-                    └─────────────────────┘
-```
+### Informazioni Progetto
 
----
+- **Firebase Project ID**: `creator-ai-proxy`
+- **GCP Project Number**: `757337256338`
+- **Regioni**: `us-central1` (routeRequest), `europe-west1` (validateLicense)
 
-## Cosa Tenere e Cosa Eliminare
+### Funzioni Esportate
 
-### Firebase - DA TENERE ✅
+| Funzione | Metodo | Endpoint | Descrizione |
+|----------|--------|----------|-------------|
+| `validateLicense` | POST | `/api/auth/validate-license` | Valida licenza e genera JWT |
+| `routeRequest` | POST | `/api/ai/route-request` | Routing richieste AI con fallback |
+| `getPluginDocsApi` | GET | `/api/plugin-docs/:slug/:version` | Recupera docs dalla cache |
+| `savePluginDocsApi` | POST | `/api/plugin-docs` | Salva docs in cache |
+| `getPluginDocsStatsApi` | GET | `/api/plugin-docs/stats` | Statistiche repository |
+| `getPluginDocsAllVersionsApi` | GET | `/api/plugin-docs/all/:slug` | Tutte le versioni plugin |
+| `researchPluginDocsApi` | POST | `/api/plugin-docs/research` | Ricerca docs con AI |
+| `syncPluginDocsApi` | POST | `/api/plugin-docs/sync` | Sync docs per WordPress |
 
-| File/Componente | Stato | Note |
-|-----------------|-------|------|
-| `api/auth/validateLicense.ts` | ✅ Tenere | Funziona, non toccare |
-| `api/ai/routeRequest.ts` | ✅ Semplificare | Rimuovere logica extra |
-| `api/plugin-docs/*` | ✅ Tenere | Repository documentazione |
-| `services/licensing.ts` | ✅ Tenere | Funziona |
-| `services/modelService.ts` | ✅ Semplificare | Solo generate() |
-| `providers/gemini.ts` | ✅ Tenere | Pulire |
-| `providers/claude.ts` | ✅ Tenere | Pulire |
-| `middleware/auth.ts` | ✅ Tenere | JWT validation |
-| `middleware/rateLimit.ts` | ✅ Semplificare | Solo in-memory |
-| `lib/jwt.ts` | ✅ Tenere | Sign/verify |
-| `lib/firestore.ts` | ✅ Semplificare | Solo licenses + plugin_docs |
-| `lib/logger.ts` | ✅ Tenere | Logging |
-| `config/models.ts` | ✅ Tenere | Model IDs |
+### Service Accounts
 
-### Firebase - DA ELIMINARE ❌
+| Service Account | Scopo |
+|----------------|-------|
+| `757337256338-compute@developer.gserviceaccount.com` | Default Compute Engine - **usato per functions con secrets** |
+| `creator-ai-proxy@creator-ai-proxy.iam.gserviceaccount.com` | Default App Engine |
+| `firebase-adminsdk-fbsvc@creator-ai-proxy.iam.gserviceaccount.com` | Firebase Admin SDK |
 
-| File/Componente | Motivo |
-|-----------------|--------|
-| `api/analytics/*` | Non serve per MVP |
-| `api/tasks/*` | Job queue non serve |
-| `triggers/jobQueueTrigger.ts` | Non serve |
-| `services/costCalculator.ts` | Non serve |
-| `services/jobProcessor.ts` | Non serve |
-| `services/aiRouter.ts` | Logica nel modelService |
-| `providers/openai.ts` | Non utilizzato |
-| Tutti i file relativi a "tier" | Sistema rimosso |
+**Importante**: Tutte le funzioni che usano secrets devono specificare `serviceAccount: "757337256338-compute@developer.gserviceaccount.com"`.
 
-### WordPress Plugin - DA TENERE ✅
+### Secrets (Google Cloud Secret Manager)
 
-| Componente | Stato | Note |
-|------------|-------|------|
-| `creator-core.php` | ✅ Semplificare | Entry point |
-| `Loader.php` | ✅ Semplificare | Bootstrap minimo |
-| `ProxyClient.php` | ✅ Semplificare | Solo comunicazione |
-| `ContextLoader.php` | ✅ Adattare | Raccolta info |
-| Settings base | ✅ Semplificare | Solo license key |
+| Nome Secret | Descrizione |
+|-------------|-------------|
+| `JWT_SECRET` | Secret per firma JWT token autenticazione |
+| `GEMINI_API_KEY` | API key Google Gemini |
+| `CLAUDE_API_KEY` | API key Anthropic Claude |
 
-### WordPress Plugin - DA ELIMINARE ❌
+### Collezioni Firestore
 
-| Componente | Motivo |
-|------------|--------|
-| `SnapshotManager.php` | No backup/rollback |
-| `DeltaBackup.php` | No backup/rollback |
-| `Rollback.php` | No backup/rollback |
-| `ElementorPageBuilder.php` | No integrazioni hardcoded |
-| `ElementorSchemaLearner.php` | No integrazioni hardcoded |
-| `ElementorIntegration.php` | No integrazioni hardcoded |
-| `ElementorActionHandler.php` | No integrazioni hardcoded |
-| `ACFIntegration.php` | No integrazioni hardcoded |
-| `RankMathIntegration.php` | No integrazioni hardcoded |
-| `WooCommerceIntegration.php` | No integrazioni hardcoded |
-| `LiteSpeedIntegration.php` | No integrazioni hardcoded |
-| `WPCodeIntegration.php` | No integrazioni hardcoded |
-| `ActionDispatcher.php` (vecchio) | Logica azioni hardcoded |
-| Tutti gli ActionHandler specifici | No azioni hardcoded |
-| `SetupWizard.php` complesso | Troppo complesso |
-| Sistema permessi complesso | Non per MVP |
-| Rate limiting WP | Non per MVP |
-| Audit logger complesso | Non per MVP |
+#### 1. `licenses`
 
----
-
-## Struttura File - WordPress Plugin
-
-```
-creator-core/
-├── creator-core.php                 # Entry point plugin
-│
-├── includes/
-│   ├── Loader.php                   # Bootstrap e inizializzazione
-│   │
-│   ├── Admin/
-│   │   └── Settings.php             # Pagina settings (license key, proxy URL)
-│   │
-│   ├── Chat/
-│   │   ├── ChatInterface.php        # Registra pagina admin e assets
-│   │   └── ChatController.php       # REST endpoint POST /creator/v1/chat
-│   │
-│   ├── Context/
-│   │   └── ContextLoader.php        # Raccoglie info WP (tema, plugin, versioni)
-│   │
-│   ├── Conversation/
-│   │   └── ConversationManager.php  # Gestisce history e loop multi-step
-│   │
-│   ├── Response/
-│   │   └── ResponseHandler.php      # Parsa risposta AI, decide azione
-│   │
-│   ├── Executor/
-│   │   └── CodeExecutor.php         # Esegue PHP (eval wrapper)
-│   │
-│   ├── Proxy/
-│   │   └── ProxyClient.php          # Comunicazione con Firebase
-│   │
-│   └── Debug/
-│       └── DebugLogger.php          # Log conversazione per debug
-│
-├── assets/
-│   ├── js/
-│   │   └── chat.js                  # UI chat + status updates
-│   └── css/
-│       └── chat.css                 # Stili chat
-│
-└── views/
-    ├── chat.php                     # Template pagina chat
-    └── settings.php                 # Template pagina settings
-
-TOTALE: ~18 file
-```
-
----
-
-## Struttura File - Firebase Functions
-
-```
-functions/src/
-├── index.ts                         # Entry point, esporta functions
-│
-├── api/
-│   ├── auth/
-│   │   └── validateLicense.ts       # POST /validate-license
-│   │
-│   ├── ai/
-│   │   └── routeRequest.ts          # POST /route-request
-│   │
-│   └── plugin-docs/
-│       ├── getPluginDocs.ts         # GET /plugin-docs/:slug
-│       └── searchPluginDocs.ts      # POST /plugin-docs/search
-│
-├── services/
-│   ├── licensing.ts                 # Validazione licenze
-│   ├── modelService.ts              # Chiamate AI (Gemini/Claude)
-│   └── pluginDocsService.ts         # Gestione repository doc
-│
-├── providers/
-│   ├── gemini.ts                    # Google Gemini provider
-│   └── claude.ts                    # Anthropic Claude provider
-│
-├── middleware/
-│   ├── auth.ts                      # JWT authentication
-│   └── rateLimit.ts                 # Rate limiting in-memory
-│
-├── lib/
-│   ├── firestore.ts                 # Wrapper Firestore
-│   ├── jwt.ts                       # Sign/verify JWT
-│   ├── logger.ts                    # Structured logging
-│   └── secrets.ts                   # Firebase Secrets
-│
-├── config/
-│   └── models.ts                    # MODEL_IDS, configurazione
-│
-└── types/
-    ├── AIProvider.ts                # Interface provider
-    ├── Auth.ts                      # Types autenticazione
-    ├── Route.ts                     # Types richieste
-    └── PluginDocs.ts                # Types documentazione
-
-TOTALE: ~20 file
-```
-
----
-
-## Formato Comunicazione AI
-
-### Struttura Risposta JSON
-
-L'AI risponde **SEMPRE** con questo formato JSON:
-
-```json
-{
-  "step": "discovery | strategy | implementation | verification",
-  "type": "question | plan | execute | verify | complete | error | request_docs",
-  "status": "Stato breve per UI (es. 'Analyzing request...')",
-  "message": "Messaggio completo da mostrare all'utente",
-  "data": {},
-  "requires_confirmation": false,
-  "continue_automatically": true
-}
-```
-
-### Campi
+Gestisce licenze utente e quote.
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| `step` | string | Fase corrente del processo |
-| `type` | string | Tipo di risposta |
-| `status` | string | Messaggio breve per status log UI |
-| `message` | string | Messaggio completo per l'utente |
-| `data` | object | Dati specifici per tipo |
-| `requires_confirmation` | boolean | Se true, attende conferma utente |
-| `continue_automatically` | boolean | Se true, procede automaticamente |
+| `license_key` | string | Formato: `CREATOR-YYYY-XXXXX-XXXXX` |
+| `site_url` | string | URL sito WordPress registrato |
+| `site_token` | string | JWT token per autenticazione |
+| `user_id` | string | ID proprietario |
+| `plan` | string | `starter` \| `pro` \| `enterprise` |
+| `tokens_limit` | number | Limite token mensile |
+| `tokens_used` | number | Token utilizzati nel mese corrente |
+| `status` | string | `active` \| `suspended` \| `expired` |
+| `reset_date` | Timestamp | Data reset quota mensile |
+| `expires_at` | Timestamp | Scadenza licenza |
+| `created_at` | Timestamp | Data creazione |
+| `updated_at` | Timestamp | Ultimo aggiornamento |
 
-### Tipi di Risposta
+#### 2. `audit_logs`
 
-#### `type: "question"` - Domanda Chiarificatrice
+Log di tutte le richieste per compliance e debugging.
 
-```json
-{
-  "step": "discovery",
-  "type": "question",
-  "status": "Waiting for clarification...",
-  "message": "Per creare la landing page ho bisogno di sapere:\n\n1. Vuoi usare Elementor o l'editor classico?\n2. Hai già i contenuti o li genero io?",
-  "data": {},
-  "requires_confirmation": false,
-  "continue_automatically": false
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `license_id` | string | ID licenza |
+| `request_type` | string | `license_validation` \| `ai_request` \| `task_submission` |
+| `provider_used` | string | `gemini` \| `claude` |
+| `tokens_input` | number | Token input utilizzati |
+| `tokens_output` | number | Token output generati |
+| `cost_usd` | number | Costo operazione in USD |
+| `status` | string | `success` \| `failed` \| `timeout` |
+| `ip_address` | string | IP del client |
+| `response_time_ms` | number | Tempo risposta in millisecondi |
+| `metadata` | object | Dati aggiuntivi specifici della richiesta |
+| `created_at` | Timestamp | Data e ora richiesta |
+
+#### 3. `rate_limit_counters`
+
+Contatori per rate limiting per IP.
+
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `endpoint` | string | Endpoint limitato |
+| `ip_address` | string | IP del client |
+| `hour` | number | Bucket temporale (ora) |
+| `count` | number | Contatore richieste |
+| `ttl` | Timestamp | Auto-delete dopo 2 minuti |
+
+#### 4. `cost_tracking`
+
+Tracking costi mensili aggregati per licenza.
+
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `license_id` | string | ID licenza |
+| `month` | string | Formato: `YYYY-MM` |
+| `gemini_tokens_input` | number | Token input Gemini |
+| `gemini_tokens_output` | number | Token output Gemini |
+| `gemini_cost_usd` | number | Costo totale Gemini |
+| `claude_tokens_input` | number | Token input Claude |
+| `claude_tokens_output` | number | Token output Claude |
+| `claude_cost_usd` | number | Costo totale Claude |
+| `total_cost_usd` | number | Costo totale mensile |
+
+#### 5. `plugin_docs_cache`
+
+Cache centralizzata documentazione plugin WordPress.
+
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `plugin_slug` | string | Es: `advanced-custom-fields` |
+| `plugin_version` | string | Es: `6.2.5` |
+| `docs_url` | string | URL documentazione ufficiale |
+| `main_functions` | string[] | Funzioni principali del plugin |
+| `api_reference` | string | URL API reference |
+| `version_notes` | string[] | Note versione |
+| `cached_at` | Timestamp | Data cache |
+| `cache_hits` | number | Contatore utilizzi |
+| `source` | string | `ai_research` \| `manual` \| `fallback` |
+| `research_meta` | object | Metadati ricerca AI |
+
+### Provider AI
+
+#### Modelli Configurati
+
+| Provider | Model ID | Input $/1k | Output $/1k |
+|----------|----------|------------|-------------|
+| **Claude** | `claude-opus-4-5-20251101` | $0.015 | $0.075 |
+| **Gemini** | `gemini-2.5-pro-preview-05-06` | $0.00125 | $0.005 |
+
+#### Strategia Routing
+
+Creator utilizza un sistema di routing semplificato con fallback automatico:
+
+```typescript
+DEFAULT_ROUTING = {
+  primary: claude,    // Provider primario per tutte le richieste
+  fallback: gemini    // Fallback automatico se Claude fallisce
 }
 ```
 
-#### `type: "plan"` - Piano d'Azione
+Se Claude fallisce per qualsiasi motivo (rate limit, errore API, timeout), il sistema prova automaticamente Gemini come fallback, garantendo alta disponibilità del servizio.
 
-```json
-{
-  "step": "strategy",
-  "type": "plan",
-  "status": "Plan ready",
-  "message": "Ecco il piano per creare la homepage:",
-  "data": {
-    "actions": [
-      { "index": 1, "description": "Creare pagina base con template Elementor Canvas" },
-      { "index": 2, "description": "Costruire Hero Section con video background" },
-      { "index": 3, "description": "Aggiungere Features Section (3 colonne)" }
-    ],
-    "total_actions": 3,
-    "estimated_time": "2-3 minuti"
+### Struttura Directory Firebase
+
+```
+functions/
+├── src/
+│   ├── index.ts                      # Export funzioni
+│   ├── api/
+│   │   ├── ai/
+│   │   │   └── routeRequest.ts       # Endpoint AI principale
+│   │   ├── auth/
+│   │   │   └── validateLicense.ts    # Validazione licenze
+│   │   └── plugin-docs/
+│   │       └── pluginDocs.ts         # 6 endpoint plugin docs
+│   ├── services/
+│   │   ├── modelService.ts           # Logica routing AI
+│   │   ├── licensing.ts              # Validazione licenze
+│   │   └── pluginDocsResearch.ts     # Ricerca AI docs
+│   ├── providers/
+│   │   ├── gemini.ts                 # Provider Gemini
+│   │   └── claude.ts                 # Provider Claude
+│   ├── lib/
+│   │   ├── firestore.ts              # Operazioni database
+│   │   ├── jwt.ts                    # Gestione JWT
+│   │   ├── secrets.ts                # Definizione secrets
+│   │   └── logger.ts                 # Logging strutturato
+│   ├── middleware/
+│   │   ├── auth.ts                   # Autenticazione JWT
+│   │   └── rateLimit.ts              # Rate limiting
+│   ├── config/
+│   │   └── models.ts                 # Configurazione modelli AI
+│   ├── types/
+│   │   ├── License.ts
+│   │   ├── Route.ts
+│   │   ├── PluginDocs.ts
+│   │   └── ...
+│   └── utils/
+│       └── promptUtils.ts            # Validazione prompt
+├── .eslintrc.js
+├── package.json
+├── package-lock.json
+└── tsconfig.json
+```
+
+### Context WordPress
+
+Il contesto WordPress viene passato nelle richieste AI per personalizzare le risposte:
+
+```typescript
+context: {
+  wordpress: {
+    version: "6.9",
+    language: "it_IT",
+    is_multisite: false,
+    site_url: "https://example.com"
   },
-  "requires_confirmation": true,
-  "continue_automatically": false
-}
-```
-
-#### `type: "execute"` - Esecuzione Codice
-
-```json
-{
-  "step": "implementation",
-  "type": "execute",
-  "status": "Executing step 1/3...",
-  "message": "Sto creando la pagina base...",
-  "data": {
-    "code": "$page_id = wp_insert_post(['post_title' => 'Homepage', 'post_type' => 'page', 'post_status' => 'draft', 'meta_input' => ['_elementor_edit_mode' => 'builder']]); return ['success' => true, 'page_id' => $page_id];",
-    "action_index": 1,
-    "action_total": 3,
-    "action_description": "Creazione pagina base"
+  environment: {
+    php_version: "8.2.29",
+    mysql_version: "8.0",
+    memory_limit: "256M",
+    debug_mode: false
   },
-  "requires_confirmation": false,
-  "continue_automatically": true
-}
-```
-
-#### `type: "verify"` - Verifica Risultato
-
-```json
-{
-  "step": "verification",
-  "type": "verify",
-  "status": "Verifying...",
-  "message": "Verifico che la pagina sia stata creata...",
-  "data": {
-    "code": "$page = get_post($context['last_result']['page_id']); return ['exists' => !empty($page), 'title' => $page->post_title, 'status' => $page->post_status];",
-    "expected": {
-      "exists": true
-    }
+  theme: {
+    name: "Hello Elementor",
+    version: "3.0.0",
+    is_child: false
   },
-  "requires_confirmation": false,
-  "continue_automatically": true
-}
-```
-
-#### `type: "complete"` - Task Completato
-
-```json
-{
-  "step": "verification",
-  "type": "complete",
-  "status": "Completed",
-  "message": "✅ Homepage creata con successo!\n\nLa pagina è in bozza. Puoi trovarla qui: /wp-admin/post.php?post=123&action=edit\n\nVuoi che la pubblichi?",
-  "data": {
-    "summary": {
-      "pages_created": 1,
-      "sections_added": 3
-    },
-    "links": [
-      { "label": "Modifica pagina", "url": "/wp-admin/post.php?post=123&action=edit" }
-    ]
-  },
-  "requires_confirmation": false,
-  "continue_automatically": false
-}
-```
-
-#### `type: "error"` - Errore
-
-```json
-{
-  "step": "implementation",
-  "type": "error",
-  "status": "Error occurred",
-  "message": "Si è verificato un errore durante la creazione della pagina:\n\n`wp_insert_post` ha ritornato un errore: 'Invalid post type'",
-  "data": {
-    "error_code": "WP_INSERT_ERROR",
-    "error_message": "Invalid post type",
-    "recoverable": true,
-    "suggestion": "Verifico se il post type 'page' è disponibile e riprovo con un approccio diverso."
-  },
-  "requires_confirmation": false,
-  "continue_automatically": true
-}
-```
-
-#### `type: "request_docs"` - Richiesta Documentazione
-
-```json
-{
-  "step": "discovery",
-  "type": "request_docs",
-  "status": "Fetching documentation...",
-  "message": "Recupero la documentazione necessaria...",
-  "data": {
-    "plugins_needed": ["elementor", "contact-form-7"],
-    "reason": "Per creare la landing page con form di contatto"
-  },
-  "requires_confirmation": false,
-  "continue_automatically": true
-}
-```
-
----
-
-## Flusso di Orchestrazione (4 Step)
-
-### Step 1: Discovery
-
-**Obiettivo**: Comprendere esattamente cosa vuole l'utente.
-
-**Comportamento AI**:
-- Se la richiesta è chiara e completa → passa a Strategy
-- Se la richiesta è ambigua → fa domande chiarificatrici
-- Se servono informazioni su plugin → richiede documentazione
-
-**Esempio**:
-```
-UTENTE: "Crea una landing page"
-
-AI (Discovery):
-"Per creare la landing page ho bisogno di alcune informazioni:
-1. Vuoi usare Elementor o l'editor classico?
-2. Quante sezioni deve avere?
-3. Hai già i contenuti o li genero io?"
-```
-
-### Step 2: Strategy
-
-**Obiettivo**: Creare un piano d'azione dettagliato.
-
-**Comportamento AI**:
-- Analizza la richiesta compresa
-- Crea un piano con azioni numerate
-- Chiede conferma all'utente (se task complesso)
-
-**Esempio**:
-```
-UTENTE: "Usa Elementor, 5 sezioni, genera i contenuti tu"
-
-AI (Strategy):
-"Ecco il piano:
-1. Creare pagina WordPress con template Elementor
-2. Costruire Hero Section
-3. Costruire Features Section
-4. Costruire Testimonials Section
-5. Costruire CTA Section
-6. Costruire Footer Section
-
-Procedo?"
-```
-
-### Step 3: Implementation
-
-**Obiettivo**: Eseguire il piano, un'azione alla volta.
-
-**Comportamento AI**:
-- Genera codice PHP per ogni azione
-- Aspetta il risultato dell'esecuzione
-- Passa alla prossima azione o gestisce errori
-
-**Esempio**:
-```
-AI (Implementation - Step 1/6):
-{
-  "type": "execute",
-  "code": "// Codice PHP per creare la pagina",
-  "action_index": 1,
-  "action_total": 6
-}
-
-[Plugin esegue, ritorna risultato]
-
-AI (Implementation - Step 2/6):
-{
-  "type": "execute", 
-  "code": "// Codice PHP per Hero Section",
-  "action_index": 2,
-  "action_total": 6
-}
-
-[...continua...]
-```
-
-### Step 4: Verification
-
-**Obiettivo**: Verificare che tutto sia stato eseguito correttamente.
-
-**Comportamento AI**:
-- Esegue controlli di verifica
-- Se qualcosa non va → torna a Strategy con nuovo approccio
-- Se tutto ok → mostra messaggio di completamento
-
-**Esempio**:
-```
-AI (Verification):
-{
-  "type": "verify",
-  "code": "// Codice per verificare che la pagina esista e abbia le sezioni"
-}
-
-[Plugin esegue verifica]
-
-AI (Complete):
-"✅ Landing page creata con successo!
-- 5 sezioni aggiunte
-- Pagina in bozza
-- Link: /wp-admin/post.php?post=123
-
-Vuoi che la pubblichi?"
-```
-
----
-
-## Sistema Documentazione Plugin
-
-### Contesto Base (Sempre Inviato)
-
-```json
-{
-  "wordpress": {
-    "version": "6.4.2",
-    "locale": "it_IT",
-    "multisite": false
-  },
-  "php": {
-    "version": "8.2.0"
-  },
-  "mysql": {
-    "version": "8.0.35"
-  },
-  "theme": {
-    "name": "flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor",
-    "version": "2.1.0",
-    "parent": null
-  },
-  "plugins": [
-    {
-      "name": "Elementor",
-      "slug": "elementor",
-      "version": "3.18.0",
-      "active": true
-    },
-    {
-      "name": "WooCommerce", 
-      "slug": "woocommerce",
-      "version": "8.4.0",
-      "active": true
-    },
-    {
-      "name": "Rank Math SEO",
-      "slug": "seo-by-flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor flavor-flavor-seo",
-      "version": "1.0.208",
-      "active": true
-    },
-    {
-      "name": "Speed Optimizer",
-      "slug": "sg-cachepress", 
-      "version": "7.4.0",
-      "active": true
-    }
+  plugins: [
+    { name: "Elementor", version: "3.18.0" },
+    { name: "WooCommerce", version: "8.5.0" }
   ]
 }
 ```
 
-### Flusso Documentazione On-Demand
-
-```
-1. UTENTE: "Ottimizza la cache del sito"
-
-2. AI vede la lista plugin, identifica Speed Optimizer
-
-3. AI risponde:
-   {
-     "type": "request_docs",
-     "data": {
-       "plugins_needed": ["sg-cachepress"],
-       "reason": "Configurazione cache"
-     }
-   }
-
-4. PLUGIN:
-   - Riceve richiesta
-   - Chiama Firebase: GET /plugin-docs/sg-cachepress?version=7.4.0
-   - Firebase cerca nel repository
-   - Se non trovata: cerca online e salva
-   - Ritorna documentazione
-
-5. PLUGIN richiama AI con:
-   {
-     "prompt": "[messaggio originale]",
-     "context": { ...contesto base... },
-     "documentation": {
-       "sg-cachepress": "Speed Optimizer Documentation v7.4\n\n## Options\n..."
-     }
-   }
-
-6. AI continua normalmente con la documentazione disponibile
-```
-
-### Struttura Repository Firestore
-
-```
-plugin_docs/
-├── elementor/
-│   ├── 3.18.0: { doc: "...", fetched_at: "2024-12-10", source: "https://..." }
-│   ├── 3.17.0: { doc: "...", fetched_at: "2024-11-15", source: "https://..." }
-│   └── latest: "3.18.0"
-├── woocommerce/
-│   ├── 8.4.0: { doc: "...", fetched_at: "2024-12-08", source: "https://..." }
-│   └── latest: "8.4.0"
-└── sg-cachepress/
-    ├── 7.4.0: { doc: "...", fetched_at: "2024-12-10", source: "https://..." }
-    └── latest: "7.4.0"
-```
+Questo contesto viene:
+1. Loggato per debug
+2. Aggiunto al system prompt dell'AI
+3. Inserito come header nel prompt utente
 
 ---
 
-## System Prompt AI
+## Plugin WordPress
 
-### Prompt Base
+### Informazioni Plugin
+
+- **Nome**: Creator Core
+- **Slug**: `creator-core`
+- **Namespace PHP**: `CreatorCore\`
+- **Versione**: 3.0.0-MVP
+- **Autoloader**: PSR-4 custom
+
+### Struttura Directory
 
 ```
-You are Creator, an AI-powered WordPress development assistant. Your role is to help users build, configure, and manage WordPress websites by generating and executing PHP code directly.
-
-## CORE PRINCIPLES
-
-1. **You can do ANYTHING a WordPress expert can do** - there are no hardcoded limits
-2. **You generate PHP code** that gets executed on WordPress
-3. **You learn from documentation** - you don't have built-in knowledge of specific plugins
-4. **You follow a 4-step process**: Discovery → Strategy → Implementation → Verification
-
-## RESPONSE FORMAT
-
-You MUST respond with valid JSON in this exact format:
-
-```json
-{
-  "step": "discovery | strategy | implementation | verification",
-  "type": "question | plan | execute | verify | complete | error | request_docs",
-  "status": "Short status for UI",
-  "message": "Full message for user",
-  "data": {},
-  "requires_confirmation": false,
-  "continue_automatically": true
-}
+creator-core/
+├── creator-core.php              # Main plugin file
+├── composer.json                 # PHP dependencies
+├── phpunit.xml                   # PHPUnit configuration
+├── uninstall.php                 # Cleanup on uninstall
+├── assets/
+│   ├── js/
+│   │   ├── chat-interface.js     # Chat UI logic
+│   │   ├── action-handler.js     # Action execution
+│   │   └── debug-panel.js        # Debug functionality
+│   └── css/
+│       ├── chat-interface.css    # Chat styles
+│       └── admin-common.css      # Common admin styles
+├── database/
+│   ├── migrations.php            # Migration system
+│   └── schema.sql                # Database schema
+├── includes/
+│   ├── Activator.php             # Activation hooks
+│   ├── Deactivator.php           # Deactivation hooks
+│   ├── Autoloader.php            # PSR-4 autoloader
+│   ├── Loader.php                # Plugin bootstrap
+│   ├── Admin/
+│   │   └── Settings.php          # Settings page
+│   ├── Chat/
+│   │   ├── ChatInterface.php     # Chat UI registration
+│   │   └── ChatController.php    # REST API endpoint
+│   ├── Context/
+│   │   └── ContextLoader.php     # WP context collection
+│   ├── Conversation/
+│   │   └── ConversationManager.php # Multi-turn orchestration
+│   ├── Debug/
+│   │   ├── DebugController.php   # Debug REST endpoints
+│   │   └── DebugLogger.php       # Conversation logging
+│   ├── Execution/
+│   │   └── WPCLIExecutor.php     # WP-CLI command execution
+│   ├── Executor/
+│   │   └── CodeExecutor.php      # PHP code execution via eval
+│   ├── Proxy/
+│   │   └── ProxyClient.php       # Firebase HTTP client
+│   └── Response/
+│       └── ResponseHandler.php   # AI response processing
+└── tests/
+    ├── bootstrap.php
+    ├── stubs/
+    │   └── wordpress-stubs.php
+    ├── Unit/                     # Unit tests
+    └── Integration/              # Integration tests
 ```
 
-## ORCHESTRATION PROCESS
+### Componenti Principali
 
-### Step 1: Discovery
-- If the request is clear and complete → proceed to Strategy
-- If the request is ambiguous → ask clarifying questions (type: "question")
-- If you need plugin documentation → request it (type: "request_docs")
+#### 1. ChatInterface & ChatController
 
-### Step 2: Strategy
-- Create a numbered action plan
-- For complex tasks (3+ actions), ask for user confirmation
-- Include estimated steps and time
+**ChatInterface.php** (`CreatorCore\Chat\ChatInterface`)
+- Registra la pagina admin nel menu WordPress
+- Enqueues assets (JS e CSS)
+- Renderizza l'interfaccia HTML della chat
 
-### Step 3: Implementation
-- Generate PHP code for each action
-- Execute one action at a time
-- Wait for result before proceeding
-- Handle errors gracefully
+**ChatController.php** (`CreatorCore\Chat\ChatController`)
+- Gestisce l'endpoint REST `POST /wp-json/creator/v1/chat`
+- Valida le richieste in ingresso
+- Orchestra il flusso della conversazione
+- Implementa loop handling per roadmap e checkpoint
 
-### Step 4: Verification
-- Verify the results match expectations
-- If something failed → return to Strategy with alternative approach
-- If all succeeded → show completion message
+#### 2. ConversationManager
 
-## CODE EXECUTION
+**ConversationManager.php** (`CreatorCore\Conversation\ConversationManager`)
+- Orchestrazione conversazioni multi-turn con AI
+- Implementa il ciclo a 4 fasi:
+  - **Discovery**: Raccolta informazioni e chiarimenti
+  - **Strategy**: Pianificazione approccio
+  - **Implementation**: Esecuzione operazioni
+  - **Verification**: Verifica risultati
+- Gestisce roadmap per operazioni complesse
+- Accumula contesto tra step successivi
 
-When generating code (type: "execute"), the code will be executed via eval() in WordPress context.
+#### 3. ContextLoader
 
-**Available in scope:**
-- All WordPress functions (wp_insert_post, get_posts, update_option, etc.)
-- $wpdb for database queries
-- All active plugin functions
-- $context array with previous results
+**ContextLoader.php** (`CreatorCore\Context\ContextLoader`)
+- Raccoglie informazioni sull'ambiente WordPress:
+  - Versione WordPress, PHP, MySQL
+  - Tema attivo e se è child theme
+  - Plugin installati e attivi con versioni
+  - Impostazioni sito (lingua, multisite, URLs)
+  - Custom Post Types e tassonomie
+- Lazy-loading di contesto dettagliato su richiesta AI
 
-**Code requirements:**
-- Must be valid PHP
-- Must return a result array (success/failure + data)
-- Should handle errors gracefully
-- No <?php tags needed
+#### 4. ProxyClient
 
-**Example:**
-```php
-$page_id = wp_insert_post([
-    'post_title' => 'My Page',
-    'post_type' => 'page',
-    'post_status' => 'publish'
-]);
+**ProxyClient.php** (`CreatorCore\Proxy\ProxyClient`)
+- Client HTTP per comunicazione con Firebase
+- Gestisce autenticazione JWT
+- Metodi principali:
+  - `validate_license()`: Validazione licenza e ottenimento token
+  - `send_to_ai()`: Invio richieste AI con context
+  - `get_plugin_docs()`: Ricerca documentazione plugin
+  - `refresh_token()`: Rinnovo automatico token scaduto
+- Implementa retry logic con exponential backoff
+- Logging completo errori network e HTTP
 
-if (is_wp_error($page_id)) {
-    return ['success' => false, 'error' => $page_id->get_error_message()];
-}
+#### 5. ResponseHandler
 
-return ['success' => true, 'page_id' => $page_id];
-```
+**ResponseHandler.php** (`CreatorCore\Response\ResponseHandler`)
+- Analizza risposte AI e determina il tipo
+- Gestisce diversi response types:
+  - `question`: Domande di chiarimento
+  - `plan`: Piani di azione
+  - `roadmap`: Roadmap per task complessi
+  - `execute`: Esecuzione codice PHP
+  - `execute_step`: Singolo step di roadmap
+  - `checkpoint`: Verifica intermedia
+  - `compress_history`: Compressione conversazione
+  - `verify`: Verifica risultati
+  - `complete`: Operazione completata
+  - `error`: Gestione errori
+  - `request_docs`: Richiesta documentazione plugin
+  - `wp_cli`: Esecuzione comandi WP-CLI
 
-## DOCUMENTATION
+#### 6. CodeExecutor
 
-You receive the WordPress context with:
-- WordPress, PHP, MySQL versions
-- Active theme and version
-- List of installed plugins with versions
+**CodeExecutor.php** (`CreatorCore\Executor\CodeExecutor`)
+- Esegue codice PHP generato dall'AI via `eval()`
+- Security features:
+  - Blacklist di 26+ funzioni pericolose (exec, shell_exec, eval, system, etc.)
+  - Validazione sintassi PHP
+  - Output buffering per catturare echo/print
+  - Error handler custom per catturare errori
+  - Timeout configurabile
+- Preparazione codice: wrapping in try-catch, namespace adjustment
+- Restituisce output, return value, ed eventuali errori
 
-When you need to use a plugin's specific functions, request its documentation:
-```json
-{
-  "type": "request_docs",
-  "data": {
-    "plugins_needed": ["plugin-slug"],
-    "reason": "Why you need it"
-  }
-}
-```
+#### 7. WPCLIExecutor
 
-The documentation will be provided and you can continue.
+**WPCLIExecutor.php** (`CreatorCore\Execution\WPCLIExecutor`)
+- Esegue comandi WP-CLI in modo sicuro
+- Whitelist comandi permessi:
+  - `wp post`, `wp page`, `wp media`, `wp menu`, `wp widget`
+  - `wp comment`, `wp term`, `wp taxonomy`
+  - `wp user` (solo lettura: list, get, meta)
+  - `wp option` (get, list, update, add)
+  - `wp plugin`, `wp theme` (solo lettura)
+  - `wp transient`, `wp cache`, `wp rewrite`, `wp cron`
+  - Plugin specifici: `wp wc`, `wp acf`, `wp elementor`, `wp wpcode`
+- Blacklist pattern bloccati:
+  - `--allow-root`, `eval`, `eval-file`, `shell`
+  - `db drop`, `db reset`, `site delete`
+  - `plugin install/delete/update`, `theme install/delete/update`
+  - `user create/delete/update`
+  - Redirect, pipe, chaining, substitution: `>`, `|`, `;`, `&&`, `||`, `` ` ``, `$(`
+- Auto-detection path WP-CLI
+- Timeout 30 secondi
+- Output JSON parsing
 
-## LANGUAGE
+#### 8. DebugLogger & DebugController
 
-- Respond in the same language as the user's message
-- Italian users → respond in Italian
-- English users → respond in English
+**DebugLogger.php** (`CreatorCore\Debug\DebugLogger`)
+- Logging conversazioni e interazioni AI su file
+- Supporta log rotation e limiti di dimensione
+- File logs in `wp-content/uploads/creator-logs/`
 
-## IMPORTANT RULES
+**DebugController.php** (`CreatorCore\Debug\DebugController`)
+- REST endpoints per debug:
+  - `GET /wp-json/creator/v1/debug/conversation-history`
+  - `GET /wp-json/creator/v1/debug/message/:id`
+  - `GET /wp-json/creator/v1/debug/logs`
 
-1. NEVER say "I can't do this" - you can do anything via PHP
-2. NEVER make up plugin functions - request documentation if unsure
-3. ALWAYS return valid JSON
-4. ALWAYS include status for UI feedback
-5. For multi-step tasks, execute ONE step at a time
-6. If an error occurs, try an alternative approach before giving up
-```
+### Database Tables
+
+Il plugin crea 4 tabelle custom:
+
+| Tabella | Descrizione |
+|---------|-------------|
+| `{prefix}_creator_conversations` | Conversazioni utente con timestamp e metadata |
+| `{prefix}_creator_messages` | Singoli messaggi in conversazioni (user/assistant) |
+| `{prefix}_creator_snapshots` | Snapshot pre-operazione per rollback |
+| `{prefix}_creator_audit_logs` | Log audit operazioni eseguite |
+
+### System Prompts AI
+
+Il plugin definisce system prompts complessi che istruiscono l'AI su:
+
+1. **Ruolo e capacità**: WordPress assistant con accesso completo al sito
+2. **Response format**: JSON strutturato con type, content, actions
+3. **Approccio micro-step**: Quando creare roadmap per task complessi
+4. **Plugin integration safety**: Come operare sui plugin (API, WP-CLI, manual)
+5. **Sicurezza**: Cosa NON fare (mai manipolare internals plugin, sempre verificare docs)
+6. **Context management**: Lazy-loading e compressione history
 
 ---
 
-## Specifiche Componenti WordPress
+## Guida Deployment
 
-### 1. creator-core.php
+### Ambiente di Lavoro
 
-**Responsabilità**: Entry point del plugin
-
-```php
-<?php
-/**
- * Plugin Name: Creator Core
- * Description: AI-powered WordPress development assistant
- * Version: 3.0.0
- * Requires PHP: 7.4
- */
-
-defined('ABSPATH') || exit;
-
-define('CREATOR_VERSION', '3.0.0');
-define('CREATOR_PLUGIN_DIR', plugin_dir_path(__FILE__));
-define('CREATOR_PLUGIN_URL', plugin_dir_url(__FILE__));
-
-// Autoloader
-spl_autoload_register(function ($class) {
-    $prefix = 'CreatorCore\\';
-    if (strncmp($prefix, $class, strlen($prefix)) !== 0) return;
-    
-    $relative_class = substr($class, strlen($prefix));
-    $file = CREATOR_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', $relative_class) . '.php';
-    
-    if (file_exists($file)) require $file;
-});
-
-// Bootstrap
-add_action('plugins_loaded', function() {
-    $loader = new CreatorCore\Loader();
-    $loader->init();
-});
+**Directory Locale Progetto**:
+```
+/Users/michele/creator-ai-proxy/
 ```
 
-### 2. Loader.php
+**Utente di Sviluppo**: Michele
 
-**Responsabilità**: Inizializzazione componenti
+**Branch di Lavoro**: Tipicamente feature branches, con merge su `main` per production deploy
 
-```php
-<?php
-namespace CreatorCore;
+### Prerequisiti
 
-class Loader {
-    public function init(): void {
-        // Admin pages
-        if (is_admin()) {
-            new Admin\Settings();
-            new Chat\ChatInterface();
-        }
-        
-        // REST API
-        add_action('rest_api_init', [$this, 'register_routes']);
-    }
-    
-    public function register_routes(): void {
-        $chat_controller = new Chat\ChatController();
-        $chat_controller->register_routes();
-    }
-}
+#### Node.js Version
+
+**CRITICO**: Il progetto richiede Node.js 20.
+
+Firebase Cloud Build usa Node 20 per compilare le functions. Se generi `package-lock.json` con una versione diversa (es. Node 24), il deployment fallirà.
+
+**Installare e usare Node 20**:
+
+```bash
+# Installare nvm (Node Version Manager)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+source ~/.zshrc  # o source ~/.bashrc
+
+# Installare e usare Node 20
+nvm install 20
+nvm use 20
 ```
 
-### 3. ChatController.php
+### Workflow Deployment
 
-**Responsabilità**: REST endpoint per la chat
+#### 1. Sync con GitHub
 
-```php
-<?php
-namespace CreatorCore\Chat;
+```bash
+cd /Users/michele/creator-ai-proxy
 
-class ChatController {
-    
-    public function register_routes(): void {
-        register_rest_route('creator/v1', '/chat', [
-            'methods' => 'POST',
-            'callback' => [$this, 'handle_message'],
-            'permission_callback' => [$this, 'check_permissions'],
-        ]);
-    }
-    
-    public function check_permissions(): bool {
-        return current_user_can('manage_options');
-    }
-    
-    public function handle_message(\WP_REST_Request $request): \WP_REST_Response {
-        $message = sanitize_textarea_field($request->get_param('message'));
-        $conversation_id = sanitize_text_field($request->get_param('conversation_id'));
-        
-        $conversation_manager = new \CreatorCore\Conversation\ConversationManager();
-        $response = $conversation_manager->process_message($message, $conversation_id);
-        
-        return new \WP_REST_Response($response, 200);
-    }
-}
+# Sync main branch
+git checkout main
+git pull origin main
+
+# Fetch branch di lavoro
+git fetch origin <branch-name>
+
+# Reset a remote (scarta modifiche locali)
+git reset --hard origin/<branch-name>
+
+# OPPURE merge modifiche remote
+git pull origin <branch-name> --no-rebase
 ```
 
-### 4. ConversationManager.php
+#### 2. Preparare Functions
 
-**Responsabilità**: Gestione conversazione e loop multi-step
+```bash
+cd functions
 
-```php
-<?php
-namespace CreatorCore\Conversation;
+# IMPORTANTE: Usare Node 20
+nvm use 20
 
-class ConversationManager {
-    
-    private $proxy_client;
-    private $response_handler;
-    private $context_loader;
-    private $debug_logger;
-    
-    public function __construct() {
-        $this->proxy_client = new \CreatorCore\Proxy\ProxyClient();
-        $this->response_handler = new \CreatorCore\Response\ResponseHandler();
-        $this->context_loader = new \CreatorCore\Context\ContextLoader();
-        $this->debug_logger = new \CreatorCore\Debug\DebugLogger();
-    }
-    
-    public function process_message(string $message, string $conversation_id): array {
-        // Carica contesto WP
-        $context = $this->context_loader->get_context();
-        
-        // Carica history conversazione
-        $history = $this->get_conversation_history($conversation_id);
-        
-        // Invia a Firebase
-        $ai_response = $this->proxy_client->send_message([
-            'prompt' => $message,
-            'context' => $context,
-            'conversation_history' => $history,
-        ]);
-        
-        // Log per debug
-        $this->debug_logger->log($message, $ai_response);
-        
-        // Processa risposta
-        $result = $this->response_handler->handle($ai_response, $context);
-        
-        // Se continue_automatically, continua il loop
-        if ($result['continue_automatically'] ?? false) {
-            return $this->continue_loop($result, $conversation_id, $context);
-        }
-        
-        // Salva in history
-        $this->save_to_history($conversation_id, $message, $ai_response);
-        
-        return $result;
-    }
-    
-    private function continue_loop(array $result, string $conversation_id, array $context): array {
-        // Prepara messaggio di continuazione con risultato esecuzione
-        $continuation = [
-            'type' => 'execution_result',
-            'result' => $result['execution_result'] ?? null,
-        ];
-        
-        // Richiama AI per prossimo step
-        $ai_response = $this->proxy_client->send_message([
-            'prompt' => json_encode($continuation),
-            'context' => $context,
-            'conversation_history' => $this->get_conversation_history($conversation_id),
-        ]);
-        
-        $this->debug_logger->log('CONTINUATION', $ai_response);
-        
-        $new_result = $this->response_handler->handle($ai_response, $context);
-        
-        if ($new_result['continue_automatically'] ?? false) {
-            return $this->continue_loop($new_result, $conversation_id, $context);
-        }
-        
-        return $new_result;
-    }
-    
-    // ... altri metodi helper
-}
+# Clean install
+rm -rf node_modules package-lock.json
+npm install
 ```
 
-### 5. ResponseHandler.php
+#### 3. Deploy Functions
 
-**Responsabilità**: Parsing risposta AI e esecuzione azioni
-
-```php
-<?php
-namespace CreatorCore\Response;
-
-class ResponseHandler {
-    
-    private $code_executor;
-    private $proxy_client;
-    
-    public function __construct() {
-        $this->code_executor = new \CreatorCore\Executor\CodeExecutor();
-        $this->proxy_client = new \CreatorCore\Proxy\ProxyClient();
-    }
-    
-    public function handle(array $ai_response, array $context): array {
-        $type = $ai_response['type'] ?? 'unknown';
-        
-        switch ($type) {
-            case 'question':
-            case 'plan':
-            case 'complete':
-                // Mostra messaggio all'utente
-                return [
-                    'type' => $type,
-                    'status' => $ai_response['status'] ?? '',
-                    'message' => $ai_response['message'] ?? '',
-                    'data' => $ai_response['data'] ?? [],
-                    'requires_confirmation' => $ai_response['requires_confirmation'] ?? false,
-                    'continue_automatically' => false,
-                ];
-                
-            case 'execute':
-                // Esegui codice PHP
-                $code = $ai_response['data']['code'] ?? '';
-                $execution_result = $this->code_executor->execute($code, $context);
-                
-                return [
-                    'type' => 'execute',
-                    'status' => $ai_response['status'] ?? '',
-                    'message' => $ai_response['message'] ?? '',
-                    'data' => $ai_response['data'] ?? [],
-                    'execution_result' => $execution_result,
-                    'continue_automatically' => $ai_response['continue_automatically'] ?? true,
-                ];
-                
-            case 'verify':
-                // Esegui codice di verifica
-                $code = $ai_response['data']['code'] ?? '';
-                $verification_result = $this->code_executor->execute($code, $context);
-                
-                return [
-                    'type' => 'verify',
-                    'status' => $ai_response['status'] ?? '',
-                    'message' => $ai_response['message'] ?? '',
-                    'verification_result' => $verification_result,
-                    'continue_automatically' => $ai_response['continue_automatically'] ?? true,
-                ];
-                
-            case 'request_docs':
-                // Recupera documentazione e continua
-                $docs = $this->fetch_documentation($ai_response['data']['plugins_needed'] ?? []);
-                
-                return [
-                    'type' => 'request_docs',
-                    'status' => $ai_response['status'] ?? 'Fetching documentation...',
-                    'message' => $ai_response['message'] ?? '',
-                    'documentation' => $docs,
-                    'continue_automatically' => true,
-                ];
-                
-            case 'error':
-                return [
-                    'type' => 'error',
-                    'status' => $ai_response['status'] ?? 'Error',
-                    'message' => $ai_response['message'] ?? 'An error occurred',
-                    'data' => $ai_response['data'] ?? [],
-                    'continue_automatically' => $ai_response['data']['recoverable'] ?? false,
-                ];
-                
-            default:
-                return [
-                    'type' => 'error',
-                    'status' => 'Unknown response',
-                    'message' => 'Received unknown response type from AI',
-                    'continue_automatically' => false,
-                ];
-        }
-    }
-    
-    private function fetch_documentation(array $plugin_slugs): array {
-        $docs = [];
-        foreach ($plugin_slugs as $slug) {
-            $doc = $this->proxy_client->get_plugin_docs($slug);
-            if ($doc) {
-                $docs[$slug] = $doc;
-            }
-        }
-        return $docs;
-    }
-}
+Deploy tutte le functions:
+```bash
+firebase deploy --only functions --project creator-ai-proxy
 ```
 
-### 6. CodeExecutor.php
-
-**Responsabilità**: Esecuzione codice PHP
-
-```php
-<?php
-namespace CreatorCore\Executor;
-
-class CodeExecutor {
-    
-    public function execute(string $code, array $context = []): array {
-        if (empty(trim($code))) {
-            return ['success' => false, 'error' => 'Empty code'];
-        }
-        
-        // Variabili disponibili nel contesto
-        $context = array_merge($context, [
-            'last_result' => $context['last_result'] ?? null,
-        ]);
-        
-        // Cattura output
-        ob_start();
-        
-        try {
-            // Esegui il codice
-            $result = eval($code);
-            
-            $output = ob_get_clean();
-            
-            // Se il codice non ha ritornato nulla, considera successo
-            if ($result === null) {
-                $result = ['success' => true, 'output' => $output];
-            }
-            
-            return [
-                'success' => true,
-                'result' => $result,
-                'output' => $output,
-            ];
-            
-        } catch (\Throwable $e) {
-            ob_end_clean();
-            
-            return [
-                'success' => false,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ];
-        }
-    }
-}
+Deploy function specifica:
+```bash
+firebase deploy --only functions:routeRequest --project creator-ai-proxy
+firebase deploy --only functions:validateLicense --project creator-ai-proxy
 ```
 
-### 7. ContextLoader.php
+#### 4. Gestire Prompt Eliminazione Functions
 
-**Responsabilità**: Raccolta informazioni WordPress
-
-```php
-<?php
-namespace CreatorCore\Context;
-
-class ContextLoader {
-    
-    public function get_context(): array {
-        return [
-            'wordpress' => $this->get_wordpress_info(),
-            'php' => $this->get_php_info(),
-            'mysql' => $this->get_mysql_info(),
-            'theme' => $this->get_theme_info(),
-            'plugins' => $this->get_plugins_list(),
-        ];
-    }
-    
-    private function get_wordpress_info(): array {
-        global $wp_version;
-        return [
-            'version' => $wp_version,
-            'locale' => get_locale(),
-            'multisite' => is_multisite(),
-            'site_url' => get_site_url(),
-            'home_url' => get_home_url(),
-        ];
-    }
-    
-    private function get_php_info(): array {
-        return [
-            'version' => phpversion(),
-        ];
-    }
-    
-    private function get_mysql_info(): array {
-        global $wpdb;
-        return [
-            'version' => $wpdb->db_version(),
-        ];
-    }
-    
-    private function get_theme_info(): array {
-        $theme = wp_get_theme();
-        $parent = $theme->parent();
-        
-        return [
-            'name' => $theme->get('Name'),
-            'version' => $theme->get('Version'),
-            'parent' => $parent ? $parent->get('Name') : null,
-        ];
-    }
-    
-    private function get_plugins_list(): array {
-        if (!function_exists('get_plugins')) {
-            require_once ABSPATH . 'wp-admin/includes/plugin.php';
-        }
-        
-        $all_plugins = get_plugins();
-        $active_plugins = get_option('active_plugins', []);
-        
-        $plugins = [];
-        foreach ($all_plugins as $path => $plugin) {
-            $slug = dirname($path);
-            if ($slug === '.') {
-                $slug = basename($path, '.php');
-            }
-            
-            $plugins[] = [
-                'name' => $plugin['Name'],
-                'slug' => $slug,
-                'version' => $plugin['Version'],
-                'active' => in_array($path, $active_plugins),
-            ];
-        }
-        
-        return $plugins;
-    }
-}
+Quando Firebase rileva functions in cloud che non esistono localmente, chiederà:
+```
+Would you like to proceed with deletion? (y/N)
 ```
 
-### 8. ProxyClient.php
+Rispondere `N` per mantenere le vecchie functions e continuare il deployment.
 
-**Responsabilità**: Comunicazione con Firebase
+### Troubleshooting Comuni
 
-```php
-<?php
-namespace CreatorCore\Proxy;
+#### Errore: Service Account Does Not Exist
 
-class ProxyClient {
-    
-    private $base_url;
-    private $token;
-    
-    public function __construct() {
-        $this->base_url = get_option('creator_proxy_url', 'https://us-central1-creator-ai.cloudfunctions.net');
-        $this->token = get_option('creator_site_token', '');
-    }
-    
-    public function send_message(array $data): array {
-        return $this->request('POST', '/route-request', $data);
-    }
-    
-    public function get_plugin_docs(string $slug, string $version = null): ?string {
-        $endpoint = '/plugin-docs/' . $slug;
-        if ($version) {
-            $endpoint .= '?version=' . urlencode($version);
-        }
-        
-        $response = $this->request('GET', $endpoint);
-        return $response['documentation'] ?? null;
-    }
-    
-    public function validate_license(string $license_key): array {
-        return $this->request('POST', '/validate-license', [
-            'license_key' => $license_key,
-            'site_url' => get_site_url(),
-        ]);
-    }
-    
-    private function request(string $method, string $endpoint, array $data = []): array {
-        $url = $this->base_url . $endpoint;
-        
-        $args = [
-            'method' => $method,
-            'timeout' => 120,
-            'headers' => [
-                'Content-Type' => 'application/json',
-            ],
-        ];
-        
-        // Aggiungi Authorization se abbiamo un token
-        if (!empty($this->token)) {
-            $args['headers']['Authorization'] = 'Bearer ' . $this->token;
-        }
-        
-        // Aggiungi body per POST
-        if ($method === 'POST' && !empty($data)) {
-            $args['body'] = json_encode($data);
-        }
-        
-        $response = wp_remote_request($url, $args);
-        
-        if (is_wp_error($response)) {
-            return [
-                'success' => false,
-                'error' => $response->get_error_message(),
-            ];
-        }
-        
-        $status_code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-        $decoded = json_decode($body, true);
-        
-        if ($status_code >= 400) {
-            return [
-                'success' => false,
-                'error' => $decoded['error'] ?? 'HTTP Error ' . $status_code,
-                'status_code' => $status_code,
-            ];
-        }
-        
-        return $decoded ?: [];
-    }
-}
-```
-
-### 9. DebugLogger.php
-
-**Responsabilità**: Logging conversazione per debug
-
-```php
-<?php
-namespace CreatorCore\Debug;
-
-class DebugLogger {
-    
-    private $log_file;
-    
-    public function __construct() {
-        $upload_dir = wp_upload_dir();
-        $this->log_file = $upload_dir['basedir'] . '/creator-debug.log';
-    }
-    
-    public function log($input, $output): void {
-        $entry = [
-            'timestamp' => current_time('mysql'),
-            'input' => $input,
-            'output' => $output,
-        ];
-        
-        $line = json_encode($entry, JSON_PRETTY_PRINT) . "\n\n---\n\n";
-        
-        file_put_contents($this->log_file, $line, FILE_APPEND | LOCK_EX);
-    }
-    
-    public function get_recent_logs(int $limit = 50): array {
-        if (!file_exists($this->log_file)) {
-            return [];
-        }
-        
-        $content = file_get_contents($this->log_file);
-        $entries = explode("\n\n---\n\n", $content);
-        $entries = array_filter($entries);
-        $entries = array_slice($entries, -$limit);
-        
-        return array_map(function($entry) {
-            return json_decode($entry, true);
-        }, $entries);
-    }
-    
-    public function clear(): void {
-        if (file_exists($this->log_file)) {
-            unlink($this->log_file);
-        }
-    }
-}
-```
-
----
-
-## Specifiche Componenti Firebase
-
-### 1. routeRequest.ts (Semplificato)
+**Soluzione**: Aggiungere `serviceAccount` option alla function definition:
 
 ```typescript
-import { onRequest } from "firebase-functions/v2/https";
-import { authenticateRequest } from "../middleware/auth";
-import { checkRateLimit } from "../middleware/rateLimit";
-import { modelService } from "../services/modelService";
-import { logger } from "../lib/logger";
-
-const SYSTEM_PROMPT = `...`; // System prompt completo
-
-export const routeRequest = onRequest(
-  { 
-    region: "europe-west1",
-    memory: "1GiB",
-    timeoutSeconds: 300,
-    cors: true 
-  },
-  async (req, res) => {
-    // Solo POST
-    if (req.method !== "POST") {
-      res.status(405).json({ error: "Method not allowed" });
-      return;
-    }
-
-    try {
-      // Autenticazione
-      const authResult = await authenticateRequest(req);
-      if (!authResult.authenticated) {
-        res.status(401).json({ error: authResult.error });
-        return;
-      }
-
-      // Rate limit
-      const rateLimitOk = await checkRateLimit(authResult.claims.license_id);
-      if (!rateLimitOk) {
-        res.status(429).json({ error: "Rate limit exceeded" });
-        return;
-      }
-
-      const { prompt, context, conversation_history, documentation } = req.body;
-
-      // Costruisci system prompt
-      let fullSystemPrompt = SYSTEM_PROMPT;
-      
-      // Aggiungi contesto WordPress
-      if (context) {
-        fullSystemPrompt += `\n\n## WORDPRESS ENVIRONMENT\n${JSON.stringify(context, null, 2)}`;
-      }
-
-      // Aggiungi documentazione se presente
-      if (documentation && Object.keys(documentation).length > 0) {
-        fullSystemPrompt += `\n\n## PLUGIN DOCUMENTATION\n`;
-        for (const [slug, doc] of Object.entries(documentation)) {
-          fullSystemPrompt += `\n### ${slug}\n${doc}\n`;
-        }
-      }
-
-      // Costruisci messaggi
-      const messages = [];
-      
-      // Aggiungi history
-      if (conversation_history && Array.isArray(conversation_history)) {
-        messages.push(...conversation_history);
-      }
-      
-      // Aggiungi messaggio corrente
-      messages.push({ role: "user", content: prompt });
-
-      // Chiama AI
-      const response = await modelService.generate({
-        systemPrompt: fullSystemPrompt,
-        messages,
-        model: "gemini", // o "claude" basato su config
-      });
-
-      // Parsa risposta JSON
-      let parsedResponse;
-      try {
-        // L'AI dovrebbe rispondere con JSON puro
-        parsedResponse = JSON.parse(response.content);
-      } catch {
-        // Se non è JSON valido, wrappa come errore
-        parsedResponse = {
-          step: "implementation",
-          type: "error",
-          status: "Parse error",
-          message: "AI response was not valid JSON",
-          data: { raw_response: response.content },
-        };
-      }
-
-      res.json({
-        success: true,
-        response: parsedResponse,
-        tokens_used: response.tokensUsed,
-        model: response.model,
-      });
-
-    } catch (error) {
-      logger.error("routeRequest error", { error });
-      res.status(500).json({ 
-        error: "Internal server error",
-        message: error.message 
-      });
-    }
-  }
-);
+export const routeRequest = onRequest({
+  secrets: [jwtSecret, geminiApiKey, claudeApiKey],
+  serviceAccount: "757337256338-compute@developer.gserviceaccount.com",
+  // ... altre opzioni
+}, async (req, res) => { ... });
 ```
 
-### 2. modelService.ts (Semplificato)
+#### Errore: Package Lock Out of Sync
 
-```typescript
-import { GeminiProvider } from "../providers/gemini";
-import { ClaudeProvider } from "../providers/claude";
-import { logger } from "../lib/logger";
-
-interface GenerateOptions {
-  systemPrompt: string;
-  messages: Array<{ role: string; content: string }>;
-  model: "gemini" | "claude";
-}
-
-interface GenerateResult {
-  content: string;
-  tokensUsed: number;
-  model: string;
-}
-
-class ModelService {
-  private gemini: GeminiProvider;
-  private claude: ClaudeProvider;
-
-  constructor() {
-    this.gemini = new GeminiProvider();
-    this.claude = new ClaudeProvider();
-  }
-
-  async generate(options: GenerateOptions): Promise<GenerateResult> {
-    const { systemPrompt, messages, model } = options;
-
-    const primaryProvider = model === "claude" ? this.claude : this.gemini;
-    const fallbackProvider = model === "claude" ? this.gemini : this.claude;
-
-    try {
-      // Prova provider primario
-      const result = await primaryProvider.generate(systemPrompt, messages);
-      return {
-        content: result.content,
-        tokensUsed: result.tokensUsed,
-        model: result.model,
-      };
-    } catch (primaryError) {
-      logger.warn(`Primary provider ${model} failed, trying fallback`, { 
-        error: primaryError.message 
-      });
-
-      try {
-        // Prova fallback
-        const result = await fallbackProvider.generate(systemPrompt, messages);
-        return {
-          content: result.content,
-          tokensUsed: result.tokensUsed,
-          model: result.model,
-        };
-      } catch (fallbackError) {
-        logger.error("Both providers failed", {
-          primary: primaryError.message,
-          fallback: fallbackError.message,
-        });
-        throw new Error("All AI providers failed");
-      }
-    }
-  }
-}
-
-export const modelService = new ModelService();
+**Soluzione**:
+```bash
+nvm use 20
+rm -rf node_modules package-lock.json
+npm install
 ```
+
+#### Errore: ESLint Configuration Not Found
+
+**Soluzione**: Verificare che `.eslintrc.js` esista in `functions/`.
+
+#### Functions Non Aggiornate
+
+Se le modifiche non vengono deployate, fare una piccola modifica al file per forzare redeploy:
+```bash
+# Modificare un commento nella function
+firebase deploy --only functions:<function-name>
+```
+
+#### Branches Divergenti su Git Pull
+
+**Soluzione 1 - Merge**:
+```bash
+git pull origin <branch> --no-rebase
+```
+
+**Soluzione 2 - Usare versione remote**:
+```bash
+git fetch origin <branch>
+git reset --hard origin/<branch>
+```
+
+### Comandi Utili
+
+```bash
+# Visualizzare logs functions
+firebase functions:log --project creator-ai-proxy
+
+# Logs function specifica
+firebase functions:log --only routeRequest --project creator-ai-proxy
+
+# Listare functions deployate
+gcloud functions list --project creator-ai-proxy
+
+# Verificare permessi secret
+gcloud secrets get-iam-policy <SECRET_NAME> --project creator-ai-proxy
+
+# Test function localmente
+cd functions && npm run serve
+```
+
+### Link Risorse
+
+- **Firebase Console**: https://console.firebase.google.com/project/creator-ai-proxy
+- **Cloud Console**: https://console.cloud.google.com/functions/list?project=creator-ai-proxy
+- **Secret Manager**: https://console.cloud.google.com/security/secret-manager?project=creator-ai-proxy
 
 ---
 
-## Piano di Sviluppo
+## Stato Attuale del Progetto
 
-### Fase 1: Pulizia (2-3 giorni)
+### Completato e Funzionante
 
-**Obiettivo**: Rimuovere tutto il codice non necessario
+#### Backend Firebase (100%)
+- ✅ Sistema autenticazione JWT con licensing
+- ✅ Routing AI con fallback automatico Gemini ↔ Claude
+- ✅ Rate limiting per IP e license
+- ✅ Cost tracking mensile per provider
+- ✅ Audit logging completo
+- ✅ Plugin documentation repository con AI research
+- ✅ Middleware auth e rate limit
+- ✅ 8 Cloud Functions deployate e testate
+- ✅ Firestore collections configurate
 
-#### Firebase
-- [ ] Eliminare `api/analytics/`
-- [ ] Eliminare `api/tasks/`
-- [ ] Eliminare `triggers/`
-- [ ] Eliminare `services/costCalculator.ts`
-- [ ] Eliminare `services/jobProcessor.ts`
-- [ ] Eliminare `services/aiRouter.ts`
-- [ ] Eliminare `providers/openai.ts`
-- [ ] Semplificare `routeRequest.ts`
-- [ ] Semplificare `modelService.ts`
-- [ ] Verificare che `validateLicense` funzioni ancora
-- [ ] Verificare che i provider Gemini/Claude funzionino
+#### Plugin WordPress (100%)
+- ✅ Chat interface con UI completa
+- ✅ Universal PHP Engine con security validation
+- ✅ Sistema micro-step per operazioni complesse
+- ✅ WP-CLI executor con whitelist/blacklist
+- ✅ Context loader con lazy-loading
+- ✅ Response handler per tutti i tipi di risposta
+- ✅ Conversation manager con loop orchestration
+- ✅ Debug panel con conversation history
+- ✅ Rollback system con snapshot
+- ✅ Database tables e migrations
 
-#### WordPress Plugin
-- [ ] Eliminare tutti i file `Backup/`
-- [ ] Eliminare tutti i file `Integrations/` (Elementor, ACF, etc.)
-- [ ] Eliminare `ActionDispatcher.php` vecchio
-- [ ] Eliminare tutti gli ActionHandler specifici
-- [ ] Eliminare `SetupWizard.php` complesso
-- [ ] Eliminare sistema permessi complesso
-- [ ] Mantenere solo struttura base
+#### Test Coverage
+- ✅ 121 test cases Firebase (unit + integration)
+- ✅ 44 test cases PHP plugin
+- ✅ Coverage: modelService 94%, licensing 88%, auth 100%
 
-**Deliverable**: Codice pulito che si compila/attiva senza errori
+### Architettura Finale
 
----
+Il sistema è basato su un'architettura pulita e semplificata:
 
-### Fase 2: Core Loop Base (3-4 giorni)
+1. **Universal PHP Engine**: Eliminato il sistema di action handlers hardcoded, ora l'AI genera direttamente codice PHP eseguibile
+2. **Simple Fallback**: Routing Gemini ↔ Claude senza matrix complessa
+3. **Micro-Step System**: Per operazioni complesse con roadmap, step execution, checkpoint
+4. **Plugin Integration Safety**: Sistema dinamico che verifica sempre la documentazione invece di hardcoded behaviors
+5. **Security First**: 26+ funzioni pericolose bloccate, whitelist/blacklist per WP-CLI
 
-**Obiettivo**: Far funzionare il loop base chat → AI → risposta
+### Prossimi Sviluppi Potenziali
 
-#### WordPress Plugin
-- [ ] Implementare `Loader.php` semplificato
-- [ ] Implementare `ChatInterface.php` (pagina admin)
-- [ ] Implementare `ChatController.php` (REST endpoint)
-- [ ] Implementare `ProxyClient.php` (comunicazione Firebase)
-- [ ] Implementare `ContextLoader.php` (raccolta info WP)
-- [ ] Creare UI chat base (HTML/CSS/JS)
+Il sistema è completo come MVP. Eventuali sviluppi futuri potrebbero includere:
 
-#### Firebase
-- [ ] Aggiornare `routeRequest.ts` con nuovo formato
-- [ ] Aggiornare `modelService.ts` semplificato
-- [ ] Creare system prompt base
-- [ ] Testare chiamate AI
-
-**Test di Validazione**:
-```
-1. Aprire pagina chat in WP admin
-2. Scrivere "Ciao, dimmi che versione di WordPress ho"
-3. AI deve rispondere con la versione corretta
-```
-
-**Deliverable**: Chat funzionante con risposte AI
+- Context caching per ridurre token usage
+- Circuit breaker pattern per maggiore resilienza
+- Monitoring e alerting avanzato
+- Redis per rate limiting in produzione ad alto traffico
+- Espansione plugin integrations con AI docs research automatico
 
 ---
 
-### Fase 3: Esecuzione Codice (2-3 giorni)
-
-**Obiettivo**: Eseguire codice PHP generato dall'AI
-
-#### WordPress Plugin
-- [ ] Implementare `CodeExecutor.php`
-- [ ] Implementare `ResponseHandler.php`
-- [ ] Gestire tipo `execute` nella risposta
-- [ ] Gestire risultato esecuzione
-- [ ] Passare risultato all'AI per continuazione
-
-**Test di Validazione**:
-```
-1. Scrivere "Crea una pagina chiamata Test"
-2. AI deve generare codice PHP
-3. Codice deve essere eseguito
-4. Pagina "Test" deve apparire in WordPress
-```
-
-**Deliverable**: Esecuzione codice PHP funzionante
-
----
-
-### Fase 4: Loop Multi-Step (2-3 giorni)
-
-**Obiettivo**: Gestire task complessi con più azioni
-
-#### WordPress Plugin
-- [ ] Implementare `ConversationManager.php`
-- [ ] Gestire `continue_automatically`
-- [ ] Gestire conversation history
-- [ ] Gestire verifica risultati
-- [ ] Gestire errori e retry
-
-**Test di Validazione**:
-```
-1. Scrivere "Crea 3 pagine: Home, About, Contact"
-2. AI deve creare un piano
-3. Eseguire le 3 azioni in sequenza
-4. Verificare che tutte le pagine esistano
-5. Mostrare messaggio di completamento
-```
-
-**Deliverable**: Task multi-step funzionanti
-
----
-
-### Fase 5: Documentazione Plugin (2-3 giorni)
-
-**Obiettivo**: Sistema documentazione on-demand
-
-#### Firebase
-- [ ] Verificare `getPluginDocs.ts`
-- [ ] Verificare `searchPluginDocs.ts`
-- [ ] Verificare repository Firestore
-
-#### WordPress Plugin
-- [ ] Gestire tipo `request_docs` nella risposta
-- [ ] Recuperare documentazione da Firebase
-- [ ] Passare documentazione all'AI
-- [ ] Continuare conversazione con doc
-
-**Test di Validazione**:
-```
-1. Scrivere "Ottimizza la configurazione della cache" (con plugin cache installato)
-2. AI deve richiedere documentazione del plugin
-3. Documentazione deve essere recuperata
-4. AI deve rispondere con suggerimenti specifici
-```
-
-**Deliverable**: Sistema documentazione funzionante
-
----
-
-### Fase 6: Task Complessi (3-4 giorni)
-
-**Obiettivo**: Validare con task reali complessi
-
-**Test di Validazione 1 - Homepage Elementor**:
-```
-"Crea la homepage del sito usando Elementor con:
-- Hero Section con titolo e CTA
-- Features Section a 3 colonne
-- Testimonials
-- Pricing
-- FAQ accordion
-- Footer con contatti"
-```
-
-**Test di Validazione 2 - Configurazione Plugin**:
-```
-"Configura RankMath SEO con:
-- Sitemap abilitata
-- Schema markup per organizzazione
-- Redirect 301 da vecchie URL"
-```
-
-**Test di Validazione 3 - E-commerce**:
-```
-"Crea 5 prodotti WooCommerce per un negozio di magliette,
-con prezzi, descrizioni, e immagini placeholder"
-```
-
-**Deliverable**: Task complessi funzionanti
-
----
-
-### Fase 7: UI e Debug (2 giorni)
-
-**Obiettivo**: Migliorare UX e debugging
-
-#### WordPress Plugin
-- [ ] Implementare `DebugLogger.php`
-- [ ] Aggiungere status log nella UI
-- [ ] Aggiungere debug panel collapsabile
-- [ ] Migliorare gestione errori UI
-- [ ] Polish CSS
-
-**Deliverable**: UI completa e debug funzionante
-
----
-
-## Test di Validazione
-
-### Test Essenziali (Must Pass)
-
-| # | Test | Criterio di Successo |
-|---|------|---------------------|
-| 1 | Chat base | AI risponde a "Ciao" |
-| 2 | Contesto WP | AI conosce versione WP/PHP |
-| 3 | Creazione pagina | "Crea pagina Test" → pagina creata |
-| 4 | Creazione articolo | "Scrivi articolo su X" → articolo creato |
-| 5 | Multi-step | "Crea 3 pagine" → 3 pagine create |
-| 6 | Errore recovery | AI gestisce errori e riprova |
-| 7 | Plugin docs | AI richiede e usa documentazione |
-
-### Test Avanzati (Should Pass)
-
-| # | Test | Criterio di Successo |
-|---|------|---------------------|
-| 8 | Elementor page | Homepage completa con sezioni |
-| 9 | WooCommerce | Prodotti creati correttamente |
-| 10 | Config plugin | Settings modificati correttamente |
-| 11 | Custom code | Snippet aggiunto a functions.php |
-| 12 | Conversazione lunga | 10+ scambi senza perdere contesto |
-
-### Test di Stress (Nice to Pass)
-
-| # | Test | Criterio di Successo |
-|---|------|---------------------|
-| 13 | Task molto complesso | Homepage 8+ sezioni |
-| 14 | Errori multipli | Recovery da 3+ errori consecutivi |
-| 15 | Timeout | Task lungo (>2 min) completato |
-
----
-
-## Note Finali
-
-### Priorità Assolute
-
-1. **Funziona > Perfetto**: L'obiettivo è un MVP funzionante, non codice perfetto
-2. **Semplicità > Flessibilità**: Meno codice = meno bug
-3. **Test reali > Test unitari**: Validare con casi d'uso reali
-
-### Cosa NON fare
-
-- Non aggiungere features non richieste
-- Non ottimizzare prematuramente
-- Non preoccuparsi della sicurezza (per ora)
-- Non creare integrazioni specifiche per plugin
-- Non implementare backup/rollback
-
-### Quando Chiedere Chiarimenti
-
-- Se una specifica non è chiara
-- Se un test fallisce e non sai perché
-- Se devi fare una scelta architetturale importante
-- Se un task richiede più di 1 giorno
-
----
-
-*Documento creato: Dicembre 2025*
-*Versione: 1.0*
-*Stato: Pronto per Implementazione*
+*Documento generato: Dicembre 2025*  
+*Versione: 3.0.0-MVP*
