@@ -102,30 +102,6 @@ export async function incrementTokensUsed(
   });
 }
 
-/**
- * Deducts credits from a license
- *
- * @param {string} licenseKey - The license key
- * @param {number} creditsToDeduct - Number of credits to deduct
- * @returns {Promise<void>}
- *
- * @example
- * ```typescript
- * await deductCredits("CREATOR-2024-ABCDE-FGHIJ", 0.5);
- * ```
- */
-export async function deductCredits(
-  licenseKey: string,
-  creditsToDeduct: number
-): Promise<void> {
-  const docRef = db.collection(COLLECTIONS.LICENSES).doc(licenseKey);
-  await docRef.update({
-    credits_available: FieldValue.increment(-creditsToDeduct),
-    credits_used: FieldValue.increment(creditsToDeduct),
-    updated_at: Timestamp.now(),
-  });
-}
-
 // ==================== AUDIT LOG OPERATIONS ====================
 
 /**
@@ -363,28 +339,6 @@ export async function updateCostTracking(
       transaction.update(docRef, updateData);
     }
   });
-}
-
-/**
- * Gets the license by site_token
- *
- * @param {string} siteToken - The JWT site token
- * @returns {Promise<License | null>} The license or null
- */
-export async function getLicenseBySiteToken(
-  siteToken: string
-): Promise<import("../types/License").License | null> {
-  const snapshot = await db
-    .collection(COLLECTIONS.LICENSES)
-    .where("site_token", "==", siteToken)
-    .limit(1)
-    .get();
-
-  if (snapshot.empty) {
-    return null;
-  }
-
-  return snapshot.docs[0].data() as import("../types/License").License;
 }
 
 /**
@@ -831,25 +785,3 @@ export async function getPluginDocsStats(): Promise<PluginDocsStats> {
   };
 }
 
-/**
- * Deletes a plugin docs cache entry
- *
- * @param {string} pluginSlug - Plugin slug
- * @param {string} pluginVersion - Plugin version
- * @returns {Promise<boolean>} True if deleted
- */
-export async function deletePluginDocs(
-  pluginSlug: string,
-  pluginVersion: string
-): Promise<boolean> {
-  const docId = getPluginDocsDocId(pluginSlug, pluginVersion);
-  const docRef = db.collection(COLLECTIONS.PLUGIN_DOCS_CACHE).doc(docId);
-
-  const doc = await docRef.get();
-  if (!doc.exists) {
-    return false;
-  }
-
-  await docRef.delete();
-  return true;
-}

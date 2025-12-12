@@ -13,7 +13,6 @@ import { savePluginDocs, getPluginDocs } from "../lib/firestore";
 import {
   ResearchPluginDocsRequest,
   ResearchPluginDocsResponse,
-  PluginDocsEntry,
 } from "../types/PluginDocs";
 
 /**
@@ -247,34 +246,6 @@ export class PluginDocsResearchService {
     }
   }
 
-  /**
-   * Get or research plugin docs
-   *
-   * Checks cache first, then researches if not found.
-   *
-   * @param request Research request
-   * @returns Plugin docs entry
-   */
-  async getOrResearch(
-    request: ResearchPluginDocsRequest
-  ): Promise<PluginDocsEntry | null> {
-    const { plugin_slug, plugin_version } = request;
-
-    // Check cache first
-    const cached = await getPluginDocs(plugin_slug, plugin_version);
-    if (cached) {
-      return cached;
-    }
-
-    // Research and cache
-    const result = await this.research(request);
-    if (!result.success || !result.data) {
-      return null;
-    }
-
-    // Return the cached entry
-    return getPluginDocs(plugin_slug, plugin_version);
-  }
 }
 
 /**
