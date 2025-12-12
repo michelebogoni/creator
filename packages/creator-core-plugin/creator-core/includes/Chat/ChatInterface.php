@@ -38,29 +38,19 @@ class ChatInterface {
      * @return void
      */
     public function init(): void {
-        add_action( 'admin_menu', [ $this, 'add_menu_page' ], 5 );
+        add_action( 'admin_menu', [ $this, 'add_menu_page' ], 15 );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
     }
 
     /**
-     * Add chat menu page
+     * Add chat menu page as submenu of Dashboard
      *
      * @return void
      */
     public function add_menu_page(): void {
-        $this->hook_suffix = add_menu_page(
-            __( 'Creator Chat', 'creator-core' ),
-            __( 'Creator', 'creator-core' ),
-            'manage_options',
-            $this->page_slug,
-            [ $this, 'render_chat_page' ],
-            'dashicons-format-chat',
-            30
-        );
-
-        // Add Chat as first submenu (same as parent)
-        add_submenu_page(
-            $this->page_slug,
+        // Add Chat as submenu under Creator Dashboard.
+        $this->hook_suffix = add_submenu_page(
+            'creator-dashboard',
             __( 'Chat', 'creator-core' ),
             __( 'Chat', 'creator-core' ),
             'manage_options',
@@ -107,37 +97,102 @@ class ChatInterface {
             true
         );
 
-        // Localize script with data
+        // Get chat ID from URL.
+        $chat_id = isset( $_GET['chat'] ) ? absint( $_GET['chat'] ) : null;
+
+        // Load conversation history if chat ID is present.
+        $conversation_history = [];
+        if ( $chat_id ) {
+            $conversation_history = $this->get_conversation_history( $chat_id );
+        }
+
+        // Localize script with data.
         $current_user = wp_get_current_user();
         wp_localize_script(
             'creator-chat-interface',
             'creatorChat',
             [
-                'restUrl'          => rest_url( 'creator/v1/' ),
-                'restNonce'        => wp_create_nonce( 'wp_rest' ),
-                'ajaxUrl'          => admin_url( 'admin-ajax.php' ),
-                'adminUrl'         => admin_url( 'admin.php' ),
-                'settingsUrl'      => admin_url( 'admin.php?page=creator-settings' ),
-                'userId'           => get_current_user_id(),
-                'userName'         => $current_user->display_name,
-                'userAvatar'       => get_avatar_url( $current_user->ID, [ 'size' => 64 ] ),
-                'pluginUrl'        => CREATOR_CORE_URL,
-                'isDebug'          => defined( 'CREATOR_DEBUG' ) && CREATOR_DEBUG,
-                'chatId'           => isset( $_GET['chat'] ) ? absint( $_GET['chat'] ) : null,
-                'maxFilesPerMessage' => 3,
-                'maxFileSize'      => 10 * 1024 * 1024, // 10MB
-                'i18n'             => [
+                'restUrl'             => rest_url( 'creator/v1/' ),
+                'restNonce'           => wp_create_nonce( 'wp_rest' ),
+                'ajaxUrl'             => admin_url( 'admin-ajax.php' ),
+                'adminUrl'            => admin_url( 'admin.php' ),
+                'dashboardUrl'        => admin_url( 'admin.php?page=creator-dashboard' ),
+                'settingsUrl'         => admin_url( 'admin.php?page=creator-dashboard' ),
+                'userId'              => get_current_user_id(),
+                'userName'            => $current_user->display_name,
+                'userAvatar'          => get_avatar_url( $current_user->ID, [ 'size' => 64 ] ),
+                'pluginUrl'           => CREATOR_CORE_URL,
+                'isDebug'             => defined( 'CREATOR_DEBUG' ) && CREATOR_DEBUG,
+                'chatId'              => $chat_id,
+                'conversationHistory' => $conversation_history,
+                'maxFilesPerMessage'  => 3,
+                'maxFileSize'         => 10 * 1024 * 1024, // 10MB
+                'i18n'                => [
                     'sendMessage'    => __( 'Send', 'creator-core' ),
                     'thinking'       => __( 'Thinking...', 'creator-core' ),
                     'error'          => __( 'An error occurred. Please try again.', 'creator-core' ),
                     'placeholder'    => __( 'Type your message...', 'creator-core' ),
                     'newChat'        => __( 'New Chat', 'creator-core' ),
                     'clearHistory'   => __( 'Clear History', 'creator-core' ),
-                    'goToSettings'   => __( 'Go to Settings', 'creator-core' ),
+                    'goToSettings'   => __( 'Go to Dashboard', 'creator-core' ),
                     'maxFilesError'  => __( 'Maximum 3 files allowed per message.', 'creator-core' ),
                     'fileTooLarge'   => __( 'File too large:', 'creator-core' ),
                 ],
             ]
+        );
+    }
+
+    /**
+     * Get conversation history for a chat
+     *
+     * @param int $chat_id The chat ID.
+     * @return array Array of messages.
+     */
+    private function get_conversation_history( int $chat_id ): array {
+        global $wpdb;
+
+        $user_id        = get_current_user_id();
+        $chats_table    = $wpdb->prefix . 'creator_chats';
+        $messages_table = $wpdb->prefix . 'creator_messages';
+
+        // Verify ownership.
+        $chat = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT id FROM {$chats_table} WHERE id = %d AND user_id = %d AND status = 'active'",
+                $chat_id,
+                $user_id
+            )
+        );
+
+        if ( ! $chat ) {
+            return [];
+        }
+
+        // Get messages.
+        $messages = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT role, content, created_at FROM {$messages_table}
+                WHERE chat_id = %d
+                ORDER BY created_at ASC",
+                $chat_id
+            ),
+            ARRAY_A
+        );
+
+        if ( ! $messages ) {
+            return [];
+        }
+
+        // Format messages for frontend.
+        return array_map(
+            function ( $msg ) {
+                return [
+                    'role'       => $msg['role'],
+                    'content'    => $msg['content'],
+                    'created_at' => $msg['created_at'],
+                ];
+            },
+            $messages
         );
     }
 
@@ -169,7 +224,7 @@ class ChatInterface {
      * @return void
      */
     private function render_setup_notice(): void {
-        $settings_url = admin_url( 'admin.php?page=creator-settings' );
+        $dashboard_url = admin_url( 'admin.php?page=creator-dashboard' );
         ?>
         <div class="wrap">
             <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
@@ -182,8 +237,8 @@ class ChatInterface {
                     <?php esc_html_e( 'Please configure your license key to use Creator Chat.', 'creator-core' ); ?>
                 </p>
                 <p>
-                    <a href="<?php echo esc_url( $settings_url ); ?>" class="button button-primary">
-                        <?php esc_html_e( 'Go to Settings', 'creator-core' ); ?>
+                    <a href="<?php echo esc_url( $dashboard_url ); ?>" class="button button-primary">
+                        <?php esc_html_e( 'Go to Dashboard', 'creator-core' ); ?>
                     </a>
                 </p>
             </div>
