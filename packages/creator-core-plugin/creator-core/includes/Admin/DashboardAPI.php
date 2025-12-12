@@ -293,10 +293,11 @@ class DashboardAPI {
 		$chat_id = $request->get_param( 'id' );
 		$user_id = get_current_user_id();
 
-		$chats_table    = $wpdb->prefix . 'creator_chats';
-		$messages_table = $wpdb->prefix . 'creator_messages';
-		$actions_table  = $wpdb->prefix . 'creator_actions';
-		$audit_table    = $wpdb->prefix . 'creator_audit_log';
+		$chats_table     = $wpdb->prefix . 'creator_chats';
+		$messages_table  = $wpdb->prefix . 'creator_messages';
+		$actions_table   = $wpdb->prefix . 'creator_actions';
+		$snapshots_table = $wpdb->prefix . 'creator_snapshots';
+		$backups_table   = $wpdb->prefix . 'creator_backups';
 
 		// Verify ownership.
 		$chat = $wpdb->get_row(
@@ -320,16 +321,35 @@ class DashboardAPI {
 		$wpdb->query( 'START TRANSACTION' );
 
 		try {
-			// Delete related actions.
+			// Get message IDs for this chat to delete related actions.
+			$message_ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT id FROM {$messages_table} WHERE chat_id = %d",
+					$chat_id
+				)
+			);
+
+			// Delete related actions (linked via message_id).
+			if ( ! empty( $message_ids ) ) {
+				$ids_placeholder = implode( ',', array_fill( 0, count( $message_ids ), '%d' ) );
+				$wpdb->query(
+					$wpdb->prepare(
+						"DELETE FROM {$actions_table} WHERE message_id IN ({$ids_placeholder})",
+						...$message_ids
+					)
+				);
+			}
+
+			// Delete snapshots (has chat_id).
 			$wpdb->delete(
-				$actions_table,
+				$snapshots_table,
 				[ 'chat_id' => $chat_id ],
 				[ '%d' ]
 			);
 
-			// Delete audit logs.
+			// Delete backups (has chat_id).
 			$wpdb->delete(
-				$audit_table,
+				$backups_table,
 				[ 'chat_id' => $chat_id ],
 				[ '%d' ]
 			);
