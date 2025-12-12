@@ -257,19 +257,19 @@
 	background: var(--creator-gray-400);
 }
 
+/* EXCEPTION: Health indicators use colors for clarity */
 .creator-health-dot.status-connected,
 .creator-health-dot.status-active {
-	background: var(--creator-gray-800);
+	background: #22C55E; /* Green */
 }
 
 .creator-health-dot.status-disconnected,
 .creator-health-dot.status-inactive {
-	background: var(--creator-gray-300);
-	border: 1px solid var(--creator-gray-400);
+	background: #EF4444; /* Red */
 }
 
 .creator-health-dot.status-unknown {
-	background: var(--creator-gray-300);
+	background: #F59E0B; /* Amber */
 }
 
 /* ============================================

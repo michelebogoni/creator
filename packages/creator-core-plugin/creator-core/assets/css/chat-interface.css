@@ -50,24 +50,25 @@
 }
 
 /* ============================================
-   Chat Container
+   Chat Container - Full Width
    ============================================ */
 .creator-chat-wrap {
 	margin: 0;
 	padding: 0;
-	background: var(--creator-gray-100);
+	background: var(--creator-white);
 	min-height: calc(100vh - 32px);
 	font-family: var(--creator-font);
+	font-size: 1.0625em; /* Larger base text */
 }
 
 .creator-chat-container {
 	display: flex;
 	flex-direction: column;
 	height: calc(100vh - 32px);
-	max-width: 62.5em;
-	margin: 0 auto;
+	width: 100%;
+	max-width: 100%;
+	margin: 0;
 	background: var(--creator-white);
-	box-shadow: var(--creator-shadow-lg);
 }
 
 /* ============================================
@@ -85,7 +86,7 @@
 
 .creator-chat-header h1 {
 	margin: 0;
-	font-size: 1.125em;
+	font-size: 1.25em;
 	font-weight: 600;
 	color: var(--creator-text);
 }
@@ -164,25 +165,30 @@
 }
 
 /* ============================================
-   Chat Messages
+   Chat Messages - Full Width Layout
    ============================================ */
 .creator-chat-messages {
 	flex: 1;
 	overflow-y: auto;
-	padding: 1.25em;
-	background: var(--creator-gray-50);
+	padding: 2em 3em;
+	background: var(--creator-white);
 }
 
 .creator-message {
 	display: flex;
 	gap: 0.75em;
-	margin-bottom: 1.5em;
-	max-width: 85%;
+	margin-bottom: 2em;
+	max-width: 100%;
 }
 
+/* User message - aligned right, in a pill */
 .creator-message-user {
-	margin-left: auto;
-	flex-direction: row-reverse;
+	justify-content: flex-end;
+}
+
+/* Assistant message - full width, no alignment */
+.creator-message-assistant {
+	justify-content: flex-start;
 }
 
 .creator-message-avatar {
@@ -190,17 +196,22 @@
 }
 
 .creator-message-avatar img {
-	width: 2em;
-	height: 2em;
+	width: 2.25em;
+	height: 2.25em;
 	border-radius: 50%;
+}
+
+/* Hide AI avatar - Creator writes directly */
+.creator-message-assistant .creator-message-avatar {
+	display: none;
 }
 
 .creator-ai-avatar {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 2em;
-	height: 2em;
+	width: 2.25em;
+	height: 2.25em;
 	border-radius: 50%;
 	background: var(--creator-gray-800);
 	color: var(--creator-white);
@@ -209,53 +220,86 @@
 }
 
 .creator-ai-avatar .dashicons {
-	font-size: 1.125em;
-	width: 1.125em;
-	height: 1.125em;
+	font-size: 1.25em;
+	width: 1.25em;
+	height: 1.25em;
 }
 
 .creator-message-content {
 	flex: 1;
+	max-width: 100%;
+}
+
+/* User message content - constrained width */
+.creator-message-user .creator-message-content {
+	max-width: 70%;
+}
+
+/* Assistant message content - full width */
+.creator-message-assistant .creator-message-content {
+	max-width: 100%;
 }
 
 .creator-message-header {
 	display: flex;
 	align-items: center;
 	gap: 0.5em;
-	margin-bottom: 0.375em;
+	margin-bottom: 0.5em;
+}
+
+/* Hide header for assistant (Creator writes directly) */
+.creator-message-assistant .creator-message-header {
+	display: none;
 }
 
 .creator-message-sender {
 	font-weight: 600;
-	font-size: 0.8125em;
+	font-size: 0.875em;
 	color: var(--creator-text);
 }
 
 .creator-message-time {
-	font-size: 0.75em;
+	font-size: 0.8125em;
 	color: var(--creator-text-muted);
 }
 
 .creator-message-body {
-	padding: 0.75em 1em;
-	border-radius: var(--creator-radius-lg);
-	font-size: 0.875em;
-	line-height: 1.6;
+	font-size: 1em;
+	line-height: 1.7;
 }
 
-/* User message - dark background, white text */
+/* User message - dark pill */
 .creator-message-user .creator-message-body {
+	padding: 0.875em 1.25em;
 	background: var(--creator-gray-800);
 	color: var(--creator-white);
-	border-bottom-right-radius: 0.25em;
+	border-radius: var(--creator-radius-xl);
+	border-bottom-right-radius: 0.375em;
 }
 
-/* Assistant message - white background, border */
+/* Assistant message - NO bubble, direct text on page */
 .creator-message-assistant .creator-message-body {
-	background: var(--creator-white);
-	color: var(--creator-text);
-	border: 1px solid var(--creator-border);
-	border-bottom-left-radius: 0.25em;
+	padding: 0;
+	background: transparent;
+	color: var(--creator-black);
+	border: none;
+	border-radius: 0;
+}
+
+/* Debug/Reasoning display above assistant response */
+.creator-message-debug {
+	font-size: 0.8125em;
+	color: var(--creator-gray-500);
+	margin-bottom: 0.75em;
+	padding: 0.5em 0;
+	border-bottom: 1px solid var(--creator-gray-100);
+	font-style: italic;
+}
+
+.creator-message-debug::before {
+	content: "Ragionamento: ";
+	font-weight: 500;
+	font-style: normal;
 }
 
 /* Error Text - just darker, no red */
@@ -290,7 +334,17 @@
    ============================================ */
 .creator-welcome-message {
 	text-align: center;
-	padding: 3.75em 1.25em;
+	padding: 4em 2em;
+}
+
+/* Creator Logo in welcome */
+.creator-welcome-logo {
+	margin-bottom: 1.5em;
+}
+
+.creator-welcome-logo svg {
+	width: 4em;
+	height: 4em;
 }
 
 .creator-welcome-icon {
@@ -312,7 +366,7 @@
 }
 
 .creator-welcome-message h2 {
-	font-size: 1.5em;
+	font-size: 1.75em;
 	color: var(--creator-text);
 	margin: 0 0 0.75em;
 	font-weight: 600;
@@ -320,24 +374,25 @@
 
 .creator-welcome-message p {
 	color: var(--creator-text-secondary);
-	max-width: 25em;
-	margin: 0 auto 1.5em;
-	font-size: 0.9375em;
+	max-width: 30em;
+	margin: 0 auto 2em;
+	font-size: 1.0625em;
+	line-height: 1.6;
 }
 
 .creator-suggestions {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: center;
-	gap: 0.625em;
+	gap: 0.75em;
 }
 
 .creator-suggestion {
-	padding: 0.625em 1em;
+	padding: 0.75em 1.25em;
 	background: var(--creator-white);
 	border: 1px solid var(--creator-border);
 	border-radius: var(--creator-radius-xl);
-	font-size: 0.875em;
+	font-size: 1em;
 	color: var(--creator-gray-700);
 	cursor: pointer;
 	transition: all var(--creator-transition);
@@ -388,7 +443,7 @@
 	flex: 1;
 	border: none;
 	background: transparent;
-	font-size: 0.875em;
+	font-size: 1em;
 	font-family: var(--creator-font);
 	line-height: 1.5;
 	resize: none;
@@ -1769,4 +1824,55 @@
 	.creator-cancel-roadmap {
 		width: 100%;
 	}
+}
+
+/* ============================================
+   WordPress Button Overrides - Uniform Gray Style
+   ============================================ */
+.creator-chat-wrap .button,
+.creator-chat-wrap .button-primary,
+.creator-chat-wrap .button-secondary {
+	background: var(--creator-gray-800) !important;
+	border: 1px solid var(--creator-gray-800) !important;
+	color: var(--creator-white) !important;
+	border-radius: var(--creator-radius) !important;
+	font-family: var(--creator-font) !important;
+	font-weight: 500 !important;
+	transition: all var(--creator-transition) !important;
+	box-shadow: none !important;
+}
+
+.creator-chat-wrap .button:hover,
+.creator-chat-wrap .button-primary:hover,
+.creator-chat-wrap .button-secondary:hover {
+	background: var(--creator-gray-900) !important;
+	border-color: var(--creator-gray-900) !important;
+	color: var(--creator-white) !important;
+}
+
+.creator-chat-wrap .button:focus,
+.creator-chat-wrap .button-primary:focus,
+.creator-chat-wrap .button-secondary:focus {
+	box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1) !important;
+	outline: none !important;
+}
+
+/* Secondary variant - outlined */
+.creator-chat-wrap .button-secondary {
+	background: var(--creator-white) !important;
+	border: 1px solid var(--creator-gray-300) !important;
+	color: var(--creator-gray-700) !important;
+}
+
+.creator-chat-wrap .button-secondary:hover {
+	background: var(--creator-gray-100) !important;
+	border-color: var(--creator-gray-400) !important;
+	color: var(--creator-gray-800) !important;
+}
+
+/* ============================================
+   Hide Thinking Panel (replaced by debug display)
+   ============================================ */
+.creator-thinking-panel {
+	display: none !important;
 }

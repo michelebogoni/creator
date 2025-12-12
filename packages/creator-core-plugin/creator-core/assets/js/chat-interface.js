@@ -336,7 +336,7 @@
                         const aiResponse = response.response || {};
                         const messageContent = aiResponse.message || 'No response message';
 
-                        // Add AI response
+                        // Add AI response with reasoning/debug info
                         self.addMessage({
                             role: 'assistant',
                             content: messageContent,
@@ -345,7 +345,8 @@
                             step: aiResponse.step || 'complete',
                             status: aiResponse.status || '',
                             data: aiResponse.data || {},
-                            steps: aiResponse.steps || []
+                            steps: aiResponse.steps || [],
+                            reasoning: aiResponse.reasoning || aiResponse.thinking || ''
                         });
 
                         // Handle plan confirmation
@@ -522,7 +523,7 @@
          */
         renderMessage: function(message) {
             const isUser = message.role === 'user';
-            const senderName = isUser ? creatorChat.userName : 'Creator AI';
+            const senderName = isUser ? creatorChat.userName : 'Creator';
             const timeStr = this.formatTime(message.timestamp);
 
             let html = `
@@ -533,11 +534,8 @@
             if (isUser) {
                 html += `<img src="${creatorChat.userAvatar}" alt="${senderName}">`;
             } else {
-                html += `
-                    <div class="creator-ai-avatar">
-                        <span class="dashicons dashicons-admin-generic"></span>
-                    </div>
-                `;
+                // No avatar for assistant - writes directly
+                html += '';
             }
 
             html += `
@@ -547,6 +545,14 @@
                             <span class="creator-message-sender">${this.escapeHtml(senderName)}</span>
                             <span class="creator-message-time">${timeStr}</span>
                         </div>
+            `;
+
+            // Add reasoning/debug above response for assistant messages
+            if (!isUser && message.reasoning) {
+                html += `<div class="creator-message-debug">${this.escapeHtml(message.reasoning)}</div>`;
+            }
+
+            html += `
                         <div class="creator-message-body">
                             ${this.formatMessageContent(message.content, message.isError)}
                         </div>
@@ -1725,24 +1731,11 @@
         }
     };
 
-    // Extend CreatorChat to use ThinkingPanel
-    const originalShowTypingIndicator = CreatorChat.showTypingIndicator;
-    CreatorChat.showTypingIndicator = function() {
-        originalShowTypingIndicator.call(this);
-        CreatorThinking.showLoading();
-    };
-
-    const originalHideTypingIndicator = CreatorChat.hideTypingIndicator;
-    CreatorChat.hideTypingIndicator = function() {
-        originalHideTypingIndicator.call(this);
-        // Don't hide thinking panel immediately - let it stay visible
-    };
-
-    // Initialize on document ready
+    // Initialize on document ready - Thinking panel disabled (replaced by debug display)
     $(document).ready(function() {
         if ($('.creator-chat-container').length) {
             CreatorChat.init();
-            CreatorThinking.init();
+            // CreatorThinking.init(); // Disabled - using inline debug display instead
         }
     });
 
