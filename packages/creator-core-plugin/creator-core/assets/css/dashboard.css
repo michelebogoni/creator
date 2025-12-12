@@ -460,16 +460,11 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: var(--creator-gray-100);
-	border-radius: var(--creator-radius);
-	color: var(--creator-gray-600);
-	border: 1px solid var(--creator-gray-200);
 }
 
-.creator-conversation-icon .dashicons {
-	font-size: 1.25em;
-	width: 1.25em;
-	height: 1.25em;
+.creator-conversation-icon svg {
+	width: 100%;
+	height: 100%;
 }
 
 .creator-conversation-content {
@@ -723,12 +718,6 @@
 	.creator-conversation-icon {
 		width: 2em;
 		height: 2em;
-	}
-
-	.creator-conversation-icon .dashicons {
-		font-size: 1em;
-		width: 1em;
-		height: 1em;
 	}
 
 	.creator-conversation-title {
