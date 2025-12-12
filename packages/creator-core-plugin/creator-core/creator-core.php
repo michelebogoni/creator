@@ -46,7 +46,7 @@ add_action( 'admin_notices', function() {
     if ( $page !== '' && strpos( $page, 'creator-' ) === 0 ) {
         return;
     }
-    $url = admin_url( 'admin.php?page=creator-settings' );
+    $url = admin_url( 'admin.php?page=creator-dashboard' );
     echo '<div class="notice notice-info"><p><strong>Creator:</strong> ';
     echo 'Please configure your <a href="' . esc_url( $url ) . '">license key</a> to get started.</p></div>';
 });
@@ -166,8 +166,8 @@ function creator_core_activation_redirect() {
             return;
         }
 
-        // Redirect to settings page
-        wp_safe_redirect( admin_url( 'admin.php?page=creator-settings' ) );
+        // Redirect to dashboard page
+        wp_safe_redirect( admin_url( 'admin.php?page=creator-dashboard' ) );
         exit;
     }
 }
@@ -193,13 +193,13 @@ function creator_core_activation_notice() {
         return;
     }
 
-    $settings_url = admin_url( 'admin.php?page=creator-settings' );
+    $dashboard_url = admin_url( 'admin.php?page=creator-dashboard' );
     ?>
     <div class="notice notice-info is-dismissible">
         <p>
             <strong><?php esc_html_e( 'Creator', 'creator-core' ); ?>:</strong>
             <?php esc_html_e( 'Thank you for installing Creator! Please configure your license key to get started.', 'creator-core' ); ?>
-            <a href="<?php echo esc_url( $settings_url ); ?>" class="button button-primary" style="margin-left: 10px;">
+            <a href="<?php echo esc_url( $dashboard_url ); ?>" class="button button-primary" style="margin-left: 10px;">
                 <?php esc_html_e( 'Configure License', 'creator-core' ); ?>
             </a>
         </p>
@@ -228,11 +228,11 @@ function creator_core_activation_redirect_js() {
     // Delete the option
     delete_option( 'creator_do_activation_redirect' );
 
-    $settings_url = admin_url( 'admin.php?page=creator-settings' );
+    $dashboard_url = admin_url( 'admin.php?page=creator-dashboard' );
     ?>
     <script type="text/javascript">
         (function() {
-            window.location.href = '<?php echo esc_js( $settings_url ); ?>';
+            window.location.href = '<?php echo esc_js( $dashboard_url ); ?>';
         })();
     </script>
     <?php
