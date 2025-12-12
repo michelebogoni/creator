@@ -272,8 +272,11 @@ class ChatInterface {
                 <!-- Chat Messages Area -->
                 <div id="creator-chat-messages" class="creator-chat-messages">
                     <div class="creator-welcome-message">
-                        <div class="creator-welcome-icon">
-                            <span class="dashicons dashicons-format-chat"></span>
+                        <div class="creator-welcome-logo">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+                                <circle cx="250" cy="250" r="245"/>
+                                <polygon points="115.93 250 304.81 61.12 344.06 100.38 194.43 250 344.06 399.62 304.81 438.88 115.93 250" style="fill: #fff;"/>
+                            </svg>
                         </div>
                         <h2><?php esc_html_e( 'Welcome to Creator!', 'creator-core' ); ?></h2>
                         <p><?php esc_html_e( 'I\'m your AI assistant for WordPress development. How can I help you today?', 'creator-core' ); ?></p>
