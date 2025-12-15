@@ -41,9 +41,27 @@ class Dashboard {
 	public function init(): void {
 		add_action( 'admin_menu', [ $this, 'register_page' ], 5 );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+		add_action( 'admin_init', [ $this, 'register_settings' ] );
 		add_action( 'admin_init', [ $this, 'maybe_show_license_notice' ] );
 		add_action( 'update_option_creator_license_key', [ $this, 'on_license_key_updated' ], 10, 2 );
 		add_action( 'wp_ajax_creator_verify_license', [ $this, 'ajax_verify_license' ] );
+	}
+
+	/**
+	 * Register settings for the dashboard
+	 *
+	 * @return void
+	 */
+	public function register_settings(): void {
+		register_setting(
+			'creator_dashboard_settings',
+			'creator_license_key',
+			[
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => '',
+			]
+		);
 	}
 
 	/**
@@ -295,17 +313,6 @@ class Dashboard {
 			</div>
 		</div>
 		<?php
-
-		// Register the setting.
-		register_setting(
-			'creator_dashboard_settings',
-			'creator_license_key',
-			[
-				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
-				'default'           => '',
-			]
-		);
 	}
 
 	/**
