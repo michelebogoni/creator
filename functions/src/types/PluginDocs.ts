@@ -65,14 +65,23 @@ export interface PluginDocsEntry {
   /** Number of cache hits */
   cache_hits: number;
 
-  /** Source of the documentation (ai_research, manual, fallback) */
-  source: "ai_research" | "manual" | "fallback";
+  /** Source of the documentation (ai_research, manual, fallback, wordpress_core) */
+  source: "ai_research" | "manual" | "fallback" | "wordpress_core";
 
   /** Last verification timestamp */
   last_verified?: Timestamp;
 
   /** Research metadata for AI-researched docs */
   research_meta?: ResearchMetadata;
+
+  /** Description of the API/plugin (for WordPress Core docs) */
+  description?: string;
+
+  /** Code examples showing proper usage (for WordPress Core docs) */
+  code_examples?: string[];
+
+  /** Best practices and guidelines (for WordPress Core docs) */
+  best_practices?: string[];
 }
 
 /**
@@ -86,7 +95,7 @@ export interface CreatePluginDocsData {
   api_reference?: string;
   version_notes?: string[];
   cached_by?: string;
-  source?: "ai_research" | "manual" | "fallback";
+  source?: "ai_research" | "manual" | "fallback" | "wordpress_core";
 }
 
 /**
