@@ -266,20 +266,74 @@ Tracking costi mensili aggregati per licenza.
 
 #### 5. `plugin_docs_cache`
 
-Cache centralizzata documentazione plugin WordPress.
+Cache centralizzata documentazione plugin WordPress e **WordPress Core API**.
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| `plugin_slug` | string | Es: `advanced-custom-fields` |
-| `plugin_version` | string | Es: `6.2.5` |
+| `plugin_slug` | string | Es: `advanced-custom-fields` o `wordpress-core/media` |
+| `plugin_version` | string | Es: `6.2.5` o `6.7` (per WP Core) |
 | `docs_url` | string | URL documentazione ufficiale |
-| `main_functions` | string[] | Funzioni principali del plugin |
+| `main_functions` | string[] | Funzioni principali con descrizione |
 | `api_reference` | string | URL API reference |
 | `version_notes` | string[] | Note versione |
+| `description` | string | Descrizione dell'API (per WP Core) |
+| `code_examples` | string[] | Esempi di codice corretti (per WP Core) |
+| `best_practices` | string[] | Best practices e linee guida (per WP Core) |
 | `cached_at` | Timestamp | Data cache |
 | `cache_hits` | number | Contatore utilizzi |
-| `source` | string | `ai_research` \| `manual` \| `fallback` |
+| `source` | string | `ai_research` \| `manual` \| `fallback` \| `wordpress_core` |
 | `research_meta` | object | Metadati ricerca AI |
+
+#### 6. WordPress Core Documentation (Pre-popolata)
+
+La documentazione WordPress Core è pre-popolata e non richiede ricerca AI. Viene servita direttamente dal file `wordpressCoreDocs.ts`.
+
+**Slug format**: `wordpress-core/{topic}`
+
+| Topic | Descrizione |
+|-------|-------------|
+| `wordpress-core/media` | Media Library API - `wp_insert_attachment()`, `wp_generate_attachment_metadata()`, `media_handle_sideload()` |
+| `wordpress-core/posts` | Posts/CPT API - `wp_insert_post()`, `get_posts()`, `update_post_meta()` |
+| `wordpress-core/users` | Users API - `wp_insert_user()`, `get_user_by()`, `current_user_can()` |
+| `wordpress-core/options` | Options & Transients - `get_option()`, `set_transient()` |
+| `wordpress-core/database` | `$wpdb` API - `prepare()`, `insert()`, `update()`, `get_results()` |
+| `wordpress-core/hooks` | Actions & Filters - `add_action()`, `add_filter()`, `apply_filters()` |
+| `wordpress-core/rest-api` | REST API - `register_rest_route()`, `WP_REST_Request` |
+| `wordpress-core/taxonomies` | Taxonomies - `register_taxonomy()`, `wp_set_object_terms()` |
+| `wordpress-core/filesystem` | WP_Filesystem API |
+| `wordpress-core/scripts-styles` | `wp_enqueue_script()`, `wp_localize_script()` |
+| `wordpress-core/ajax` | AJAX handlers - `wp_ajax_*`, `check_ajax_referer()` |
+| `wordpress-core/shortcodes` | Shortcode API - `add_shortcode()`, `shortcode_atts()` |
+| `wordpress-core/widgets` | Widget API - `WP_Widget` class |
+
+**Ogni topic include**:
+- `docs_url`: URL documentazione ufficiale WordPress
+- `main_functions`: Funzioni principali con parametri e descrizione
+- `code_examples`: Esempi di codice **corretti** e completi
+- `best_practices`: Linee guida e avvertenze importanti
+
+**Esempio richiesta AI**:
+```json
+{
+  "type": "request_docs",
+  "data": {
+    "plugins_needed": ["wordpress-core/media", "elementor"]
+  }
+}
+```
+
+Questo risolve problemi come immagini non registrate nella Media Library, perché l'AI riceve documentazione su come usare correttamente `wp_insert_attachment()` invece di `file_put_contents()`.
+
+**Flusso**:
+```
+AI rileva task upload immagine
+        ↓
+Richiede "wordpress-core/media" + "elementor"
+        ↓
+Firebase ritorna documentazione con code_examples e best_practices
+        ↓
+AI genera codice CORRETTO che registra l'immagine nella Media Library
+```
 
 ### Provider AI
 
@@ -319,7 +373,8 @@ functions/
 │   ├── services/
 │   │   ├── modelService.ts           # Logica routing AI
 │   │   ├── licensing.ts              # Validazione licenze
-│   │   └── pluginDocsResearch.ts     # Ricerca AI docs
+│   │   ├── pluginDocsResearch.ts     # Ricerca AI docs plugin
+│   │   └── wordpressCoreDocs.ts      # Documentazione WordPress Core API (pre-popolata)
 │   ├── providers/
 │   │   ├── gemini.ts                 # Provider Gemini
 │   │   └── claude.ts                 # Provider Claude
@@ -761,6 +816,7 @@ cd functions && npm run serve
 - ✅ Cost tracking mensile per provider
 - ✅ Audit logging completo
 - ✅ Plugin documentation repository con AI research
+- ✅ **WordPress Core API documentation** (13 topic pre-popolati con code examples e best practices)
 - ✅ Middleware auth e rate limit
 - ✅ 8 Cloud Functions deployate e testate
 - ✅ Firestore collections configurate
