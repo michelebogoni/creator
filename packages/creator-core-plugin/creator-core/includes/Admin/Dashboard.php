@@ -70,9 +70,9 @@ class Dashboard {
 	 * @return void
 	 */
 	public function register_page(): void {
-		// Creator logo SVG: circle with chevron cutout
-		// Scaled down from 500x500 to 20x20 for WordPress menu
-		$icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><circle cx="250" cy="250" r="245" fill="black"/><polygon points="115.93 250 304.81 61.12 344.06 100.38 194.43 250 344.06 399.62 304.81 438.88 115.93 250" fill="white"/></svg>';
+		// Creator cut logo SVG for WordPress menu
+		// Using fill="black" for WordPress admin menu compatibility
+		$icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><path d="M250,5C114.69,5,5,114.69,5,250s109.69,245,245,245,245-109.69,245-245S385.31,5,250,5ZM270.88,283.38l53.89,55.37c29.52,30.33,8.03,81.24-34.3,81.24h0c-12.92,0-25.29-5.22-34.3-14.48l-118.86-122.13c-18.08-18.58-18.08-48.18,0-66.76l118.86-122.13c9.01-9.26,21.38-14.48,34.3-14.48h0c42.32,0,63.82,50.91,34.3,81.24l-53.89,55.37c-18.08,18.58-18.08,48.18,0,66.76Z" fill="black"/></svg>';
 		$icon_base64 = 'data:image/svg+xml;base64,' . base64_encode( $icon_svg );
 
 		$this->hook_suffix = add_menu_page(
