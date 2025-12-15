@@ -818,7 +818,47 @@
 	color: var(--creator-gray-800);
 }
 
+/* Change License Key button - no hover effect */
+#creator-change-license {
+	background: transparent !important;
+	border: none !important;
+}
+
+#creator-change-license:hover,
+#creator-change-license:focus,
+#creator-change-license:active {
+	background: transparent !important;
+	border: none !important;
+	color: var(--creator-gray-600) !important;
+	box-shadow: none !important;
+	outline: none !important;
+}
+
 .creator-dashboard-wrap .spinner {
 	float: none;
 	margin: 0;
+}
+
+/* ============================================
+   License Feedback Message
+   ============================================ */
+.creator-license-feedback {
+	display: none;
+	margin-top: 0.75em;
+	padding: 0.5em 0.75em;
+	font-size: 0.875em;
+	font-weight: 500;
+	border-radius: var(--creator-radius);
+}
+
+.creator-license-feedback.success {
+	background: #DCFCE7;
+	color: #166534;
+	border: 1px solid #BBF7D0;
+}
+
+.creator-license-feedback.error {
+	background: #FEE2E2;
+	color: #991B1B;
+	border: 1px solid #FECACA;
 }
