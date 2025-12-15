@@ -478,7 +478,9 @@
 	 */
 	function verifyLicense() {
 		const $btn = $('#creator-verify-license');
+		const $feedback = $('#creator-license-feedback');
 		$btn.prop('disabled', true).text(creatorDashboard.i18n.verifying);
+		$feedback.hide().removeClass('success error');
 
 		$.ajax({
 			url: creatorDashboard.ajaxUrl,
@@ -498,17 +500,34 @@
 					renderLicenseStatus();
 					renderUsageDisplay();
 					renderHealthIndicators();
+
+					// Show success feedback
+					showFeedback(response.data.message || creatorDashboard.i18n.verifySuccess, 'success');
 				} else {
-					alert(response.data.message || creatorDashboard.i18n.error);
+					// Show error feedback
+					showFeedback(response.data.message || creatorDashboard.i18n.verifyError, 'error');
 				}
 			},
 			error: function() {
-				alert(creatorDashboard.i18n.error);
+				showFeedback(creatorDashboard.i18n.error, 'error');
 			},
 			complete: function() {
 				$btn.prop('disabled', false).text(creatorDashboard.i18n.verifyLicense);
 			}
 		});
+	}
+
+	/**
+	 * Show feedback message
+	 */
+	function showFeedback(message, type) {
+		const $feedback = $('#creator-license-feedback');
+		$feedback.removeClass('success error').addClass(type).text(message).fadeIn(200);
+
+		// Auto-hide after 5 seconds
+		setTimeout(function() {
+			$feedback.fadeOut(200);
+		}, 5000);
 	}
 
 	/**

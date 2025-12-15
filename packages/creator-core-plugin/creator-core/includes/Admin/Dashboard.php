@@ -160,6 +160,8 @@ class Dashboard {
 					'daysAgo'            => __( '%d days ago', 'creator-core' ),
 					'verifying'          => __( 'Verifying...', 'creator-core' ),
 					'verifyLicense'      => __( 'Verify License', 'creator-core' ),
+					'verifySuccess'      => __( 'License verified successfully!', 'creator-core' ),
+					'verifyError'        => __( 'License verification failed.', 'creator-core' ),
 					'available'          => __( 'Available', 'creator-core' ),
 					'creditsUsed'        => __( 'Credits Used', 'creator-core' ),
 					'resetDate'          => __( 'Reset', 'creator-core' ),
@@ -223,6 +225,7 @@ class Dashboard {
 										<?php esc_html_e( 'Change License Key', 'creator-core' ); ?>
 									</button>
 								</div>
+								<div id="creator-license-feedback" class="creator-license-feedback"></div>
 								<div id="creator-change-license-form" class="creator-license-setup" style="display: none;">
 									<form method="post" action="options.php">
 										<?php settings_fields( 'creator_dashboard_settings' ); ?>
@@ -457,7 +460,7 @@ class Dashboard {
 	}
 
 	/**
-	 * Handle license key update
+	 * Handle license key update - auto-verify when saved
 	 *
 	 * @param mixed $old_value Old option value.
 	 * @param mixed $new_value New option value.
@@ -470,31 +473,23 @@ class Dashboard {
 			return;
 		}
 
+		// Clear old token/status when key changes.
 		if ( $old_value !== $new_value ) {
 			delete_option( 'creator_site_token' );
 			delete_option( 'creator_license_status' );
 		}
+
+		// Auto-verify the new license key.
+		$this->verify_license_key( $new_value );
 	}
 
 	/**
-	 * AJAX handler for license verification
+	 * Verify a license key with the proxy
 	 *
-	 * @return void
+	 * @param string $license_key The license key to verify.
+	 * @return array Result with 'success' and 'message' keys.
 	 */
-	public function ajax_verify_license(): void {
-		check_ajax_referer( 'creator_verify_license', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'creator-core' ) ] );
-		}
-
-		$license_key = get_option( 'creator_license_key', '' );
-
-		if ( empty( $license_key ) ) {
-			wp_send_json_error( [ 'message' => __( 'No license key configured.', 'creator-core' ) ] );
-		}
-
-		// Validate with proxy.
+	private function verify_license_key( string $license_key ): array {
 		$proxy  = new \CreatorCore\Proxy\ProxyClient();
 		$result = $proxy->validate_license( $license_key );
 
@@ -517,11 +512,10 @@ class Dashboard {
 			];
 			update_option( 'creator_license_status', $status_data );
 
-			wp_send_json_success( [
-				'license' => $this->get_license_data(),
-				'usage'   => $this->get_usage_data(),
-				'health'  => $this->get_system_health(),
-			] );
+			return [
+				'success' => true,
+				'message' => __( 'License verified successfully.', 'creator-core' ),
+			];
 		} else {
 			$status_data = [
 				'valid'      => false,
@@ -530,7 +524,43 @@ class Dashboard {
 			];
 			update_option( 'creator_license_status', $status_data );
 
-			wp_send_json_error( [ 'message' => $result['message'] ?? __( 'License validation failed.', 'creator-core' ) ] );
+			return [
+				'success' => false,
+				'message' => $result['message'] ?? __( 'License validation failed.', 'creator-core' ),
+			];
+		}
+	}
+
+	/**
+	 * AJAX handler for license verification
+	 *
+	 * @return void
+	 */
+	public function ajax_verify_license(): void {
+		check_ajax_referer( 'creator_verify_license', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => __( 'Permission denied.', 'creator-core' ) ] );
+		}
+
+		$license_key = get_option( 'creator_license_key', '' );
+
+		if ( empty( $license_key ) ) {
+			wp_send_json_error( [ 'message' => __( 'No license key configured.', 'creator-core' ) ] );
+		}
+
+		// Use the shared verify method.
+		$result = $this->verify_license_key( $license_key );
+
+		if ( $result['success'] ) {
+			wp_send_json_success( [
+				'message' => $result['message'],
+				'license' => $this->get_license_data(),
+				'usage'   => $this->get_usage_data(),
+				'health'  => $this->get_system_health(),
+			] );
+		} else {
+			wp_send_json_error( [ 'message' => $result['message'] ] );
 		}
 	}
 
