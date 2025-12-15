@@ -52,9 +52,9 @@ class Dashboard {
 	 * @return void
 	 */
 	public function register_page(): void {
-		// Custom SVG icon: bold left chevron "<" with rounded stroke
-		// Per DESIGN_SYSTEM: "Simbolo geometrico a metà tra 'C' e '<', in grassetto"
-		$icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L6 10L12 16"/></svg>';
+		// Creator logo SVG: circle with chevron cutout
+		// Scaled down from 500x500 to 20x20 for WordPress menu
+		$icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><circle cx="250" cy="250" r="245" fill="black"/><polygon points="115.93 250 304.81 61.12 344.06 100.38 194.43 250 344.06 399.62 304.81 438.88 115.93 250" fill="white"/></svg>';
 		$icon_base64 = 'data:image/svg+xml;base64,' . base64_encode( $icon_svg );
 
 		$this->hook_suffix = add_menu_page(

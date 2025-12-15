@@ -137,6 +137,15 @@ class ProxyClient {
                 $status_code
             );
 
+            // Check if token expired - try to refresh automatically.
+            if ( $status_code === 401 || stripos( $error_msg, 'token' ) !== false && stripos( $error_msg, 'expir' ) !== false ) {
+                $refresh_result = $this->refresh_token();
+                if ( $refresh_result ) {
+                    // Retry the request with the new token.
+                    return $this->send_message( $message, $context, $conversation_history, $documentation );
+                }
+            }
+
             return new WP_Error(
                 'proxy_error',
                 $error_msg,
@@ -347,6 +356,49 @@ class ProxyClient {
             'expires_at' => $data['reset_date'] ?? '',
             'plan'       => $data['plan'] ?? 'standard',
         ];
+    }
+
+    /**
+     * Attempt to refresh an expired token
+     *
+     * Uses the stored license key to get a new site_token.
+     *
+     * @return bool True if token was refreshed successfully.
+     */
+    public function refresh_token(): bool {
+        // Prevent infinite recursion.
+        static $is_refreshing = false;
+        if ( $is_refreshing ) {
+            return false;
+        }
+        $is_refreshing = true;
+
+        $license_key = get_option( 'creator_license_key', '' );
+
+        if ( empty( $license_key ) ) {
+            $is_refreshing = false;
+            return false;
+        }
+
+        // Re-validate license to get new token.
+        $result = $this->validate_license( $license_key );
+
+        $is_refreshing = false;
+
+        if ( $result['valid'] && ! empty( $result['site_token'] ) ) {
+            update_option( 'creator_site_token', $result['site_token'] );
+
+            // Also update license status.
+            update_option( 'creator_license_status', [
+                'valid'      => true,
+                'plan'       => $result['plan'] ?? 'standard',
+                'expires_at' => $result['expires_at'] ?? '',
+            ] );
+
+            return true;
+        }
+
+        return false;
     }
 
     /**

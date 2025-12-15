@@ -352,9 +352,9 @@
 	function renderConversationRow(conv) {
 		let html = '<div class="creator-conversation-row" data-id="' + conv.id + '">';
 
-		// Creator logo SVG for conversation icon
+		// Chat icon for conversation
 		html += '<div class="creator-conversation-icon">';
-		html += '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><circle cx="250" cy="250" r="245"/><polygon points="115.93 250 304.81 61.12 344.06 100.38 194.43 250 344.06 399.62 304.81 438.88 115.93 250" style="fill: #fff;"/></svg>';
+		html += '<span class="dashicons dashicons-format-chat"></span>';
 		html += '</div>';
 
 		html += '<div class="creator-conversation-content">';
