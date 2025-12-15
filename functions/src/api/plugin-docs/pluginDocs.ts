@@ -31,6 +31,10 @@ import {
   PluginDocsResearchService,
   getFallbackDocs,
 } from "../../services/pluginDocsResearch";
+import {
+  isWordPressCoreDocsRequest,
+  getWordPressCoreDocs,
+} from "../../services/wordpressCoreDocs";
 import { geminiApiKey, claudeApiKey } from "../../lib/secrets";
 
 /**
@@ -390,6 +394,45 @@ export const researchPluginDocsApi = functions
         pluginSlug: body.plugin_slug,
         pluginVersion: body.plugin_version,
       });
+
+      // Check if this is a WordPress Core docs request
+      if (isWordPressCoreDocsRequest(body.plugin_slug)) {
+        const wpDocs = getWordPressCoreDocs(body.plugin_slug);
+        if (wpDocs) {
+          logger.info("Returning WordPress Core docs", {
+            topic: body.plugin_slug,
+            version: body.plugin_version,
+          });
+
+          // Return WordPress Core docs without caching (they're static)
+          res.status(200).json({
+            success: true,
+            cached: true,
+            source: "wordpress_core",
+            data: {
+              plugin_slug: body.plugin_slug,
+              plugin_version: body.plugin_version,
+              docs_url: wpDocs.docs_url,
+              api_reference: wpDocs.api_reference,
+              main_functions: wpDocs.main_functions,
+              description: wpDocs.description,
+              code_examples: wpDocs.code_examples,
+              best_practices: wpDocs.best_practices,
+            },
+          });
+          return;
+        }
+
+        // Unknown WordPress Core topic
+        logger.warn("Unknown WordPress Core topic requested", {
+          topic: body.plugin_slug,
+        });
+        res.status(404).json({
+          success: false,
+          error: `Unknown WordPress Core topic: ${body.plugin_slug}`,
+        });
+        return;
+      }
 
       // Check cache first
       const cached = await getPluginDocs(body.plugin_slug, body.plugin_version);

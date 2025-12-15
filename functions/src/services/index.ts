@@ -4,3 +4,4 @@
  */
 
 export * from "./licensing";
+export * from "./wordpressCoreDocs";
