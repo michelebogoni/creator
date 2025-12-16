@@ -497,7 +497,8 @@
 		// Check license status and show appropriate feedback
 		const license = creatorDashboard.license;
 		if (license.hasKey) {
-			if (license.isValid) {
+			// isVerified means site_token was obtained successfully
+			if (license.isVerified) {
 				showFeedback(creatorDashboard.i18n.verifySuccess, 'success');
 			} else {
 				showFeedback(creatorDashboard.i18n.verifyError, 'error');

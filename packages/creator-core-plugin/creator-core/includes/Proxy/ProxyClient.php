@@ -334,6 +334,11 @@ class ProxyClient {
         $body        = wp_remote_retrieve_body( $response );
         $data        = json_decode( $body, true );
 
+        // Debug: log raw Firebase response
+        error_log( '[Creator Proxy] validate_license response - status: ' . $status_code );
+        error_log( '[Creator Proxy] validate_license response - body: ' . $body );
+        error_log( '[Creator Proxy] validate_license response - data keys: ' . ( is_array( $data ) ? implode( ', ', array_keys( $data ) ) : 'NOT_ARRAY' ) );
+
         if ( $status_code !== 200 ) {
             return [
                 'valid'   => false,
@@ -349,12 +354,17 @@ class ProxyClient {
             ];
         }
 
+        // Debug: log site_token presence
+        error_log( '[Creator Proxy] site_token in response: ' . ( isset( $data['site_token'] ) ? 'YES (length: ' . strlen( $data['site_token'] ) . ')' : 'NO' ) );
+
         return [
-            'valid'      => true,
-            'message'    => $data['message'] ?? __( 'License validated successfully.', 'creator-core' ),
-            'site_token' => $data['site_token'] ?? '',
-            'expires_at' => $data['reset_date'] ?? '',
-            'plan'       => $data['plan'] ?? 'standard',
+            'valid'        => true,
+            'message'      => $data['message'] ?? __( 'License validated successfully.', 'creator-core' ),
+            'site_token'   => $data['site_token'] ?? '',
+            'expires_at'   => $data['reset_date'] ?? '',
+            'plan'         => $data['plan'] ?? 'standard',
+            'tokens_used'  => $data['tokens_used'] ?? 0,
+            'tokens_limit' => $data['tokens_limit'] ?? 50000,
         ];
     }
 
