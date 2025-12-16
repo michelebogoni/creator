@@ -94,8 +94,25 @@ class Loader {
      * @return void
      */
     private function init_license_hooks(): void {
-        // Register hook to auto-verify license when license key is saved
+        // Register hook for when license key is UPDATED (already exists)
         add_action( 'update_option_creator_license_key', [ $this, 'on_license_key_updated' ], 10, 2 );
+
+        // Register hook for when license key is ADDED for the first time
+        add_action( 'add_option_creator_license_key', [ $this, 'on_license_key_added' ], 10, 2 );
+    }
+
+    /**
+     * Handle license key added for the first time
+     *
+     * @param string $option Option name.
+     * @param mixed  $value  Option value.
+     * @return void
+     */
+    public function on_license_key_added( $option, $value ): void {
+        error_log( '[Creator Hook] on_license_key_added called - value: ' . ( $value ? 'SET' : 'EMPTY' ) );
+
+        // Delegate to the update handler with empty old value
+        $this->on_license_key_updated( '', $value );
     }
 
     /**
