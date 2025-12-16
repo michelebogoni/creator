@@ -62,12 +62,18 @@ class Loader {
         // Always register REST API endpoints (permission is checked per-request)
         $this->init_rest_api();
 
+        // Always register license-related hooks (they need to fire even during options.php processing)
+        // These hooks handle their own permission checks internally
+        $this->init_license_hooks();
+
         // Only load admin UI components in admin context
         if ( ! is_admin() ) {
             return;
         }
 
         // Check user capability for admin UI
+        // Note: current_user_can() may not work reliably during plugins_loaded,
+        // but it's fine here because we only skip UI components, not hooks
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
@@ -75,6 +81,101 @@ class Loader {
         // Initialize admin components
         $this->init_admin();
         $this->init_chat();
+    }
+
+    /**
+     * Initialize license-related hooks
+     *
+     * These hooks must be registered early and unconditionally because:
+     * - update_option hooks fire during options.php processing
+     * - current_user_can() isn't reliable during plugins_loaded
+     * - Permission checks are done inside the callbacks
+     *
+     * @return void
+     */
+    private function init_license_hooks(): void {
+        // Register hook to auto-verify license when license key is saved
+        add_action( 'update_option_creator_license_key', [ $this, 'on_license_key_updated' ], 10, 2 );
+    }
+
+    /**
+     * Handle license key update - auto-verify when saved
+     *
+     * This is a wrapper that delegates to Dashboard if available,
+     * or handles verification directly if Dashboard isn't loaded yet.
+     *
+     * @param mixed $old_value Old option value.
+     * @param mixed $new_value New option value.
+     * @return void
+     */
+    public function on_license_key_updated( $old_value, $new_value ): void {
+        // Permission check - only process for users who can manage options
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        if ( empty( $new_value ) ) {
+            delete_option( 'creator_site_token' );
+            delete_option( 'creator_license_status' );
+            return;
+        }
+
+        // Clear old token/status when key changes
+        if ( $old_value !== $new_value ) {
+            delete_option( 'creator_site_token' );
+            delete_option( 'creator_license_status' );
+        }
+
+        // Auto-verify the new license key
+        $this->verify_license_key( $new_value );
+    }
+
+    /**
+     * Verify a license key with the proxy
+     *
+     * @param string $license_key The license key to verify.
+     * @return array Result with 'success' and 'message' keys.
+     */
+    private function verify_license_key( string $license_key ): array {
+        $proxy  = new Proxy\ProxyClient();
+        $result = $proxy->validate_license( $license_key );
+
+        if ( $result['valid'] ) {
+            // Save the JWT site_token from Firebase.
+            if ( ! empty( $result['site_token'] ) ) {
+                update_option( 'creator_site_token', $result['site_token'] );
+            }
+
+            // Save status for display.
+            $status_data = [
+                'valid'        => true,
+                'status'       => __( 'License Valid', 'creator-core' ),
+                'expires_at'   => $result['expires_at'] ?? '',
+                'plan'         => $result['plan'] ?? 'Standard',
+                'tokens_used'  => $result['tokens_used'] ?? 0,
+                'tokens_limit' => $result['tokens_limit'] ?? 50000,
+                'reset_date'   => $result['reset_date'] ?? '',
+                'checked_at'   => current_time( 'mysql' ),
+            ];
+            update_option( 'creator_license_status', $status_data );
+
+            return [
+                'success' => true,
+                'message' => __( 'License verified successfully.', 'creator-core' ),
+            ];
+        } else {
+            $status_data = [
+                'valid'      => false,
+                'status'     => $result['message'] ?? __( 'License Invalid', 'creator-core' ),
+                'checked_at' => current_time( 'mysql' ),
+            ];
+            update_option( 'creator_license_status', $status_data );
+
+            return [
+                'success' => false,
+                'message' => $result['message'] ?? __( 'License validation failed.', 'creator-core' ),
+            ];
+        }
     }
 
     /**
