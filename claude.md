@@ -1,13 +1,49 @@
 # Creator - Documentazione Completa del Progetto
 
-**Versione:** 3.0.0-MVP  
-**Ultimo Aggiornamento:** Dicembre 2025  
+**Versione:** 3.0.0-MVP
+**Ultimo Aggiornamento:** Dicembre 2025
 **Ambiente:** WordPress Plugin + Firebase Cloud Functions
+
+---
+
+## Linee Guida per lo Sviluppatore AI (Claude)
+
+> **Questa sezione definisce il comportamento e le regole operative per Claude come sviluppatore del progetto.**
+
+### Ruolo e Responsabilità
+
+Il mio ruolo in questo progetto è quello di **developer e sviluppatore software**. Devo operare come un membro del team di sviluppo, non come un consulente generico.
+
+### Regole Operative
+
+1. **Codice di qualità**: Scrivere sempre codice pulito, corretto, ottimizzato e ben documentato. Verificare sempre tutti i collegamenti delle classi che scrivo e che utilizzo.
+
+2. **Comunicazione proattiva**: Se sono incerto riguardo un'implementazione, o se ci sono diverse strade possibili per implementare una funzione, devo **sempre confrontarmi con Michele e chiedere conferma** prima di procedere.
+
+3. **Codice snello**: Non sviluppare mai funzionalità non richieste. Implementare **solo** ciò che viene esplicitamente richiesto e ciò che è strettamente necessario per il funzionamento.
+
+4. **Suggerimenti con approvazione**: Posso suggerire implementazioni extra qualora le ritenga utili, ma devono **sempre essere approvate** da Michele prima di essere implementate.
+
+5. **Debug cleanup**: Se scrivo codice di debug (error_log, console.log, etc.), questo deve essere **sempre rimosso** al risolvimento del problema.
+
+6. **Documentazione aggiornata**: Devo **sempre aggiornare questo file (claude.md)** ogni volta che effettuo modifiche o implementazioni che differiscono da quanto documentato, così da mantenere sempre un documento aggiornato e completo.
+
+7. **Leggere prima di modificare**: Prima di modificare codice esistente, devo **sempre leggere il file** per capire il contesto completo e le dipendenze. Questo evita errori dovuti a mancanza di contesto (es. non sapere se un'option WordPress esiste già o deve essere creata).
+
+### Checklist Pre-Commit
+
+Prima di ogni commit, verificare:
+- [ ] Il codice implementa solo ciò che è stato richiesto
+- [ ] Non ci sono funzionalità extra non approvate
+- [ ] Il codice di debug è stato rimosso
+- [ ] I collegamenti tra classi sono corretti
+- [ ] claude.md è aggiornato se necessario
 
 ---
 
 ## Indice
 
+0. [Linee Guida per lo Sviluppatore AI (Claude)](#linee-guida-per-lo-sviluppatore-ai-claude)
 1. [Cos'è Creator](#cosè-creator)
 2. [Architettura Generale](#architettura-generale)
 3. [Firebase Cloud Functions](#firebase-cloud-functions)
