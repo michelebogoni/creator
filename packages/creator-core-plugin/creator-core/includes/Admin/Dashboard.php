@@ -43,7 +43,8 @@ class Dashboard {
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
 		add_action( 'admin_init', [ $this, 'maybe_show_license_notice' ] );
-		add_action( 'update_option_creator_license_key', [ $this, 'on_license_key_updated' ], 10, 2 );
+		// Note: update_option_creator_license_key hook is now registered in Loader
+		// to ensure it fires even when Dashboard isn't loaded (e.g., during options.php processing)
 		add_action( 'wp_ajax_creator_verify_license', [ $this, 'ajax_verify_license' ] );
 	}
 
