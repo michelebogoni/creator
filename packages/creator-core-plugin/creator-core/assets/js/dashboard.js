@@ -39,6 +39,9 @@
 		renderUsageDisplay();
 		renderHealthIndicators();
 
+		// Check if license was just saved (settings-updated parameter)
+		checkLicenseUpdateFeedback();
+
 		// Load conversations
 		loadConversations();
 
@@ -87,11 +90,6 @@
 			if (state.deleteId) {
 				deleteConversation(state.deleteId);
 			}
-		});
-
-		// Verify license
-		$('#creator-verify-license').on('click', function() {
-			verifyLicense();
 		});
 
 		// Change license key toggle
@@ -474,50 +472,6 @@
 	}
 
 	/**
-	 * Verify license
-	 */
-	function verifyLicense() {
-		const $btn = $('#creator-verify-license');
-		const $feedback = $('#creator-license-feedback');
-		$btn.prop('disabled', true).text(creatorDashboard.i18n.verifying);
-		$feedback.hide().removeClass('success error');
-
-		$.ajax({
-			url: creatorDashboard.ajaxUrl,
-			method: 'POST',
-			data: {
-				action: 'creator_verify_license',
-				nonce: creatorDashboard.verifyNonce
-			},
-			success: function(response) {
-				if (response.success) {
-					// Update dashboard data
-					creatorDashboard.license = response.data.license;
-					creatorDashboard.usage = response.data.usage;
-					creatorDashboard.systemHealth = response.data.health;
-
-					// Re-render
-					renderLicenseStatus();
-					renderUsageDisplay();
-					renderHealthIndicators();
-
-					// Show success feedback
-					showFeedback(response.data.message || creatorDashboard.i18n.verifySuccess, 'success');
-				} else {
-					// Show error feedback
-					showFeedback(response.data.message || creatorDashboard.i18n.verifyError, 'error');
-				}
-			},
-			error: function() {
-				showFeedback(creatorDashboard.i18n.error, 'error');
-			},
-			complete: function() {
-				$btn.prop('disabled', false).text(creatorDashboard.i18n.verifyLicense);
-			}
-		});
-	}
-
-	/**
 	 * Show feedback message
 	 */
 	function showFeedback(message, type) {
@@ -528,6 +482,31 @@
 		setTimeout(function() {
 			$feedback.fadeOut(200);
 		}, 5000);
+	}
+
+	/**
+	 * Check if license was just saved and show feedback
+	 */
+	function checkLicenseUpdateFeedback() {
+		// Check for settings-updated query parameter
+		const urlParams = new URLSearchParams(window.location.search);
+		if (!urlParams.has('settings-updated')) {
+			return;
+		}
+
+		// Check license status and show appropriate feedback
+		const license = creatorDashboard.license;
+		if (license.hasKey) {
+			if (license.isValid) {
+				showFeedback(creatorDashboard.i18n.verifySuccess, 'success');
+			} else {
+				showFeedback(creatorDashboard.i18n.verifyError, 'error');
+			}
+
+			// Clean URL (remove settings-updated parameter)
+			const cleanUrl = window.location.pathname + '?page=creator-dashboard';
+			window.history.replaceState({}, document.title, cleanUrl);
+		}
 	}
 
 	/**
