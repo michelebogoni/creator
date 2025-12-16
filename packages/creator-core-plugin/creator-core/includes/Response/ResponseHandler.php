@@ -312,8 +312,8 @@ class ResponseHandler {
             );
         }
 
-        // Execute the PHP code.
-        $execution_result = $this->code_executor->execute( $code );
+        // Execute the PHP code with context available as $context variable.
+        $execution_result = $this->code_executor->execute( $code, $context );
 
         $data = $ai_response['data'] ?? [];
 
@@ -455,8 +455,8 @@ class ResponseHandler {
             );
         }
 
-        // Execute the PHP code.
-        $execution_result = $this->code_executor->execute( $code );
+        // Execute the PHP code with context available as $context variable.
+        $execution_result = $this->code_executor->execute( $code, $context );
 
         return [
             'type'                   => 'execute',
@@ -495,8 +495,8 @@ class ResponseHandler {
             ];
         }
 
-        // Execute verification code.
-        $verification_result = $this->code_executor->execute( $code );
+        // Execute verification code with context available as $context variable.
+        $verification_result = $this->code_executor->execute( $code, $context );
 
         return [
             'type'                   => 'verify',
