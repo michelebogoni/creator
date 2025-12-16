@@ -109,8 +109,6 @@ class Loader {
      * @return void
      */
     public function on_license_key_added( $option, $value ): void {
-        error_log( '[Creator Hook] on_license_key_added called - value: ' . ( $value ? 'SET' : 'EMPTY' ) );
-
         // Delegate to the update handler with empty old value
         $this->on_license_key_updated( '', $value );
     }
@@ -126,16 +124,12 @@ class Loader {
      * @return void
      */
     public function on_license_key_updated( $old_value, $new_value ): void {
-        error_log( '[Creator Hook] on_license_key_updated called - old: ' . ( $old_value ? 'SET' : 'EMPTY' ) . ', new: ' . ( $new_value ? 'SET' : 'EMPTY' ) );
-
         // Permission check - only process for users who can manage options
         if ( ! current_user_can( 'manage_options' ) ) {
-            error_log( '[Creator Hook] Permission denied - current_user_can returned false' );
             return;
         }
 
         if ( empty( $new_value ) ) {
-            error_log( '[Creator Hook] New value empty, clearing options' );
             delete_option( 'creator_site_token' );
             delete_option( 'creator_license_status' );
             return;
@@ -143,13 +137,11 @@ class Loader {
 
         // Clear old token/status when key changes
         if ( $old_value !== $new_value ) {
-            error_log( '[Creator Hook] Key changed, clearing old token/status' );
             delete_option( 'creator_site_token' );
             delete_option( 'creator_license_status' );
         }
 
         // Auto-verify the new license key
-        error_log( '[Creator Hook] Calling verify_license_key' );
         $this->verify_license_key( $new_value );
     }
 
@@ -160,20 +152,13 @@ class Loader {
      * @return array Result with 'success' and 'message' keys.
      */
     private function verify_license_key( string $license_key ): array {
-        error_log( '[Creator License] Starting verification for key: ' . substr( $license_key, 0, 15 ) . '...' );
-
         $proxy  = new Proxy\ProxyClient();
         $result = $proxy->validate_license( $license_key );
-
-        error_log( '[Creator License] Proxy result: ' . wp_json_encode( $result ) );
 
         if ( $result['valid'] ) {
             // Save the JWT site_token from Firebase.
             if ( ! empty( $result['site_token'] ) ) {
                 update_option( 'creator_site_token', $result['site_token'] );
-                error_log( '[Creator License] site_token saved successfully (length: ' . strlen( $result['site_token'] ) . ')' );
-            } else {
-                error_log( '[Creator License] WARNING: site_token is empty in proxy result!' );
             }
 
             // Save status for display.
@@ -188,14 +173,12 @@ class Loader {
                 'checked_at'   => current_time( 'mysql' ),
             ];
             update_option( 'creator_license_status', $status_data );
-            error_log( '[Creator License] license_status saved: ' . wp_json_encode( $status_data ) );
 
             return [
                 'success' => true,
                 'message' => __( 'License verified successfully.', 'creator-core' ),
             ];
         } else {
-            error_log( '[Creator License] Validation failed: ' . ( $result['message'] ?? 'Unknown error' ) );
             $status_data = [
                 'valid'      => false,
                 'status'     => $result['message'] ?? __( 'License Invalid', 'creator-core' ),
