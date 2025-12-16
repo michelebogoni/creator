@@ -208,7 +208,7 @@ class Dashboard {
 												placeholder="CREATOR-XXXX-XXXX-XXXX"
 											/>
 											<button type="submit" class="button button-primary">
-												<?php esc_html_e( 'Save', 'creator-core' ); ?>
+												<?php esc_html_e( 'Verify License', 'creator-core' ); ?>
 											</button>
 										</div>
 									</form>
@@ -218,10 +218,7 @@ class Dashboard {
 									<!-- Populated by JS -->
 								</div>
 								<div class="creator-license-actions">
-									<button type="button" id="creator-verify-license" class="button button-secondary">
-										<?php esc_html_e( 'Verify License', 'creator-core' ); ?>
-									</button>
-									<button type="button" id="creator-change-license" class="button button-link">
+									<button type="button" id="creator-change-license" class="button button-secondary">
 										<?php esc_html_e( 'Change License Key', 'creator-core' ); ?>
 									</button>
 								</div>
@@ -239,7 +236,7 @@ class Dashboard {
 												placeholder="CREATOR-XXXX-XXXX-XXXX"
 											/>
 											<button type="submit" class="button button-primary">
-												<?php esc_html_e( 'Save', 'creator-core' ); ?>
+												<?php esc_html_e( 'Verify License', 'creator-core' ); ?>
 											</button>
 											<button type="button" id="creator-cancel-change" class="button button-secondary">
 												<?php esc_html_e( 'Cancel', 'creator-core' ); ?>
