@@ -429,7 +429,7 @@ add_action( 'rest_api_init', function() {
         },
     ));
 
-    register_rest_route( 'myplugin/v1', '/items/(?P<id>\d+)', array(
+    register_rest_route( 'myplugin/v1', '/items/(?P<id>\\d+)', array(
         'methods'             => 'GET',
         'callback'            => 'get_item_callback',
         'permission_callback' => '__return_true',
