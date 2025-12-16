@@ -334,11 +334,6 @@ class ProxyClient {
         $body        = wp_remote_retrieve_body( $response );
         $data        = json_decode( $body, true );
 
-        // Debug: log raw Firebase response
-        error_log( '[Creator Proxy] validate_license response - status: ' . $status_code );
-        error_log( '[Creator Proxy] validate_license response - body: ' . $body );
-        error_log( '[Creator Proxy] validate_license response - data keys: ' . ( is_array( $data ) ? implode( ', ', array_keys( $data ) ) : 'NOT_ARRAY' ) );
-
         if ( $status_code !== 200 ) {
             return [
                 'valid'   => false,
@@ -353,9 +348,6 @@ class ProxyClient {
                 'message' => $data['error'] ?? $data['message'] ?? __( 'Invalid license key.', 'creator-core' ),
             ];
         }
-
-        // Debug: log site_token presence
-        error_log( '[Creator Proxy] site_token in response: ' . ( isset( $data['site_token'] ) ? 'YES (length: ' . strlen( $data['site_token'] ) . ')' : 'NO' ) );
 
         return [
             'valid'        => true,

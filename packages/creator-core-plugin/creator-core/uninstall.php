@@ -47,6 +47,7 @@ if ( $backup_path && file_exists( $backup_path ) ) {
 $options = [
     'creator_license_key',
     'creator_site_token',
+    'creator_license_status',
     'creator_proxy_url',
     'creator_backup_path',
     'creator_backup_retention',

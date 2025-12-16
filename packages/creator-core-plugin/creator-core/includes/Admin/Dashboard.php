@@ -434,11 +434,7 @@ class Dashboard {
 		$license_key = get_option( 'creator_license_key', '' );
 		$site_token  = get_option( 'creator_site_token', '' );
 
-		// Debug logging
-		error_log( '[Creator Notice] Checking license notice - key: ' . ( ! empty( $license_key ) ? 'SET' : 'EMPTY' ) . ', token: ' . ( ! empty( $site_token ) ? 'SET (length: ' . strlen( $site_token ) . ')' : 'EMPTY' ) );
-
 		if ( ! empty( $license_key ) && empty( $site_token ) ) {
-			error_log( '[Creator Notice] Showing verify license notice' );
 			add_action( 'admin_notices', [ $this, 'show_verify_license_notice' ] );
 		}
 	}
