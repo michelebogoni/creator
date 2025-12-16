@@ -551,7 +551,53 @@ creator-core/
 - Implementa retry logic con exponential backoff
 - Logging completo errori network e HTTP
 
-#### 5. ResponseHandler
+#### 5. Loader & License Verification
+
+**Loader.php** (`CreatorCore\Loader`)
+- Bootstrap principale del plugin
+- Registra REST API, admin UI, e license hooks
+- **Gestione automatica verifica licenza**:
+  - Hook `add_option_creator_license_key`: Prima attivazione licenza
+  - Hook `update_option_creator_license_key`: Aggiornamento licenza esistente
+  - Verifica automatica quando l'utente salva la licenza dalla Dashboard
+  - Salva `site_token` e `license_status` in wp_options
+
+**Flusso verifica licenza**:
+```
+Utente inserisce licenza → Form submit a options.php
+                                    ↓
+            WordPress chiama add_option o update_option
+                                    ↓
+            Hook in Loader.php intercetta l'evento
+                                    ↓
+            verify_license_key() chiama Firebase API
+                                    ↓
+            Firebase valida e restituisce site_token + plan
+                                    ↓
+            Salvataggio in wp_options:
+            - creator_site_token (JWT per API calls)
+            - creator_license_status (plan, expires_at, tokens)
+                                    ↓
+            Redirect a Dashboard con verificato
+```
+
+**Options WordPress per licenza**:
+| Option | Descrizione |
+|--------|-------------|
+| `creator_license_key` | Chiave licenza (CREATOR-XXXX-XXXX-XXXX) |
+| `creator_site_token` | JWT token per autenticazione API |
+| `creator_license_status` | Array con valid, plan, expires_at, tokens_used, tokens_limit |
+
+#### 6. Dashboard
+
+**Dashboard.php** (`CreatorCore\Admin\Dashboard`)
+- Pagina principale admin con design monochromatic
+- Mostra stato licenza, usage credits, system health
+- Gestisce lista chat history con paginazione
+- Form per inserimento/cambio licenza key
+- Notice automatico se licenza non verificata (`maybe_show_license_notice()`)
+
+#### 8. ResponseHandler
 
 **ResponseHandler.php** (`CreatorCore\Response\ResponseHandler`)
 - Analizza risposte AI e determina il tipo
@@ -569,7 +615,7 @@ creator-core/
   - `request_docs`: Richiesta documentazione plugin
   - `wp_cli`: Esecuzione comandi WP-CLI
 
-#### 6. CodeExecutor
+#### 9. CodeExecutor
 
 **CodeExecutor.php** (`CreatorCore\Executor\CodeExecutor`)
 - Esegue codice PHP generato dall'AI via `eval()`
@@ -582,7 +628,7 @@ creator-core/
 - Preparazione codice: wrapping in try-catch, namespace adjustment
 - Restituisce output, return value, ed eventuali errori
 
-#### 7. WPCLIExecutor
+#### 10. WPCLIExecutor
 
 **WPCLIExecutor.php** (`CreatorCore\Execution\WPCLIExecutor`)
 - Esegue comandi WP-CLI in modo sicuro
@@ -604,7 +650,7 @@ creator-core/
 - Timeout 30 secondi
 - Output JSON parsing
 
-#### 8. DebugLogger & DebugController
+#### 11. DebugLogger & DebugController
 
 **DebugLogger.php** (`CreatorCore\Debug\DebugLogger`)
 - Logging conversazioni e interazioni AI su file
