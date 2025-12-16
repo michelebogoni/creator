@@ -60,10 +60,11 @@ class CodeExecutor {
     /**
      * Execute PHP code safely
      *
-     * @param string $code The PHP code to execute.
+     * @param string $code    The PHP code to execute.
+     * @param array  $context Optional context variables to inject into execution scope.
      * @return array{success: bool, output: string, error?: string}
      */
-    public function execute( string $code ): array {
+    public function execute( string $code, array $context = [] ): array {
         // Validate code before execution
         $validation = $this->validate_code( $code );
         if ( ! $validation['valid'] ) {
@@ -87,8 +88,11 @@ class CodeExecutor {
                 throw new \ErrorException( $message, 0, $severity, $file, $line );
             });
 
-            // Execute the code
-            $result = eval( $code ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+            // Execute the code with context available as $context variable
+            // Using a closure to create an isolated scope with the context injected
+            $result = ( function( string $_code, array $context ) {
+                return eval( $_code ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+            } )( $code, $context );
 
             restore_error_handler();
 
@@ -192,15 +196,16 @@ class CodeExecutor {
      *
      * @param string $code    The code to execute.
      * @param int    $timeout Timeout in seconds (default 30).
+     * @param array  $context Optional context variables to inject into execution scope.
      * @return array{success: bool, output: string, error?: string}
      */
-    public function execute_with_timeout( string $code, int $timeout = 30 ): array {
+    public function execute_with_timeout( string $code, int $timeout = 30, array $context = [] ): array {
         $original_time_limit = ini_get( 'max_execution_time' );
 
         // Set temporary time limit
         set_time_limit( $timeout );
 
-        $result = $this->execute( $code );
+        $result = $this->execute( $code, $context );
 
         // Restore original time limit
         set_time_limit( (int) $original_time_limit );

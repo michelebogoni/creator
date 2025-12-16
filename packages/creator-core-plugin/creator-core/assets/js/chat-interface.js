@@ -317,7 +317,7 @@
                 url: creatorChat.restUrl + 'chat',
                 type: 'POST',
                 contentType: 'application/json',
-                timeout: 120000, // 2 minute timeout to match server
+                timeout: 600000, // 10 minute timeout for complex multi-step tasks
                 headers: {
                     'X-WP-Nonce': creatorChat.restNonce
                 },
