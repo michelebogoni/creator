@@ -684,11 +684,30 @@ export async function savePluginDocs(
   if (data.api_reference !== undefined) {
     entry.api_reference = data.api_reference;
   }
+  if (data.functions_url !== undefined) {
+    entry.functions_url = data.functions_url;
+  }
   if (data.version_notes !== undefined) {
     entry.version_notes = data.version_notes;
   }
   if (data.cached_by !== undefined) {
     entry.cached_by = data.cached_by;
+  }
+  // Rich documentation fields
+  if (data.description !== undefined) {
+    entry.description = data.description;
+  }
+  if (data.code_examples !== undefined && data.code_examples.length > 0) {
+    entry.code_examples = data.code_examples;
+  }
+  if (data.best_practices !== undefined && data.best_practices.length > 0) {
+    entry.best_practices = data.best_practices;
+  }
+  if (data.data_structures !== undefined && data.data_structures.length > 0) {
+    entry.data_structures = data.data_structures;
+  }
+  if (data.component_types !== undefined && data.component_types.length > 0) {
+    entry.component_types = data.component_types;
   }
 
   await docRef.set(entry);

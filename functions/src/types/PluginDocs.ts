@@ -74,18 +74,30 @@ export interface PluginDocsEntry {
   /** Research metadata for AI-researched docs */
   research_meta?: ResearchMetadata;
 
-  /** Description of the API/plugin (for WordPress Core docs) */
+  /** Description of the API/plugin */
   description?: string;
 
-  /** Code examples showing proper usage (for WordPress Core docs) */
+  /** Code examples showing proper usage */
   code_examples?: string[];
 
-  /** Best practices and guidelines (for WordPress Core docs) */
+  /** Best practices and guidelines */
   best_practices?: string[];
+
+  /** Data structures documentation (e.g., JSON schemas, meta keys) */
+  data_structures?: string[];
+
+  /** Common widget/component types with their settings */
+  component_types?: Array<{
+    name: string;
+    type: string;
+    settings: Record<string, string>;
+    example?: string;
+  }>;
 }
 
 /**
  * Data for creating a new plugin docs entry
+ * Supports rich documentation including code examples and best practices
  */
 export interface CreatePluginDocsData {
   plugin_slug: string;
@@ -93,9 +105,30 @@ export interface CreatePluginDocsData {
   docs_url: string;
   main_functions: string[];
   api_reference?: string;
+  functions_url?: string;
   version_notes?: string[];
   cached_by?: string;
   source?: "ai_research" | "manual" | "fallback" | "wordpress_core";
+
+  /** Description of the plugin/API */
+  description?: string;
+
+  /** Code examples showing proper usage */
+  code_examples?: string[];
+
+  /** Best practices and guidelines */
+  best_practices?: string[];
+
+  /** Data structures documentation (e.g., JSON schemas, meta keys) */
+  data_structures?: string[];
+
+  /** Common widget/component types with their settings */
+  component_types?: Array<{
+    name: string;
+    type: string;
+    settings: Record<string, string>;
+    example?: string;
+  }>;
 }
 
 /**
@@ -163,6 +196,7 @@ export interface ResearchPluginDocsRequest {
 
 /**
  * Response from AI research
+ * Contains comprehensive documentation including examples and best practices
  */
 export interface ResearchPluginDocsResponse {
   success: boolean;
@@ -172,6 +206,26 @@ export interface ResearchPluginDocsResponse {
     main_functions: string[];
     api_reference?: string;
     version_notes?: string[];
+
+    /** Description of the plugin/API */
+    description?: string;
+
+    /** Code examples showing proper usage */
+    code_examples?: string[];
+
+    /** Best practices and guidelines */
+    best_practices?: string[];
+
+    /** Data structures documentation (e.g., JSON schemas, meta keys) */
+    data_structures?: string[];
+
+    /** Common widget/component types with their settings */
+    component_types?: Array<{
+      name: string;
+      type: string;
+      settings: Record<string, string>;
+      example?: string;
+    }>;
   };
   research_meta?: {
     ai_provider: "gemini" | "claude";
