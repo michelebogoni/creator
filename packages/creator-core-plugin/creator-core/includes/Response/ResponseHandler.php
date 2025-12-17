@@ -92,11 +92,14 @@ class ResponseHandler {
             // This handles cases where AI doesn't follow JSON format strictly.
             $clean_content = $this->extract_text_content( $raw_content );
 
+            // Ensure message is readable (not JSON) even in fallback case.
+            $readable_message = $this->ensure_readable_message( $clean_content, [], 'complete' );
+
             return [
                 'type'                   => 'complete',
                 'step'                   => 'discovery',
                 'status'                 => __( 'Response', 'creator-core' ),
-                'message'                => $clean_content,
+                'message'                => $readable_message,
                 'data'                   => [],
                 'requires_confirmation'  => false,
                 'continue_automatically' => false,
@@ -140,6 +143,8 @@ class ResponseHandler {
             return $decoded;
         }
 
+        $first_error = json_last_error_msg();
+
         // Sometimes the AI wraps JSON in markdown code blocks.
         $extracted = $this->extract_json_from_markdown( $content );
 
@@ -158,6 +163,19 @@ class ResponseHandler {
             if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
                 return $decoded;
             }
+        }
+
+        // Try with JSON_INVALID_UTF8_SUBSTITUTE to handle encoding issues.
+        $decoded = json_decode( $content, true, 512, JSON_INVALID_UTF8_SUBSTITUTE );
+
+        if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
+            return $decoded;
+        }
+
+        // Log parsing failure for debugging.
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( '[Creator Debug] JSON parsing failed: ' . $first_error );
+            error_log( '[Creator Debug] Content preview (first 500 chars): ' . substr( $content, 0, 500 ) );
         }
 
         return null;
