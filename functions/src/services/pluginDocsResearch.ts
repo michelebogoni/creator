@@ -3,8 +3,15 @@
  * @module services/pluginDocsResearch
  *
  * @description
- * Uses AI to research plugin documentation when not found in cache.
- * The AI searches for official documentation URLs and main functions.
+ * Uses AI to research comprehensive plugin documentation.
+ * The AI searches for official documentation and extracts:
+ * - API functions with signatures and descriptions
+ * - Code examples for common use cases
+ * - Best practices and guidelines
+ * - Data structures (JSON schemas, meta keys, etc.)
+ * - Component/widget types with settings
+ *
+ * NO HARDCODED FALLBACKS - All documentation is dynamically researched.
  */
 
 import { ModelService, ModelServiceKeys } from "./modelService";
@@ -16,43 +23,130 @@ import {
 } from "../types/PluginDocs";
 
 /**
- * System prompt for plugin documentation research
+ * Comprehensive system prompt for plugin documentation research
+ *
+ * This prompt instructs the AI to research and provide COMPLETE documentation
+ * including code examples, best practices, and data structures.
  */
-const RESEARCH_SYSTEM_PROMPT = `You are a WordPress plugin documentation researcher. Your task is to find official documentation and main functions for WordPress plugins.
+const RESEARCH_SYSTEM_PROMPT = `You are a WordPress plugin documentation researcher and technical writer.
+Your task is to research and provide COMPREHENSIVE documentation for WordPress plugins.
 
 IMPORTANT: You MUST respond ONLY with a valid JSON object (no markdown, no code blocks, just raw JSON).
 
 Response format:
 {
-  "docs_url": "https://...",
-  "functions_url": "https://...",
-  "api_reference": "https://...",
-  "main_functions": ["function_name()", "another_function()"],
-  "version_notes": ["Note about this version"]
+  "docs_url": "https://official-docs-url...",
+  "functions_url": "https://functions-reference-url...",
+  "api_reference": "https://api-reference-url...",
+  "description": "Detailed description of what this plugin does and its main purpose",
+  "main_functions": [
+    "function_name( $param1, $param2 ) - Description of what this function does",
+    "another_function( $param ) - Another description"
+  ],
+  "code_examples": [
+    "// Example 1: Basic usage\\n$result = function_name( $param );\\nif ( $result ) {\\n    // Handle success\\n}",
+    "// Example 2: Advanced usage\\n// Full working code example..."
+  ],
+  "best_practices": [
+    "Always check return values with is_wp_error()",
+    "Use specific hook priorities when needed",
+    "Another best practice..."
+  ],
+  "data_structures": [
+    "Meta key '_plugin_data': JSON structure { 'key': 'value', 'nested': { } }",
+    "Database table structure: column1 (type), column2 (type)..."
+  ],
+  "component_types": [
+    {
+      "name": "component_name",
+      "type": "widget|element|block",
+      "settings": {
+        "setting_name": "type and description",
+        "another_setting": "type and description"
+      },
+      "example": "{ 'elType': 'widget', 'widgetType': 'heading', 'settings': { 'title': 'Hello' } }"
+    }
+  ],
+  "version_notes": ["Important notes about this version"]
 }
 
-RULES:
-1. docs_url: The main documentation page for the plugin
-2. functions_url: The functions/API reference page if available
-3. api_reference: Full API documentation URL if available
-4. main_functions: List of the most important/commonly used functions (max 15)
-5. version_notes: Any important notes about this specific version
+RULES FOR COMPREHENSIVE DOCUMENTATION:
 
-If you cannot find official documentation, provide the WordPress.org plugin page URL as docs_url.
+1. **docs_url**: The main official documentation page
+2. **functions_url**: Functions/methods reference page if available
+3. **api_reference**: Full API documentation URL
 
-For popular plugins, use these known URLs:
-- Advanced Custom Fields: https://www.advancedcustomfields.com/resources/
-- WooCommerce: https://developer.woocommerce.com/docs/
-- Elementor: https://developers.elementor.com/docs/
-- Yoast SEO: https://developer.yoast.com/
-- Contact Form 7: https://contactform7.com/docs/
-- Gravity Forms: https://docs.gravityforms.com/
-- WPForms: https://wpforms.com/docs/
+4. **description**:
+   - What the plugin does
+   - Main use cases
+   - How it integrates with WordPress
 
-For other plugins, use: https://wordpress.org/plugins/{plugin_slug}/`;
+5. **main_functions**:
+   - NO LIMIT on number of functions
+   - Include ALL important functions/methods
+   - Format: "function_name( $param1, $param2 ) - Description"
+   - Include parameter types when known
+   - Include return type when known
+
+6. **code_examples**:
+   - Provide COMPLETE, WORKING code examples
+   - Cover common use cases
+   - Include error handling
+   - Show integration patterns
+   - For page builders: include programmatic content creation examples
+
+7. **best_practices**:
+   - Security considerations
+   - Performance tips
+   - Common pitfalls to avoid
+   - Recommended patterns
+
+8. **data_structures**:
+   - Database table structures
+   - Meta key formats and JSON schemas
+   - Post meta fields used
+   - Options structure
+   - For page builders: COMPLETE JSON structure for pages/elements
+
+9. **component_types** (for page builders like Elementor, Beaver Builder, etc.):
+   - ALL available widget/element/block types
+   - Their settings with types and allowed values
+   - JSON example for programmatic creation
+
+SPECIFIC INSTRUCTIONS FOR PAGE BUILDERS:
+
+For Elementor specifically, document:
+- The _elementor_data meta key JSON structure
+- Section, Column, Container element types
+- ALL widget types (heading, text-editor, image, button, video, icon, etc.)
+- Settings for each widget (title, align, size, color, link, etc.)
+- Complete JSON example for creating a page programmatically
+
+For WooCommerce specifically, document:
+- Product creation functions
+- Order management
+- Cart operations
+- All hooks and filters
+
+For ACF (Advanced Custom Fields) specifically, document:
+- Field group registration
+- Field types and settings
+- get_field(), update_field() with all options
+- Repeater and flexible content handling
+
+BE THOROUGH. The AI using this documentation needs to be able to:
+1. Understand the plugin's capabilities
+2. Write working code without additional research
+3. Follow best practices automatically
+4. Handle edge cases properly
+
+If official documentation is limited, use your knowledge to provide comprehensive documentation based on the plugin's known behavior and common usage patterns.`;
 
 /**
  * Plugin Documentation Research Service
+ *
+ * Provides comprehensive AI-powered documentation research for any WordPress plugin.
+ * No hardcoded fallbacks - all documentation is dynamically generated.
  */
 export class PluginDocsResearchService {
   private modelService: ModelService;
@@ -67,22 +161,22 @@ export class PluginDocsResearchService {
    * Research plugin documentation using AI
    *
    * @param request Research request with plugin details
-   * @returns Research response with documentation data
+   * @returns Research response with comprehensive documentation
    */
   async research(
     request: ResearchPluginDocsRequest
   ): Promise<ResearchPluginDocsResponse> {
     const { plugin_slug, plugin_version, plugin_name, plugin_uri } = request;
 
-    this.logger.info("Starting plugin docs research", {
+    this.logger.info("Starting comprehensive plugin docs research", {
       plugin_slug,
       plugin_version,
     });
 
     // Check cache first
     const cached = await getPluginDocs(plugin_slug, plugin_version);
-    if (cached) {
-      this.logger.info("Plugin docs found in cache", { plugin_slug });
+    if (cached && this.isDocumentationComplete(cached)) {
+      this.logger.info("Complete plugin docs found in cache", { plugin_slug });
       return {
         success: true,
         data: {
@@ -91,11 +185,16 @@ export class PluginDocsResearchService {
           main_functions: cached.main_functions,
           api_reference: cached.api_reference,
           version_notes: cached.version_notes,
+          description: cached.description,
+          code_examples: cached.code_examples,
+          best_practices: cached.best_practices,
+          data_structures: cached.data_structures,
+          component_types: cached.component_types,
         },
       };
     }
 
-    // Build research prompt
+    // Build comprehensive research prompt
     const prompt = this.buildResearchPrompt(
       plugin_slug,
       plugin_version,
@@ -104,13 +203,13 @@ export class PluginDocsResearchService {
     );
 
     try {
-      // Call AI to research
+      // Call AI to research - use Claude for better code generation
       const response = await this.modelService.generate({
-        model: "gemini", // Use Gemini for research (faster/cheaper)
+        model: "claude",
         prompt,
         system_prompt: RESEARCH_SYSTEM_PROMPT,
-        temperature: 0.3, // Lower temperature for more factual responses
-        max_tokens: 2000,
+        temperature: 0.2, // Lower temperature for factual responses
+        max_tokens: 16000, // Allow large responses for comprehensive docs
       });
 
       if (!response.success) {
@@ -129,7 +228,7 @@ export class PluginDocsResearchService {
       if (!parsed) {
         this.logger.error("Failed to parse AI response", {
           plugin_slug,
-          content: response.content.substring(0, 500),
+          content: response.content.substring(0, 1000),
         });
         return {
           success: false,
@@ -137,24 +236,32 @@ export class PluginDocsResearchService {
         };
       }
 
-      // Save to cache
+      // Save comprehensive docs to cache
       await savePluginDocs({
         plugin_slug,
         plugin_version,
         docs_url: parsed.docs_url,
+        functions_url: parsed.functions_url,
         main_functions: parsed.main_functions,
         api_reference: parsed.api_reference,
         version_notes: parsed.version_notes,
+        description: parsed.description,
+        code_examples: parsed.code_examples,
+        best_practices: parsed.best_practices,
+        data_structures: parsed.data_structures,
+        component_types: parsed.component_types,
         source: "ai_research",
       });
 
-      // Update with research metadata
-      // Note: We'd need to update firestore.ts to support research_meta
-      this.logger.info("Plugin docs researched and cached", {
+      this.logger.info("Comprehensive plugin docs researched and cached", {
         plugin_slug,
         plugin_version,
         docs_url: parsed.docs_url,
         functions_count: parsed.main_functions.length,
+        examples_count: parsed.code_examples?.length || 0,
+        practices_count: parsed.best_practices?.length || 0,
+        structures_count: parsed.data_structures?.length || 0,
+        components_count: parsed.component_types?.length || 0,
       });
 
       return {
@@ -182,7 +289,24 @@ export class PluginDocsResearchService {
   }
 
   /**
-   * Build the research prompt for a plugin
+   * Check if cached documentation is comprehensive
+   * Returns false if key fields are missing, triggering re-research
+   */
+  private isDocumentationComplete(cached: {
+    code_examples?: string[];
+    best_practices?: string[];
+    description?: string;
+  }): boolean {
+    // Documentation is considered complete if it has code examples and best practices
+    const hasExamples = cached.code_examples && cached.code_examples.length > 0;
+    const hasPractices = cached.best_practices && cached.best_practices.length > 0;
+    const hasDescription = cached.description && cached.description.length > 50;
+
+    return Boolean(hasExamples && hasPractices && hasDescription);
+  }
+
+  /**
+   * Build comprehensive research prompt for a plugin
    */
   private buildResearchPrompt(
     slug: string,
@@ -190,7 +314,7 @@ export class PluginDocsResearchService {
     name?: string,
     uri?: string
   ): string {
-    let prompt = "Research the WordPress plugin documentation for:\n\n";
+    let prompt = `Research COMPREHENSIVE documentation for this WordPress plugin:\n\n`;
     prompt += `Plugin Slug: ${slug}\n`;
     prompt += `Version: ${version}\n`;
 
@@ -202,9 +326,37 @@ export class PluginDocsResearchService {
       prompt += `Plugin URI: ${uri}\n`;
     }
 
-    prompt += "\nFind the official documentation URL and list the main functions/hooks this plugin provides.";
-    prompt += "\n\nIf this is a well-known plugin, provide the actual documentation URLs.";
-    prompt += "\nFor less known plugins, use the WordPress.org plugin page.";
+    prompt += `\n## REQUIRED INFORMATION:\n`;
+    prompt += `1. Official documentation URLs\n`;
+    prompt += `2. ALL main functions/methods with signatures and descriptions\n`;
+    prompt += `3. WORKING code examples for common use cases\n`;
+    prompt += `4. Best practices and security guidelines\n`;
+    prompt += `5. Data structures (meta keys, JSON formats, database tables)\n`;
+
+    // Add plugin-specific requirements
+    if (slug.includes("elementor")) {
+      prompt += `\n## ELEMENTOR-SPECIFIC REQUIREMENTS:\n`;
+      prompt += `- Complete _elementor_data JSON structure\n`;
+      prompt += `- ALL widget types with their settings\n`;
+      prompt += `- Section/Column/Container structure\n`;
+      prompt += `- Code example for programmatically creating a complete page\n`;
+      prompt += `- Widget settings schema for: heading, text-editor, image, button, video, icon, spacer, divider, google_maps, icon-box, image-box, star-rating, testimonial, tabs, accordion, toggle, social-icons, progress, counter, alert, html, shortcode, menu-anchor, sidebar, read-more, post-title, post-excerpt, post-content, post-featured-image, archive-title, archive-posts, site-logo, site-title, nav-menu, search-form\n`;
+    } else if (slug.includes("woocommerce")) {
+      prompt += `\n## WOOCOMMERCE-SPECIFIC REQUIREMENTS:\n`;
+      prompt += `- Product creation and management functions\n`;
+      prompt += `- Order CRUD operations\n`;
+      prompt += `- Cart and checkout hooks\n`;
+      prompt += `- Payment gateway integration\n`;
+    } else if (slug.includes("acf") || slug.includes("advanced-custom-fields")) {
+      prompt += `\n## ACF-SPECIFIC REQUIREMENTS:\n`;
+      prompt += `- Field group registration with all options\n`;
+      prompt += `- ALL field types with settings\n`;
+      prompt += `- Repeater and flexible content handling\n`;
+      prompt += `- Location rules configuration\n`;
+    }
+
+    prompt += `\nProvide the MOST COMPREHENSIVE documentation possible.`;
+    prompt += `\nThe AI using this will need to write working code without additional research.`;
 
     return prompt;
   }
@@ -237,104 +389,19 @@ export class PluginDocsResearchService {
       return {
         docs_url: parsed.docs_url,
         functions_url: parsed.functions_url,
-        main_functions: parsed.main_functions.slice(0, 15), // Max 15 functions
+        main_functions: parsed.main_functions, // No limit
         api_reference: parsed.api_reference,
         version_notes: parsed.version_notes,
+        description: parsed.description,
+        code_examples: parsed.code_examples,
+        best_practices: parsed.best_practices,
+        data_structures: parsed.data_structures,
+        component_types: parsed.component_types,
       };
     } catch {
       return null;
     }
   }
-
 }
 
-/**
- * Well-known plugin documentation URLs
- * Used as fallback for popular plugins
- */
-export const KNOWN_PLUGIN_DOCS: Record<
-  string,
-  { docs_url: string; api_reference?: string; main_functions: string[] }
-> = {
-  "advanced-custom-fields": {
-    docs_url: "https://www.advancedcustomfields.com/resources/",
-    api_reference: "https://www.advancedcustomfields.com/resources/#functions",
-    main_functions: [
-      "get_field()",
-      "update_field()",
-      "get_field_object()",
-      "have_rows()",
-      "the_row()",
-      "get_sub_field()",
-      "acf_add_local_field_group()",
-      "acf_add_local_field()",
-      "acf_get_field_groups()",
-    ],
-  },
-  woocommerce: {
-    docs_url: "https://developer.woocommerce.com/docs/",
-    api_reference: "https://woocommerce.github.io/code-reference/",
-    main_functions: [
-      "wc_get_product()",
-      "wc_create_order()",
-      "wc_get_orders()",
-      "WC()->cart",
-      "WC()->session",
-      "wc_add_notice()",
-      "wc_price()",
-      "wc_get_template()",
-      "wc_get_product_terms()",
-    ],
-  },
-  elementor: {
-    docs_url: "https://developers.elementor.com/docs/",
-    api_reference: "https://developers.elementor.com/docs/scripts-styles/",
-    main_functions: [
-      "\\Elementor\\Plugin::instance()",
-      "\\Elementor\\Controls_Manager",
-      "\\Elementor\\Widget_Base",
-      "elementor_get_option()",
-      "\\Elementor\\Core\\Documents_Manager",
-    ],
-  },
-  "contact-form-7": {
-    docs_url: "https://contactform7.com/docs/",
-    main_functions: [
-      "wpcf7_add_form_tag()",
-      "wpcf7_submit",
-      "wpcf7_before_send_mail",
-      "wpcf7_mail_sent",
-    ],
-  },
-  "wordpress-seo": {
-    docs_url: "https://developer.yoast.com/",
-    api_reference: "https://developer.yoast.com/customization/apis/",
-    main_functions: [
-      "wpseo_title",
-      "wpseo_metadesc",
-      "wpseo_opengraph",
-      "wpseo_robots",
-      "wpseo_breadcrumb",
-    ],
-  },
-  "gravityforms": {
-    docs_url: "https://docs.gravityforms.com/",
-    api_reference: "https://docs.gravityforms.com/category/developers/",
-    main_functions: [
-      "GFAPI::get_form()",
-      "GFAPI::get_entries()",
-      "GFAPI::add_entry()",
-      "GFAPI::update_entry()",
-      "GFFormsModel::get_form_meta()",
-    ],
-  },
-};
-
-/**
- * Get fallback docs for well-known plugins
- */
-export function getFallbackDocs(
-  pluginSlug: string
-): (typeof KNOWN_PLUGIN_DOCS)[string] | null {
-  return KNOWN_PLUGIN_DOCS[pluginSlug] || null;
-}
+// NO HARDCODED FALLBACKS - All documentation is dynamically researched

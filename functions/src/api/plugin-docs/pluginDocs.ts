@@ -29,7 +29,6 @@ import {
 } from "../../types/PluginDocs";
 import {
   PluginDocsResearchService,
-  getFallbackDocs,
 } from "../../services/pluginDocsResearch";
 import {
   isWordPressCoreDocsRequest,
@@ -434,15 +433,26 @@ export const researchPluginDocsApi = functions
         return;
       }
 
-      // Check cache first
+      // Check cache first - but only return if documentation is comprehensive
       const cached = await getPluginDocs(body.plugin_slug, body.plugin_version);
-      if (cached) {
+      const isComplete = cached &&
+        cached.code_examples && cached.code_examples.length > 0 &&
+        cached.best_practices && cached.best_practices.length > 0 &&
+        cached.description && cached.description.length > 50;
+
+      if (cached && isComplete) {
         // Increment cache hits
         incrementPluginDocsCacheHits(body.plugin_slug, body.plugin_version).catch(
           (err) => {
             logger.warn("Failed to increment cache hits", { error: err.message });
           }
         );
+
+        logger.info("Returning comprehensive cached docs", {
+          pluginSlug: body.plugin_slug,
+          hasExamples: cached.code_examples?.length || 0,
+          hasPractices: cached.best_practices?.length || 0,
+        });
 
         res.status(200).json({
           success: true,
@@ -453,33 +463,16 @@ export const researchPluginDocsApi = functions
         return;
       }
 
-      // Check for fallback docs for well-known plugins
-      const fallback = getFallbackDocs(body.plugin_slug);
-      if (fallback) {
-        logger.info("Using fallback docs for known plugin", {
+      // If cached docs exist but are incomplete, log and re-research
+      if (cached && !isComplete) {
+        logger.info("Cached docs incomplete, triggering re-research", {
           pluginSlug: body.plugin_slug,
+          hasExamples: cached.code_examples?.length || 0,
+          hasPractices: cached.best_practices?.length || 0,
         });
-
-        // Save fallback to cache
-        const entry = await savePluginDocs({
-          plugin_slug: body.plugin_slug,
-          plugin_version: body.plugin_version,
-          docs_url: fallback.docs_url,
-          main_functions: fallback.main_functions,
-          api_reference: fallback.api_reference,
-          source: "fallback",
-        });
-
-        res.status(200).json({
-          success: true,
-          cached: true,
-          source: "fallback",
-          data: entry,
-        } as PluginDocsResponse);
-        return;
       }
 
-      // Use AI to research
+      // NO HARDCODED FALLBACKS - Use AI to research comprehensive documentation
       const researchService = new PluginDocsResearchService(
         {
           gemini: geminiApiKey.value(),
@@ -608,6 +601,12 @@ export const syncPluginDocsApi = functions
           main_functions: data.main_functions,
           api_reference: data.api_reference,
           version_notes: data.version_notes,
+          // Include rich documentation fields
+          description: data.description,
+          code_examples: data.code_examples,
+          best_practices: data.best_practices,
+          data_structures: data.data_structures,
+          component_types: data.component_types,
         };
       });
 
