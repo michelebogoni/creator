@@ -41,7 +41,7 @@ class ChatController {
      *
      * @var int
      */
-    private const MAX_LOOP_ITERATIONS = 20;
+    private const MAX_LOOP_ITERATIONS = 100;
 
     /**
      * Maximum retry attempts for failed executions
@@ -254,6 +254,7 @@ class ChatController {
         $all_steps        = [];
         $last_result      = null;
         $retry_count      = 0;
+        $error_memory     = []; // Accumulates errors during retries, cleared on success.
 
         while ( $iteration < self::MAX_LOOP_ITERATIONS ) {
             $iteration++;
@@ -440,16 +441,24 @@ class ChatController {
                         if ( $this->should_retry_execution( $last_result, $retry_count ) ) {
                             $retry_count++;
 
+                            // Add error to memory for context in future retries.
+                            $error_memory[] = [
+                                'attempt'       => $retry_count,
+                                'error'         => $last_result['error'] ?? 'Unknown error',
+                                'command_tried' => $processed['data']['command'] ?? '',
+                            ];
+
                             $debug_logger->log_retry( $last_result, $retry_count, $iteration );
 
                             $retry_message = wp_json_encode( [
-                                'type'        => 'wp_cli_failed',
-                                'command'     => $processed['data']['command'] ?? '',
-                                'error'       => $last_result['error'] ?? 'Unknown error',
-                                'output'      => $last_result['output'] ?? '',
-                                'retry_count' => $retry_count,
-                                'max_retries' => self::MAX_RETRY_ATTEMPTS,
-                                'instruction' => 'The WP-CLI command failed. Please analyze the error and try a different approach.',
+                                'type'         => 'wp_cli_failed',
+                                'command'      => $processed['data']['command'] ?? '',
+                                'error'        => $last_result['error'] ?? 'Unknown error',
+                                'output'       => $last_result['output'] ?? '',
+                                'retry_count'  => $retry_count,
+                                'max_retries'  => self::MAX_RETRY_ATTEMPTS,
+                                'error_memory' => $error_memory, // All previous errors.
+                                'instruction'  => 'The WP-CLI command failed. Review error_memory to see ALL previous failed attempts. DO NOT repeat the same commands. Try a DIFFERENT approach.',
                             ] );
 
                             $current_message = $retry_message;
@@ -465,7 +474,9 @@ class ChatController {
                             continue;
                         }
                     } else {
-                        $retry_count = 0;
+                        // Reset retry count and clear error memory on successful execution.
+                        $retry_count  = 0;
+                        $error_memory = [];
                     }
                 }
 
@@ -505,19 +516,27 @@ class ChatController {
                         if ( $this->should_retry_execution( $last_result, $retry_count ) ) {
                             $retry_count++;
 
+                            // Add error to memory for context in future retries.
+                            $error_memory[] = [
+                                'attempt'    => $retry_count,
+                                'error'      => $last_result['error'] ?? 'Unknown error',
+                                'code_tried' => substr( $processed['data']['code'] ?? '', 0, 500 ), // First 500 chars.
+                            ];
+
                             // Log the retry.
                             $debug_logger->log_retry( $last_result, $retry_count, $iteration );
 
-                            // Build retry message with error details and step context.
+                            // Build retry message with error details, step context, and error history.
                             $retry_message = wp_json_encode( [
-                                'type'        => 'step_execution_failed',
-                                'step_index'  => $processed['data']['step_index'] ?? 0,
-                                'step_title'  => $processed['data']['step_title'] ?? '',
-                                'error'       => $last_result['error'] ?? 'Unknown error',
-                                'output'      => $last_result['output'] ?? '',
-                                'retry_count' => $retry_count,
-                                'max_retries' => self::MAX_RETRY_ATTEMPTS,
-                                'instruction' => 'Step execution failed. Please analyze the error and try a different approach for this step.',
+                                'type'         => 'step_execution_failed',
+                                'step_index'   => $processed['data']['step_index'] ?? 0,
+                                'step_title'   => $processed['data']['step_title'] ?? '',
+                                'error'        => $last_result['error'] ?? 'Unknown error',
+                                'output'       => $last_result['output'] ?? '',
+                                'retry_count'  => $retry_count,
+                                'max_retries'  => self::MAX_RETRY_ATTEMPTS,
+                                'error_memory' => $error_memory, // All previous errors for this step.
+                                'instruction'  => 'Step execution failed. Review the error_memory to see ALL previous failed attempts and their errors. DO NOT repeat the same approaches that already failed. Try a DIFFERENT approach for this step.',
                             ] );
 
                             $current_message = $retry_message;
@@ -533,8 +552,9 @@ class ChatController {
                             continue;
                         }
                     } else {
-                        // Reset retry count on successful execution.
-                        $retry_count = 0;
+                        // Reset retry count and clear error memory on successful execution.
+                        $retry_count  = 0;
+                        $error_memory = [];
                     }
                 }
 
@@ -574,17 +594,25 @@ class ChatController {
                     if ( $this->should_retry_execution( $last_result, $retry_count ) ) {
                         $retry_count++;
 
+                        // Add error to memory for context in future retries.
+                        $error_memory[] = [
+                            'attempt'    => $retry_count,
+                            'error'      => $last_result['error'] ?? 'Unknown error',
+                            'code_tried' => substr( $processed['data']['code'] ?? '', 0, 500 ), // First 500 chars.
+                        ];
+
                         // Log the retry.
                         $debug_logger->log_retry( $last_result, $retry_count, $iteration );
 
-                        // Build retry message with error details.
+                        // Build retry message with error details and error history.
                         $retry_message = wp_json_encode( [
-                            'type'        => 'execution_failed',
-                            'error'       => $last_result['error'] ?? 'Unknown error',
-                            'output'      => $last_result['output'] ?? '',
-                            'retry_count' => $retry_count,
-                            'max_retries' => self::MAX_RETRY_ATTEMPTS,
-                            'instruction' => 'The previous code execution failed. Please analyze the error and try a different approach.',
+                            'type'         => 'execution_failed',
+                            'error'        => $last_result['error'] ?? 'Unknown error',
+                            'output'       => $last_result['output'] ?? '',
+                            'retry_count'  => $retry_count,
+                            'max_retries'  => self::MAX_RETRY_ATTEMPTS,
+                            'error_memory' => $error_memory, // All previous errors.
+                            'instruction'  => 'The previous code execution failed. Review error_memory to see ALL previous failed attempts. DO NOT repeat the same approaches. Try a DIFFERENT approach.',
                         ] );
 
                         $current_message = $retry_message;
@@ -601,8 +629,9 @@ class ChatController {
                         continue;
                     }
                 } else {
-                    // Reset retry count on successful execution.
-                    $retry_count = 0;
+                    // Reset retry count and clear error memory on successful execution.
+                    $retry_count  = 0;
+                    $error_memory = [];
                 }
             } elseif ( isset( $processed['verification_result'] ) ) {
                 $last_result = $processed['verification_result'];
