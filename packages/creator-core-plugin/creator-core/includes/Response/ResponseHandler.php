@@ -141,12 +141,23 @@ class ResponseHandler {
         }
 
         // Sometimes the AI wraps JSON in markdown code blocks.
-        $content = $this->extract_json_from_markdown( $content );
+        $extracted = $this->extract_json_from_markdown( $content );
 
-        $decoded = json_decode( $content, true );
+        $decoded = json_decode( $extracted, true );
 
         if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
             return $decoded;
+        }
+
+        // Sometimes the AI includes text before/after JSON. Try to extract it.
+        $extracted = $this->extract_json_from_text( $content );
+
+        if ( $extracted !== null ) {
+            $decoded = json_decode( $extracted, true );
+
+            if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
+                return $decoded;
+            }
         }
 
         return null;
@@ -165,6 +176,78 @@ class ResponseHandler {
         }
 
         return $content;
+    }
+
+    /**
+     * Extract JSON object from text that contains prose before/after JSON
+     *
+     * This handles cases where AI responds with text like:
+     * "Here is my response:\n\n{ "type": "roadmap", ... }"
+     *
+     * @param string $content Content that may contain embedded JSON.
+     * @return string|null Extracted JSON or null if not found.
+     */
+    private function extract_json_from_text( string $content ): ?string {
+        // Find the first '{' that might start a JSON object.
+        $start_pos = strpos( $content, '{' );
+
+        if ( $start_pos === false ) {
+            return null;
+        }
+
+        // Find the matching closing brace by counting braces.
+        $brace_count = 0;
+        $in_string   = false;
+        $escape_next = false;
+        $length      = strlen( $content );
+        $end_pos     = null;
+
+        for ( $i = $start_pos; $i < $length; $i++ ) {
+            $char = $content[ $i ];
+
+            if ( $escape_next ) {
+                $escape_next = false;
+                continue;
+            }
+
+            if ( $char === '\\' && $in_string ) {
+                $escape_next = true;
+                continue;
+            }
+
+            if ( $char === '"' ) {
+                $in_string = ! $in_string;
+                continue;
+            }
+
+            if ( ! $in_string ) {
+                if ( $char === '{' ) {
+                    $brace_count++;
+                } elseif ( $char === '}' ) {
+                    $brace_count--;
+
+                    if ( $brace_count === 0 ) {
+                        $end_pos = $i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if ( $end_pos === null ) {
+            return null;
+        }
+
+        $json_candidate = substr( $content, $start_pos, $end_pos - $start_pos + 1 );
+
+        // Verify it's valid JSON before returning.
+        $test_decode = json_decode( $json_candidate, true );
+
+        if ( json_last_error() === JSON_ERROR_NONE && is_array( $test_decode ) ) {
+            return $json_candidate;
+        }
+
+        return null;
     }
 
     /**
