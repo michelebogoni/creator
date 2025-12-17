@@ -304,21 +304,27 @@ Tracking costi mensili aggregati per licenza.
 
 Cache centralizzata documentazione plugin WordPress e **WordPress Core API**.
 
+> **PRINCIPIO ARCHITETTURALE**: Il sistema NON usa fallback hardcodati. Tutta la documentazione dei plugin viene ricercata dinamicamente tramite AI research, garantendo informazioni sempre aggiornate e complete.
+
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
 | `plugin_slug` | string | Es: `advanced-custom-fields` o `wordpress-core/media` |
 | `plugin_version` | string | Es: `6.2.5` o `6.7` (per WP Core) |
 | `docs_url` | string | URL documentazione ufficiale |
-| `main_functions` | string[] | Funzioni principali con descrizione |
+| `functions_url` | string | URL documentazione funzioni (opzionale) |
+| `main_functions` | string[] | **TUTTE** le funzioni principali (senza limite) |
 | `api_reference` | string | URL API reference |
 | `version_notes` | string[] | Note versione |
-| `description` | string | Descrizione dell'API (per WP Core) |
-| `code_examples` | string[] | Esempi di codice corretti (per WP Core) |
-| `best_practices` | string[] | Best practices e linee guida (per WP Core) |
+| `description` | string | Descrizione completa dell'API/plugin |
+| `code_examples` | string[] | Esempi di codice **completi e funzionanti** |
+| `best_practices` | string[] | Best practices e linee guida |
+| `data_structures` | string[] | Strutture dati (JSON schemas, meta keys) |
+| `component_types` | array | Widget/componenti con settings (per page builders) |
 | `cached_at` | Timestamp | Data cache |
 | `cache_hits` | number | Contatore utilizzi |
-| `source` | string | `ai_research` \| `manual` \| `fallback` \| `wordpress_core` |
-| `research_meta` | object | Metadati ricerca AI |
+| `source` | string | `ai_research` \| `manual` \| `wordpress_core` |
+| `research_meta` | object | Metadati ricerca AI (provider, model, tokens, cost) |
+| `last_verified` | Timestamp | Ultima verifica completezza |
 
 #### 6. WordPress Core Documentation (Pre-popolata)
 
@@ -369,6 +375,104 @@ Richiede "wordpress-core/media" + "elementor"
 Firebase ritorna documentazione con code_examples e best_practices
         ↓
 AI genera codice CORRETTO che registra l'immagine nella Media Library
+```
+
+### Sistema AI Research per Plugin Documentation
+
+Il sistema utilizza un approccio **100% dinamico** per la documentazione dei plugin. Nessun fallback hardcodato.
+
+#### Principi Architetturali
+
+1. **NO Hardcoded Fallbacks**: Il file `pluginDocsResearch.ts` non contiene `KNOWN_PLUGIN_DOCS` o `getFallbackDocs()`. Ogni plugin viene ricercato tramite AI.
+
+2. **Comprehensive Research Prompt**: L'AI riceve un prompt che richiede:
+   - **TUTTE** le funzioni principali (senza limite di 15)
+   - Esempi di codice **completi e funzionanti**
+   - Best practices e linee guida
+   - Strutture dati (JSON schemas, meta keys, formati)
+   - Per page builders: widget/componenti con relative settings
+
+3. **Plugin-Specific Prompts**: Plugin popolari ricevono prompt specializzati:
+   - **Elementor**: Focus su `_elementor_data`, widget types, settings per widget
+   - **WooCommerce**: Product data, checkout fields, order management
+   - **ACF**: Field groups, field types, location rules
+
+4. **Cache Completeness Check**: Prima di usare la cache, il sistema verifica che contenga:
+   - `code_examples` con almeno 1 elemento
+   - `best_practices` con almeno 1 elemento
+   - `description` con almeno 50 caratteri
+
+   Se incompleta, viene lanciata una nuova ricerca AI.
+
+#### Flusso Plugin Documentation Research
+
+```
+WordPress richiede documentazione plugin
+        ↓
+Firebase verifica cache (plugin_docs_cache)
+        ↓
+┌─────────────────────────────────────────┐
+│ Cache trovata?                          │
+│                                         │
+│  ├─ NO → Lancia AI Research             │
+│  │                                      │
+│  └─ SI → Verifica completezza:          │
+│         - code_examples presente?       │
+│         - best_practices presente?      │
+│         - description completa?         │
+│                                         │
+│         ├─ COMPLETA → Ritorna cache     │
+│         │                               │
+│         └─ INCOMPLETA → AI Research     │
+└─────────────────────────────────────────┘
+        ↓
+AI Research con prompt comprensivo
+        ↓
+Salvataggio in Firestore con tutti i campi rich
+        ↓
+Documentazione completa ritornata a WordPress
+```
+
+#### Campi Rich Documentation
+
+Per plugin come Elementor, la documentazione include:
+
+```typescript
+{
+  plugin_slug: "elementor",
+  plugin_version: "3.18.0",
+  docs_url: "https://developers.elementor.com/docs/",
+  description: "Comprehensive Elementor page builder API...",
+  main_functions: [
+    "\\Elementor\\Plugin::instance()",
+    "update_post_meta($post_id, '_elementor_data', ...)",
+    // TUTTE le funzioni, non solo 5-15
+  ],
+  code_examples: [
+    "// Complete working example for creating a page with Elementor\n$page_data = [...];",
+    "// Example for adding a specific widget\n$widget_config = [...];"
+  ],
+  best_practices: [
+    "Always use update_post_meta() instead of direct DB access",
+    "Set _elementor_edit_mode to 'builder' for proper rendering"
+  ],
+  data_structures: [
+    "Widget JSON structure: {id, elType, widgetType, settings: {...}}",
+    "_elementor_data format: JSON array of sections with elements"
+  ],
+  component_types: [
+    {
+      name: "Heading",
+      type: "heading",
+      settings: {
+        title: "string",
+        header_size: "h1|h2|h3|h4|h5|h6",
+        align: "left|center|right"
+      },
+      example: '{"widgetType":"heading","settings":{"title":"My Title"}}'
+    }
+  ]
+}
 ```
 
 ### Provider AI
@@ -545,6 +649,17 @@ creator-core/
 - Enqueues assets (JS e CSS)
 - Renderizza l'interfaccia HTML della chat
 
+**chat-interface.js** (Frontend)
+- Gestisce l'UI della chat e le interazioni utente
+- **AJAX Timeout**: Configurato a **10 minuti** (600000ms) per supportare task complessi multi-step
+  ```javascript
+  $.ajax({
+      timeout: 600000, // 10 minute timeout for complex multi-step tasks
+      // ...
+  });
+  ```
+- Questo timeout esteso è necessario perché operazioni complesse (es. creazione pagine Elementor con 14+ step) possono richiedere diversi minuti
+
 **ChatController.php** (`CreatorCore\Chat\ChatController`)
 - Gestisce l'endpoint REST `POST /wp-json/creator/v1/chat`
 - Valida le richieste in ingresso
@@ -637,12 +752,13 @@ Utente inserisce licenza → Form submit a options.php
 
 **ResponseHandler.php** (`CreatorCore\Response\ResponseHandler`)
 - Analizza risposte AI e determina il tipo
+- **Passa il context completo al CodeExecutor** per ogni esecuzione di codice
 - Gestisce diversi response types:
   - `question`: Domande di chiarimento
   - `plan`: Piani di azione
   - `roadmap`: Roadmap per task complessi
-  - `execute`: Esecuzione codice PHP
-  - `execute_step`: Singolo step di roadmap
+  - `execute`: Esecuzione codice PHP (con context)
+  - `execute_step`: Singolo step di roadmap (con context e accumulated_context)
   - `checkpoint`: Verifica intermedia
   - `compress_history`: Compressione conversazione
   - `verify`: Verifica risultati
@@ -655,12 +771,26 @@ Utente inserisce licenza → Form submit a options.php
 
 **CodeExecutor.php** (`CreatorCore\Executor\CodeExecutor`)
 - Esegue codice PHP generato dall'AI via `eval()`
+- **Context Injection**: Riceve il context completo dal ResponseHandler, disponibile come variabile `$context` nel codice eseguito
+  ```php
+  // Il codice AI può accedere a:
+  $context['accumulated_context']  // Contesto accumulato dai step precedenti
+  $context['wordpress']           // Informazioni WordPress
+  $context['plugins']             // Plugin installati
+  // etc.
+  ```
 - Security features:
   - Blacklist di 26+ funzioni pericolose (exec, shell_exec, eval, system, etc.)
   - Validazione sintassi PHP
   - Output buffering per catturare echo/print
   - Error handler custom per catturare errori
   - Timeout configurabile
+- **Closure-based execution**: Il codice viene eseguito in una closure che inietta `$context`:
+  ```php
+  $result = ( function( string $_code, array $context ) {
+      return eval( $_code );
+  } )( $code, $context );
+  ```
 - Preparazione codice: wrapping in try-catch, namespace adjustment
 - Restituisce output, return value, ed eventuali errori
 
@@ -897,7 +1027,10 @@ cd functions && npm run serve
 - ✅ Rate limiting per IP e license
 - ✅ Cost tracking mensile per provider
 - ✅ Audit logging completo
-- ✅ Plugin documentation repository con AI research
+- ✅ **Plugin documentation con AI Research dinamico** (nessun fallback hardcodato)
+- ✅ **Comprehensive research prompts** per documentazione completa (esempi, best practices, data structures)
+- ✅ **Plugin-specific prompts** per Elementor, WooCommerce, ACF
+- ✅ **Cache completeness verification** con auto-refresh per docs incompleti
 - ✅ **WordPress Core API documentation** (13 topic pre-popolati con code examples e best practices)
 - ✅ Middleware auth e rate limit
 - ✅ 8 Cloud Functions deployate e testate
@@ -905,7 +1038,9 @@ cd functions && npm run serve
 
 #### Plugin WordPress (100%)
 - ✅ Chat interface con UI completa
+- ✅ **Extended AJAX timeout** (10 minuti) per task multi-step complessi
 - ✅ Universal PHP Engine con security validation
+- ✅ **Context injection** nel CodeExecutor per accesso a `$context` dal codice AI
 - ✅ Sistema micro-step per operazioni complesse
 - ✅ WP-CLI executor con whitelist/blacklist
 - ✅ Context loader con lazy-loading
@@ -927,8 +1062,14 @@ Il sistema è basato su un'architettura pulita e semplificata:
 1. **Universal PHP Engine**: Eliminato il sistema di action handlers hardcoded, ora l'AI genera direttamente codice PHP eseguibile
 2. **Simple Fallback**: Routing Gemini ↔ Claude senza matrix complessa
 3. **Micro-Step System**: Per operazioni complesse con roadmap, step execution, checkpoint
-4. **Plugin Integration Safety**: Sistema dinamico che verifica sempre la documentazione invece di hardcoded behaviors
-5. **Security First**: 26+ funzioni pericolose bloccate, whitelist/blacklist per WP-CLI
+4. **Context Injection**: Il codice AI ha accesso al context completo (`$context['accumulated_context']`, etc.)
+5. **Dynamic Plugin Documentation**:
+   - **Zero hardcoded fallbacks** - tutta la documentazione viene ricercata tramite AI
+   - **Comprehensive prompts** - richiede TUTTE le funzioni, esempi completi, best practices
+   - **Cache completeness check** - ri-ricerca automatica se docs incompleti
+   - **Plugin-specific prompts** - istruzioni specializzate per Elementor, WooCommerce, ACF
+6. **Security First**: 26+ funzioni pericolose bloccate, whitelist/blacklist per WP-CLI
+7. **Extended Timeouts**: 10 minuti per task multi-step complessi (es. pagine Elementor con 14+ step)
 
 ### Prossimi Sviluppi Potenziali
 
