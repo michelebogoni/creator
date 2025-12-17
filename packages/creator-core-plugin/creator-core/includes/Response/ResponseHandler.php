@@ -316,12 +316,22 @@ class ResponseHandler {
      * @return array Response for the frontend.
      */
     private function handle_message_response( array $ai_response ): array {
+        $type = $ai_response['type'] ?? 'complete';
+        $data = $ai_response['data'] ?? [];
+
+        // Ensure message is a human-readable string, not JSON.
+        $message = $this->ensure_readable_message(
+            $ai_response['message'] ?? '',
+            $data,
+            $type
+        );
+
         return [
-            'type'                   => $ai_response['type'],
+            'type'                   => $type,
             'step'                   => $ai_response['step'] ?? 'discovery',
             'status'                 => $ai_response['status'] ?? '',
-            'message'                => $ai_response['message'] ?? '',
-            'data'                   => $ai_response['data'] ?? [],
+            'message'                => $message,
+            'data'                   => $data,
             'requires_confirmation'  => $ai_response['requires_confirmation'] ?? false,
             'continue_automatically' => false,
         ];
@@ -400,11 +410,18 @@ class ResponseHandler {
 
         $data = $ai_response['data'] ?? [];
 
+        // Ensure message is a human-readable string, not JSON.
+        $message = $this->ensure_readable_message(
+            $ai_response['message'] ?? '',
+            $data,
+            'execute_step'
+        );
+
         return [
             'type'                   => 'execute_step',
             'step'                   => $ai_response['step'] ?? 'implementation',
             'status'                 => $ai_response['status'] ?? __( 'Executing step...', 'creator-core' ),
-            'message'                => $ai_response['message'] ?? '',
+            'message'                => $message,
             'data'                   => $data,
             'execution_result'       => $execution_result,
             'requires_confirmation'  => false,
@@ -429,11 +446,18 @@ class ResponseHandler {
             $data['progress_percentage'] = round( ( $data['completed_step'] / $data['total_steps'] ) * 100 );
         }
 
+        // Ensure message is a human-readable string, not JSON.
+        $message = $this->ensure_readable_message(
+            $ai_response['message'] ?? '',
+            $data,
+            'checkpoint'
+        );
+
         return [
             'type'                   => 'checkpoint',
             'step'                   => $ai_response['step'] ?? 'implementation',
             'status'                 => $ai_response['status'] ?? __( 'Step complete', 'creator-core' ),
-            'message'                => $ai_response['message'] ?? '',
+            'message'                => $message,
             'data'                   => $data,
             'requires_confirmation'  => $ai_response['requires_confirmation'] ?? false,
             'continue_automatically' => $ai_response['continue_automatically'] ?? true,
@@ -505,13 +529,20 @@ class ResponseHandler {
         $data            = $ai_response['data'] ?? [];
         $data['command'] = $command;
 
+        // Ensure message is a human-readable string, not JSON.
+        $message = $this->ensure_readable_message(
+            $ai_response['message'] ?? '',
+            $data,
+            'wp_cli'
+        );
+
         return [
             'type'                   => 'wp_cli',
             'step'                   => $ai_response['step'] ?? 'implementation',
             'status'                 => $execution_result['success']
                 ? __( 'WP-CLI command executed', 'creator-core' )
                 : __( 'WP-CLI command failed', 'creator-core' ),
-            'message'                => $ai_response['message'] ?? '',
+            'message'                => $message,
             'data'                   => $data,
             'execution_result'       => $execution_result,
             'requires_confirmation'  => false,
@@ -541,12 +572,21 @@ class ResponseHandler {
         // Execute the PHP code with context available as $context variable.
         $execution_result = $this->code_executor->execute( $code, $context );
 
+        $data = $ai_response['data'] ?? [];
+
+        // Ensure message is a human-readable string, not JSON.
+        $message = $this->ensure_readable_message(
+            $ai_response['message'] ?? '',
+            $data,
+            'execute'
+        );
+
         return [
             'type'                   => 'execute',
             'step'                   => $ai_response['step'] ?? 'implementation',
             'status'                 => $ai_response['status'] ?? __( 'Executing...', 'creator-core' ),
-            'message'                => $ai_response['message'] ?? '',
-            'data'                   => $ai_response['data'] ?? [],
+            'message'                => $message,
+            'data'                   => $data,
             'execution_result'       => $execution_result,
             'requires_confirmation'  => false,
             'continue_automatically' => $ai_response['continue_automatically'] ?? true,
@@ -564,6 +604,14 @@ class ResponseHandler {
      */
     private function handle_verify_response( array $ai_response, array $context ): array {
         $code = $ai_response['data']['code'] ?? '';
+        $data = $ai_response['data'] ?? [];
+
+        // Ensure message is a human-readable string, not JSON.
+        $message = $this->ensure_readable_message(
+            $ai_response['message'] ?? '',
+            $data,
+            'verify'
+        );
 
         if ( empty( $code ) ) {
             // Verification without code just passes through.
@@ -571,8 +619,8 @@ class ResponseHandler {
                 'type'                   => 'verify',
                 'step'                   => $ai_response['step'] ?? 'verification',
                 'status'                 => $ai_response['status'] ?? __( 'Verified', 'creator-core' ),
-                'message'                => $ai_response['message'] ?? '',
-                'data'                   => $ai_response['data'] ?? [],
+                'message'                => $message,
+                'data'                   => $data,
                 'requires_confirmation'  => false,
                 'continue_automatically' => $ai_response['continue_automatically'] ?? true,
             ];
@@ -585,8 +633,8 @@ class ResponseHandler {
             'type'                   => 'verify',
             'step'                   => $ai_response['step'] ?? 'verification',
             'status'                 => $ai_response['status'] ?? __( 'Verified', 'creator-core' ),
-            'message'                => $ai_response['message'] ?? '',
-            'data'                   => $ai_response['data'] ?? [],
+            'message'                => $message,
+            'data'                   => $data,
             'verification_result'    => $verification_result,
             'requires_confirmation'  => false,
             'continue_automatically' => $ai_response['continue_automatically'] ?? true,
@@ -703,6 +751,113 @@ class ResponseHandler {
             'requires_confirmation'  => false,
             'continue_automatically' => false,
         ];
+    }
+
+    /**
+     * Ensure message is a human-readable string, not JSON or empty
+     *
+     * Sometimes the AI returns JSON in the message field instead of a readable message.
+     * This method detects that and generates a fallback message based on context.
+     *
+     * @param string $message The message from AI response.
+     * @param array  $data    The data from AI response (for context).
+     * @param string $type    The response type.
+     * @return string Human-readable message.
+     */
+    private function ensure_readable_message( string $message, array $data, string $type ): string {
+        // If message is empty, generate a contextual one.
+        if ( empty( trim( $message ) ) ) {
+            return $this->generate_fallback_message( $data, $type );
+        }
+
+        // Check if message looks like JSON (starts with { or [).
+        $trimmed = trim( $message );
+        if ( strlen( $trimmed ) > 0 && ( $trimmed[0] === '{' || $trimmed[0] === '[' ) ) {
+            // Try to decode it - if it's valid JSON, it's not a readable message.
+            $decoded = json_decode( $trimmed, true );
+            if ( json_last_error() === JSON_ERROR_NONE ) {
+                // It's JSON, generate a fallback.
+                return $this->generate_fallback_message( $data, $type );
+            }
+        }
+
+        return $message;
+    }
+
+    /**
+     * Generate a fallback message based on response type and data
+     *
+     * @param array  $data The response data.
+     * @param string $type The response type.
+     * @return string Generated message.
+     */
+    private function generate_fallback_message( array $data, string $type ): string {
+        switch ( $type ) {
+            case 'execute_step':
+                $step_index = $data['step_index'] ?? '';
+                $step_title = $data['step_title'] ?? '';
+                $total_steps = $data['total_steps'] ?? '';
+
+                if ( $step_index && $step_title ) {
+                    if ( $total_steps ) {
+                        return sprintf(
+                            /* translators: 1: step number, 2: total steps, 3: step title */
+                            __( 'Executing step %1$d of %2$d: %3$s', 'creator-core' ),
+                            $step_index,
+                            $total_steps,
+                            $step_title
+                        );
+                    }
+                    return sprintf(
+                        /* translators: 1: step number, 2: step title */
+                        __( 'Executing step %1$d: %2$s', 'creator-core' ),
+                        $step_index,
+                        $step_title
+                    );
+                }
+                return __( 'Executing step...', 'creator-core' );
+
+            case 'checkpoint':
+                $completed = $data['completed_step'] ?? '';
+                $total = $data['total_steps'] ?? '';
+                if ( $completed && $total ) {
+                    $percentage = round( ( $completed / $total ) * 100 );
+                    return sprintf(
+                        /* translators: 1: completed steps, 2: total steps, 3: percentage */
+                        __( 'Progress: %1$d of %2$d steps completed (%3$d%%)', 'creator-core' ),
+                        $completed,
+                        $total,
+                        $percentage
+                    );
+                }
+                return __( 'Step completed', 'creator-core' );
+
+            case 'execute':
+                return __( 'Executing code...', 'creator-core' );
+
+            case 'verify':
+                return __( 'Verifying changes...', 'creator-core' );
+
+            case 'wp_cli':
+                $command = $data['command'] ?? '';
+                if ( $command ) {
+                    return sprintf(
+                        /* translators: %s: WP-CLI command */
+                        __( 'Executing WP-CLI: %s', 'creator-core' ),
+                        $command
+                    );
+                }
+                return __( 'Executing WP-CLI command...', 'creator-core' );
+
+            case 'complete':
+                return __( 'Task completed successfully.', 'creator-core' );
+
+            case 'question':
+                return __( 'I need some additional information to proceed.', 'creator-core' );
+
+            default:
+                return __( 'Processing...', 'creator-core' );
+        }
     }
 
     /**
