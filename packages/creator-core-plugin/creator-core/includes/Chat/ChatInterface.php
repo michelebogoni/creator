@@ -257,7 +257,10 @@ class ChatInterface {
             <div id="creator-chat-app" class="creator-chat-container">
                 <!-- Chat Header -->
                 <div class="creator-chat-header">
-                    <h1><?php esc_html_e( 'Creator Chat', 'creator-core' ); ?></h1>
+                    <h1>
+                        <svg class="creator-header-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="24" height="24"><circle cx="250" cy="250" r="245"/><path d="M290.47,419.99h0c-12.92,0-25.29-5.22-34.3-14.48l-118.86-122.13c-18.08-18.58-18.08-48.18,0-66.76l118.86-122.13c9.01-9.26,21.38-14.48,34.3-14.48h0c42.32,0,63.82,50.91,34.3,81.24l-53.89,55.37c-18.08,18.58-18.08,48.18,0,66.76l53.89,55.37c29.52,30.33,8.03,81.24-34.3,81.24Z" style="fill:#fff"/></svg>
+                        creator
+                    </h1>
                     <div class="creator-chat-actions">
                         <button type="button" id="creator-debug-btn" class="button" title="<?php esc_attr_e( 'Debug Logs', 'creator-core' ); ?>">
                             <span class="dashicons dashicons-admin-tools"></span>
@@ -311,13 +314,6 @@ class ChatInterface {
                                 <span class="dashicons dashicons-arrow-right-alt"></span>
                                 <span class="creator-send-text"><?php esc_html_e( 'Send', 'creator-core' ); ?></span>
                             </button>
-                        </div>
-
-                        <div class="creator-input-info">
-                            <span class="creator-attachment-info" style="display: none;">
-                                <span class="dashicons dashicons-paperclip"></span>
-                                <span class="creator-attachment-count">0</span> <?php esc_html_e( 'files attached', 'creator-core' ); ?>
-                            </span>
                         </div>
                     </form>
                 </div>
