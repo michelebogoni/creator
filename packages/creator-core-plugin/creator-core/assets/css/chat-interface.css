@@ -1478,6 +1478,7 @@
 	margin: 1em 0;
 	overflow: hidden;
 	box-shadow: var(--creator-shadow);
+	max-width: 70%;
 }
 
 .creator-roadmap-header {
