@@ -530,79 +530,67 @@
 	color: var(--creator-text-secondary);
 }
 
-/* Real-time Progress Indicator */
+/* Simple Typing Indicator (dots under input) */
 .creator-typing-indicator {
 	display: flex;
-	flex-direction: column;
-	gap: 0.5em;
-	background: var(--creator-gray-50);
-	border-left: 3px solid var(--creator-gray-600);
-	border-radius: 0 var(--creator-radius) var(--creator-radius) 0;
-	padding: 0.75em 1em;
-	margin-bottom: 0.5em;
-	max-width: 100%;
+	align-items: center;
+	gap: 0.25em;
 }
 
-.creator-progress-header {
+.creator-typing-indicator .dot {
+	width: 0.375em;
+	height: 0.375em;
+	border-radius: 50%;
+	background: var(--creator-gray-400);
+	animation: typing 1.4s infinite ease-in-out both;
+}
+
+.creator-typing-indicator .dot:nth-child(1) { animation-delay: -0.32s; }
+.creator-typing-indicator .dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+	0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+	40% { transform: scale(1); opacity: 1; }
+}
+
+/* Progress Message in Chat Area */
+.creator-message-progress {
+	opacity: 1;
+}
+
+.creator-message-progress .creator-message-header {
 	display: flex;
 	align-items: center;
 	gap: 0.5em;
 }
 
-.creator-progress-dots {
-	display: flex;
-	gap: 0.25em;
-}
-
-.creator-progress-dots .dot {
-	width: 0.375em;
-	height: 0.375em;
-	border-radius: 50%;
-	background: var(--creator-gray-500);
-	animation: typing 1.4s infinite ease-in-out both;
-}
-
-.creator-progress-dots .dot:nth-child(1) { animation-delay: -0.32s; }
-.creator-progress-dots .dot:nth-child(2) { animation-delay: -0.16s; }
-
-.creator-progress-text {
-	font-weight: 500;
-	color: var(--creator-gray-700);
-	font-size: 0.875em;
-}
-
-.creator-progress-log {
-	display: flex;
-	flex-direction: column;
-	gap: 0.25em;
-	max-height: 10em;
-	overflow-y: auto;
+.creator-message-progress .creator-progress-status {
 	font-size: 0.75em;
-}
-
-.creator-progress-log-item {
-	display: flex;
-	gap: 0.5em;
-	color: var(--creator-gray-600);
-	padding: 0.25em 0;
-	border-bottom: 1px solid var(--creator-gray-100);
-	line-height: 1.4;
-}
-
-.creator-progress-log-item:last-child {
-	border-bottom: none;
-}
-
-.creator-progress-log-item .time {
 	color: var(--creator-gray-400);
-	font-family: monospace;
-	font-size: 0.85em;
-	flex-shrink: 0;
+	font-style: italic;
 }
 
-@keyframes typing {
-	0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-	40% { transform: scale(1); opacity: 1; }
+.creator-progress-lines {
+	font-size: 0.8125em;
+	color: var(--creator-gray-500);
+	line-height: 1.6;
+}
+
+.creator-progress-line {
+	padding: 0.125em 0;
+}
+
+/* Completed progress state - more muted */
+.creator-message-progress.creator-progress-completed {
+	opacity: 0.7;
+}
+
+.creator-message-progress.creator-progress-completed .creator-progress-lines {
+	color: var(--creator-gray-400);
+}
+
+.creator-message-progress.creator-progress-completed .creator-progress-status {
+	color: var(--creator-gray-400);
 }
 
 .creator-mock-badge {

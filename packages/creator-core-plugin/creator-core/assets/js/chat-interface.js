@@ -311,6 +311,9 @@
             // Track progress steps for final display
             this.currentProgressSteps = [];
 
+            // Create progress element in chat area
+            this.createProgressElement();
+
             try {
                 // Create EventSource for SSE
                 this.eventSource = new EventSource(streamUrl, { withCredentials: true });
@@ -324,7 +327,7 @@
                             self.chatId = data.chat_id;
                             self.updateUrl(data.chat_id);
                         }
-                        self.updateProgressMessage(data.message || 'Connesso...');
+                        self.appendProgressLine(data.message || 'Connesso...');
                     } catch (e) {
                         console.error('[CreatorChat] Error parsing connected event:', e);
                     }
@@ -341,8 +344,8 @@
                             self.currentProgressSteps.push(data.step_data);
                         }
 
-                        // Update the progress display
-                        self.updateProgressMessage(data.display_message || 'Elaborazione...');
+                        // Append progress line to chat area
+                        self.appendProgressLine(data.display_message || 'Elaborazione...');
                     } catch (e) {
                         console.error('[CreatorChat] Error parsing progress event:', e);
                     }
@@ -358,6 +361,9 @@
                         self.closeEventSource();
                         self.hideTypingIndicator();
 
+                        // Finalize progress display (make it gray/muted)
+                        self.finalizeProgressElement();
+
                         if (data.success) {
                             // Update chat ID
                             if (data.chat_id) {
@@ -369,12 +375,7 @@
                             const aiResponse = data.response || {};
                             const messageContent = aiResponse.message || 'No response message';
 
-                            // Use collected progress steps or response steps
-                            const steps = self.currentProgressSteps.length > 0
-                                ? self.currentProgressSteps
-                                : (aiResponse.steps || []);
-
-                            // Add AI response with progress steps
+                            // Add AI response (without steps - they're shown in progress)
                             self.addMessage({
                                 role: 'assistant',
                                 content: messageContent,
@@ -383,7 +384,7 @@
                                 step: aiResponse.step || 'complete',
                                 status: aiResponse.status || '',
                                 data: aiResponse.data || {},
-                                steps: steps,
+                                steps: [], // Don't show steps again, they're in progress area
                                 reasoning: aiResponse.reasoning || aiResponse.thinking || ''
                             });
 
@@ -415,12 +416,14 @@
                         console.error('[CreatorChat] SSE error event:', data);
                         self.closeEventSource();
                         self.hideTypingIndicator();
+                        self.removeProgressElement();
                         self.showError(data.message || 'Connection error', self.isLicenseError(data.message));
                     } catch (e) {
                         // Generic error handling
                         console.error('[CreatorChat] SSE connection error:', e);
                         self.closeEventSource();
                         self.hideTypingIndicator();
+                        self.removeProgressElement();
                         self.showError('Connection lost. Please try again.');
                     }
                 });
@@ -434,14 +437,70 @@
                     console.error('[CreatorChat] EventSource error:', error);
                     self.closeEventSource();
                     self.hideTypingIndicator();
+                    self.removeProgressElement();
                     self.showError('Connection error. Please try again.');
                 };
 
             } catch (e) {
                 console.error('[CreatorChat] Failed to create EventSource:', e);
                 this.hideTypingIndicator();
+                this.removeProgressElement();
                 this.showError('Failed to connect to server');
             }
+        },
+
+        /**
+         * Create progress element in chat area
+         */
+        createProgressElement: function() {
+            // Remove any existing progress element
+            this.removeProgressElement();
+
+            const $progress = $(`
+                <div class="creator-message creator-message-progress" id="creator-progress-message">
+                    <div class="creator-message-avatar"></div>
+                    <div class="creator-message-content">
+                        <div class="creator-message-header">
+                            <span class="creator-message-sender">Creator</span>
+                            <span class="creator-progress-status">sta elaborando...</span>
+                        </div>
+                        <div class="creator-progress-lines"></div>
+                    </div>
+                </div>
+            `);
+
+            // Add to chat messages area
+            $('#creator-chat-messages').append($progress);
+            this.scrollToBottom();
+        },
+
+        /**
+         * Append a progress line to the chat progress element
+         */
+        appendProgressLine: function(message) {
+            const $lines = $('#creator-progress-message .creator-progress-lines');
+            if ($lines.length) {
+                $lines.append(`<div class="creator-progress-line">${this.escapeHtml(message)}</div>`);
+                this.scrollToBottom();
+            }
+        },
+
+        /**
+         * Finalize progress element (make it muted/completed style)
+         */
+        finalizeProgressElement: function() {
+            const $progress = $('#creator-progress-message');
+            if ($progress.length) {
+                $progress.addClass('creator-progress-completed');
+                $progress.find('.creator-progress-status').text('elaborazione completata');
+            }
+        },
+
+        /**
+         * Remove progress element from chat
+         */
+        removeProgressElement: function() {
+            $('#creator-progress-message').remove();
         },
 
         /**
@@ -453,26 +512,6 @@
                 this.eventSource = null;
             }
             this.currentProgressSteps = [];
-        },
-
-        /**
-         * Update the progress message in the typing indicator
-         */
-        updateProgressMessage: function(message) {
-            const $indicator = $('#typing-indicator');
-            if ($indicator.length) {
-                // Update the message text
-                $indicator.find('.creator-progress-text').text(message);
-
-                // Add to progress log
-                const $log = $indicator.find('.creator-progress-log');
-                if ($log.length) {
-                    const timestamp = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    $log.append(`<div class="creator-progress-log-item"><span class="time">${timestamp}</span> ${this.escapeHtml(message)}</div>`);
-                    // Scroll to bottom
-                    $log.scrollTop($log[0].scrollHeight);
-                }
-            }
         },
 
         /**
@@ -1218,22 +1257,16 @@
         },
 
         /**
-         * Show typing indicator with real-time progress support
+         * Show typing indicator (simple dots under input)
          */
         showTypingIndicator: function() {
             this.isTyping = true;
 
             const $indicator = $(`
                 <div class="creator-typing-indicator" id="typing-indicator">
-                    <div class="creator-progress-header">
-                        <div class="creator-progress-dots">
-                            <div class="dot"></div>
-                            <div class="dot"></div>
-                            <div class="dot"></div>
-                        </div>
-                        <span class="creator-progress-text">Creator AI sta elaborando...</span>
-                    </div>
-                    <div class="creator-progress-log"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
                 </div>
             `);
 
