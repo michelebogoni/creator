@@ -24,7 +24,35 @@
             this.attachedFiles = [];
             this.bindEvents();
             this.initTextarea();
+
+            // Load conversation history if available
+            if (creatorChat.conversationHistory && creatorChat.conversationHistory.length > 0) {
+                this.loadConversationHistory(creatorChat.conversationHistory);
+            }
+
             this.scrollToBottom();
+        },
+
+        /**
+         * Load conversation history from PHP
+         */
+        loadConversationHistory: function(messages) {
+            if (!messages || messages.length === 0) {
+                return;
+            }
+
+            // Hide welcome message
+            $('.creator-welcome-message').hide();
+
+            // Render each message
+            const self = this;
+            messages.forEach(function(msg) {
+                self.addMessage({
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: msg.created_at || new Date().toISOString()
+                });
+            });
         },
 
         /**
