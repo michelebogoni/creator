@@ -202,7 +202,7 @@ body.toplevel_page_creator-chat #wpbody-content {
 .creator-message {
 	display: flex;
 	gap: 0.75em;
-	margin-bottom: 2em;
+	margin: 3em 0em;
 	max-width: 100%;
 }
 
@@ -956,9 +956,6 @@ body.toplevel_page_creator-chat #wpbody-content {
 /* Attachment Preview Container */
 .creator-attachment-preview {
 	padding: 0.75em 1em;
-	background: var(--creator-gray-50);
-	border-bottom: 1px solid var(--creator-border);
-	border-radius: var(--creator-radius-lg) var(--creator-radius-lg) 0 0;
 }
 
 .creator-attachment-list {
@@ -1072,7 +1069,7 @@ body.toplevel_page_creator-chat #wpbody-content {
 	gap: 0.5em;
 	margin-top: 0.75em;
 	padding-top: 0.75em;
-	border-top: 1px solid var(--creator-border);
+	border-top: none;
 }
 
 .creator-message-attachment {
