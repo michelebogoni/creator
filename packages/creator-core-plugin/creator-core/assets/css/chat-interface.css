@@ -56,6 +56,15 @@
 	padding-left: 0 !important;
 }
 
+/* Hide WordPress footer and adjust body padding when on chat page */
+body.toplevel_page_creator-chat #wpfooter {
+	display: none;
+}
+
+body.toplevel_page_creator-chat #wpbody-content {
+	padding-bottom: 0;
+}
+
 /* ============================================
    Chat Container - Full Width
    ============================================ */
@@ -63,7 +72,7 @@
 	margin: 0;
 	padding: 0;
 	background: var(--creator-white);
-	min-height: calc(100vh - 32px);
+	height: 100vh;
 	font-family: var(--creator-font);
 	font-size: 1.0625em; /* Larger base text */
 }
@@ -96,6 +105,15 @@
 	font-size: 1.25em;
 	font-weight: 600;
 	color: var(--creator-text);
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+}
+
+.creator-header-logo {
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
 }
 
 .creator-chat-header-left {
@@ -177,7 +195,7 @@
 .creator-chat-messages {
 	flex: 1;
 	overflow-y: auto;
-	padding: 2em 3em;
+	padding: 2em 3em 7em 3em;
 	background: var(--creator-white);
 }
 
@@ -288,6 +306,43 @@
 	padding: 0.5em 0;
 	border-bottom: 1px solid var(--creator-gray-100);
 	font-style: italic;
+}
+
+/* Attachments display in user messages */
+.creator-message-attachments {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5em;
+	margin-top: 0.75em;
+	padding-top: 0.75em;
+	border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.creator-message-attachment {
+	display: flex;
+	align-items: center;
+	gap: 0.375em;
+	padding: 0.25em 0.5em;
+	background: rgba(0, 0, 0, 0.05);
+	border-radius: var(--creator-radius-sm);
+	font-size: 0.75em;
+	color: var(--creator-gray-600);
+}
+
+.creator-message-attachment .creator-attachment-icon {
+	font-size: 1em;
+}
+
+.creator-message-attachment .creator-attachment-name {
+	font-weight: 500;
+	max-width: 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.creator-message-attachment .creator-attachment-size {
+	color: var(--creator-gray-400);
 }
 
 .creator-message-debug::before {
@@ -407,6 +462,10 @@
 	background: var(--creator-white);
 	border-top: 1px solid var(--creator-border);
 	flex-shrink: 0;
+	position: fixed;
+	width: -webkit-fill-available;
+	bottom: 0;
+	z-index: 100;
 }
 
 .creator-send-text {

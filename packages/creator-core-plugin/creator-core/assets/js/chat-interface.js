@@ -879,6 +879,21 @@
                         </div>
             `;
 
+            // Add attachments display for user messages
+            if (isUser && message.attachments && message.attachments.length > 0) {
+                html += '<div class="creator-message-attachments">';
+                message.attachments.forEach(function(file) {
+                    const icon = CreatorChat.getFileIcon(file.type);
+                    const size = CreatorChat.formatFileSize(file.size);
+                    html += `<div class="creator-message-attachment">
+                        <span class="creator-attachment-icon">${icon}</span>
+                        <span class="creator-attachment-name">${CreatorChat.escapeHtml(file.name)}</span>
+                        <span class="creator-attachment-size">${size}</span>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
             // Add action cards if present
             if (message.actions && message.actions.length > 0) {
                 html += '<div class="creator-message-actions">';
@@ -1658,17 +1673,14 @@
         updateAttachmentPreview: function() {
             const $preview = $('#creator-attachment-preview');
             const $list = $preview.find('.creator-attachment-list');
-            const $info = $('.creator-attachment-info');
 
             if (this.attachedFiles.length === 0) {
                 $preview.hide();
-                $info.hide();
                 $list.empty();
                 return;
             }
 
             $preview.show();
-            $info.show();
 
             let html = '';
             this.attachedFiles.forEach(function(file, index) {
