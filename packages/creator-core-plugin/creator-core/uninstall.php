@@ -43,6 +43,13 @@ if ( $backup_path && file_exists( $backup_path ) ) {
     creator_uninstall_delete_directory( $backup_path );
 }
 
+// Delete debug directory.
+$upload_dir = wp_upload_dir();
+$debug_dir  = $upload_dir['basedir'] . '/creator-debug';
+if ( file_exists( $debug_dir ) ) {
+    creator_uninstall_delete_directory( $debug_dir );
+}
+
 // Delete ALL plugin options.
 $options = [
     'creator_license_key',
