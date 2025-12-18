@@ -121,6 +121,34 @@ class ChatController {
                 'permission_callback' => [ $this, 'check_permission' ],
             ]
         );
+
+        // GET /creator/v1/chat/stream - SSE endpoint for real-time progress streaming.
+        register_rest_route(
+            $this->namespace,
+            '/chat/stream',
+            [
+                'methods'             => 'GET',
+                'callback'            => [ $this, 'handle_chat_stream' ],
+                'permission_callback' => [ $this, 'check_permission' ],
+                'args'                => [
+                    'message' => [
+                        'required'          => true,
+                        'type'              => 'string',
+                        'sanitize_callback' => 'sanitize_textarea_field',
+                    ],
+                    'chat_id' => [
+                        'required'          => false,
+                        'type'              => 'integer',
+                        'sanitize_callback' => 'absint',
+                    ],
+                    'confirm_plan' => [
+                        'required'          => false,
+                        'type'              => 'boolean',
+                        'default'           => false,
+                    ],
+                ],
+            ]
+        );
     }
 
     /**
@@ -222,6 +250,562 @@ class ChatController {
                 [ 'status' => 500 ]
             );
         }
+    }
+
+    /**
+     * Handle SSE streaming for real-time progress updates
+     *
+     * This endpoint streams progress events as the AI processes the request,
+     * allowing the frontend to show real-time updates to the user.
+     *
+     * @param WP_REST_Request $request The REST request object.
+     * @return void Outputs SSE stream directly.
+     */
+    public function handle_chat_stream( WP_REST_Request $request ) {
+        $message      = $request->get_param( 'message' );
+        $chat_id      = $request->get_param( 'chat_id' );
+        $confirm_plan = $request->get_param( 'confirm_plan' );
+
+        // Validate license.
+        $site_token = get_option( 'creator_site_token', '' );
+        if ( empty( $site_token ) ) {
+            $this->send_sse_error( __( 'Please configure your license key in settings.', 'creator-core' ) );
+            return;
+        }
+
+        // Set SSE headers.
+        $this->set_sse_headers();
+
+        try {
+            // Get or create chat.
+            $chat_id = $this->get_or_create_chat( $chat_id );
+
+            // Send initial connection event.
+            $this->send_sse_event( 'connected', [
+                'chat_id' => $chat_id,
+                'message' => __( 'Connected - starting processing...', 'creator-core' ),
+            ] );
+
+            // Save user message.
+            $this->save_message( $chat_id, 'user', $message );
+
+            // Initialize components.
+            $context_loader   = new ContextLoader();
+            $proxy_client     = new ProxyClient();
+            $response_handler = new ResponseHandler();
+            $debug_logger     = new DebugLogger();
+
+            // Start debug session.
+            $debug_logger->start_session( $message, $chat_id );
+
+            // Gather WordPress context.
+            $context = $context_loader->get_context();
+
+            // Log the context.
+            $debug_logger->log_context( $context );
+
+            // Get conversation history.
+            $conversation_history = $this->get_conversation_history_for_ai( $chat_id );
+
+            // If confirming a plan, modify the message.
+            if ( $confirm_plan ) {
+                $message = 'Procedi con il piano.';
+            }
+
+            // Execute the streaming loop.
+            $final_response = $this->execute_loop_streaming(
+                $message,
+                $context,
+                $conversation_history,
+                $proxy_client,
+                $response_handler,
+                $chat_id,
+                $debug_logger
+            );
+
+            // Save assistant response.
+            $this->save_message( $chat_id, 'assistant', wp_json_encode( $final_response ) );
+
+            // Send complete event with final response.
+            $this->send_sse_event( 'complete', [
+                'success'  => true,
+                'chat_id'  => $chat_id,
+                'response' => $final_response,
+            ] );
+
+        } catch ( \Exception $e ) {
+            $this->send_sse_error( $e->getMessage() );
+        }
+
+        exit; // End the SSE stream.
+    }
+
+    /**
+     * Set SSE headers for streaming response
+     *
+     * @return void
+     */
+    private function set_sse_headers(): void {
+        // Disable output buffering.
+        while ( ob_get_level() ) {
+            ob_end_clean();
+        }
+
+        // Set SSE headers.
+        header( 'Content-Type: text/event-stream' );
+        header( 'Cache-Control: no-cache' );
+        header( 'Connection: keep-alive' );
+        header( 'X-Accel-Buffering: no' ); // Disable nginx buffering.
+
+        // Flush headers.
+        if ( function_exists( 'flush' ) ) {
+            flush();
+        }
+    }
+
+    /**
+     * Send an SSE event
+     *
+     * @param string $event Event name.
+     * @param array  $data  Event data.
+     * @return void
+     */
+    private function send_sse_event( string $event, array $data ): void {
+        echo "event: {$event}\n";
+        echo 'data: ' . wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ) . "\n\n";
+
+        if ( function_exists( 'flush' ) ) {
+            flush();
+        }
+
+        // Also try ob_flush if available.
+        if ( function_exists( 'ob_flush' ) && ob_get_level() > 0 ) {
+            @ob_flush();
+        }
+    }
+
+    /**
+     * Send an SSE error event
+     *
+     * @param string $message Error message.
+     * @return void
+     */
+    private function send_sse_error( string $message ): void {
+        $this->set_sse_headers();
+        $this->send_sse_event( 'error', [
+            'success' => false,
+            'message' => $message,
+        ] );
+        exit;
+    }
+
+    /**
+     * Execute the multi-step AI loop with SSE streaming
+     *
+     * Similar to execute_loop but sends SSE events for each step.
+     *
+     * @param string          $message              Initial user message.
+     * @param array           $context              WordPress context.
+     * @param array           $conversation_history Previous messages.
+     * @param ProxyClient     $proxy_client         Proxy client instance.
+     * @param ResponseHandler $response_handler     Response handler instance.
+     * @param int             $chat_id              Chat ID.
+     * @param DebugLogger     $debug_logger         Debug logger instance.
+     * @return array Final response after loop completes.
+     */
+    private function execute_loop_streaming(
+        string $message,
+        array $context,
+        array $conversation_history,
+        ProxyClient $proxy_client,
+        ResponseHandler $response_handler,
+        int $chat_id,
+        DebugLogger $debug_logger
+    ): array {
+        $iteration        = 0;
+        $documentation    = null;
+        $current_message  = $message;
+        $all_steps        = [];
+        $last_result      = null;
+        $retry_count      = 0;
+        $error_memory     = [];
+
+        while ( $iteration < self::MAX_LOOP_ITERATIONS ) {
+            $iteration++;
+
+            // Build context with last execution result.
+            $loop_context = $context;
+            if ( $last_result !== null ) {
+                $loop_context['last_result'] = $last_result;
+            }
+
+            // Send progress event - starting iteration.
+            $this->send_sse_event( 'progress', [
+                'iteration'       => $iteration,
+                'phase'           => 'calling_ai',
+                'display_message' => sprintf(
+                    __( 'Iteration %d: Communicating with AI...', 'creator-core' ),
+                    $iteration
+                ),
+            ] );
+
+            // Log AI request.
+            $debug_logger->log_ai_request(
+                $current_message,
+                $loop_context,
+                $conversation_history,
+                $documentation,
+                $iteration
+            );
+
+            // Call the AI.
+            $proxy_response = $proxy_client->send_message(
+                $current_message,
+                $loop_context,
+                $conversation_history,
+                $documentation
+            );
+
+            // Log AI response.
+            $debug_logger->log_ai_response( $proxy_response, $iteration );
+
+            // Handle proxy errors.
+            if ( is_wp_error( $proxy_response ) ) {
+                $error_response = [
+                    'type'    => 'error',
+                    'step'    => 'implementation',
+                    'status'  => __( 'Error', 'creator-core' ),
+                    'message' => $proxy_response->get_error_message(),
+                    'data'    => [],
+                    'steps'   => $all_steps,
+                ];
+                $debug_logger->end_session( $error_response, $iteration );
+                return $error_response;
+            }
+
+            // Process the response.
+            $processed = $response_handler->handle( $proxy_response, $loop_context );
+
+            // Log processed response.
+            $debug_logger->log_processed_response( $processed, $iteration );
+
+            // Get display message for this step.
+            $display_message = $this->get_step_display_message( $processed, $iteration );
+
+            // Track step.
+            $step_data = [
+                'iteration'       => $iteration,
+                'type'            => $processed['type'],
+                'step'            => $processed['step'] ?? '',
+                'status'          => $processed['status'] ?? '',
+                'message'         => $processed['message'] ?? '',
+                'retry_count'     => $retry_count,
+                'timestamp'       => current_time( 'mysql' ),
+                'display_message' => $display_message,
+            ];
+            $all_steps[] = $step_data;
+
+            // Send progress event for this step.
+            $this->send_sse_event( 'progress', [
+                'iteration'       => $iteration,
+                'type'            => $processed['type'],
+                'phase'           => $this->get_phase_from_type( $processed['type'] ),
+                'display_message' => $display_message,
+                'step_data'       => $step_data,
+            ] );
+
+            // Handle request_docs type - fetch documentation and continue.
+            if ( 'request_docs' === $processed['type'] ) {
+                $documentation = $processed['documentation'] ?? [];
+
+                $debug_logger->log_documentation(
+                    $processed['data']['plugins_needed'] ?? [],
+                    $documentation,
+                    $iteration
+                );
+
+                $task            = $processed['data']['task'] ?? $processed['data']['reason'] ?? '';
+                $current_message = wp_json_encode( [
+                    'type'        => 'documentation_provided',
+                    'docs'        => array_keys( $documentation ),
+                    'task'        => $task,
+                    'instruction' => 'Documentation has been loaded. Now proceed with the task. Generate the PHP code to execute.',
+                ] );
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+                $conversation_history[] = [
+                    'role'    => 'user',
+                    'content' => $current_message,
+                ];
+                continue;
+            }
+
+            // Handle roadmap type - iterate through all steps.
+            if ( 'roadmap' === $processed['type'] && ! empty( $processed['data']['roadmap'] ) ) {
+                $roadmap      = $processed['data']['roadmap'];
+                $total_steps  = count( $roadmap );
+                $roadmap_json = wp_json_encode( $roadmap );
+
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+
+                $current_message = wp_json_encode( [
+                    'type'        => 'execute_roadmap',
+                    'instruction' => "Now execute step 1 of {$total_steps}. Generate the PHP code for this step only.",
+                    'step_index'  => 1,
+                    'total_steps' => $total_steps,
+                    'current_step' => $roadmap[0] ?? [],
+                    'full_roadmap' => $roadmap_json,
+                ] );
+                $conversation_history[] = [
+                    'role'    => 'user',
+                    'content' => $current_message,
+                ];
+                continue;
+            }
+
+            // Handle checkpoint - continue with next step.
+            if ( 'checkpoint' === $processed['type'] ) {
+                $completed_step = $processed['data']['completed_step'] ?? 0;
+                $total_steps    = $processed['data']['total_steps'] ?? 0;
+                $next_step      = $processed['data']['next_step'] ?? null;
+
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+
+                if ( $next_step && $completed_step < $total_steps ) {
+                    $next_step_data = $processed['data']['next_step_data'] ?? [];
+                    $current_message = wp_json_encode( [
+                        'type'        => 'execute_roadmap',
+                        'instruction' => "Step {$completed_step} completed. Now execute step {$next_step} of {$total_steps}.",
+                        'step_index'  => $next_step,
+                        'total_steps' => $total_steps,
+                        'current_step' => $next_step_data,
+                    ] );
+                    $conversation_history[] = [
+                        'role'    => 'user',
+                        'content' => $current_message,
+                    ];
+                    continue;
+                }
+            }
+
+            // Handle execute_step type.
+            if ( 'execute_step' === $processed['type'] ) {
+                $execution_result = $processed['data']['result'] ?? null;
+                $step_index       = $processed['data']['step_index'] ?? 0;
+                $total_steps      = $processed['data']['total_steps'] ?? 0;
+
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+
+                if ( isset( $processed['data']['execution_failed'] ) && $processed['data']['execution_failed'] ) {
+                    if ( $this->should_retry_execution( $processed, $retry_count ) ) {
+                        $retry_count++;
+                        $error_memory[] = [
+                            'step'    => $step_index,
+                            'error'   => $processed['data']['error'] ?? 'Unknown error',
+                            'code'    => $processed['data']['failed_code'] ?? '',
+                            'attempt' => $retry_count,
+                        ];
+
+                        $current_message = wp_json_encode( [
+                            'type'         => 'retry_step',
+                            'instruction'  => "Step {$step_index} failed. Please analyze the error and generate corrected code.",
+                            'step_index'   => $step_index,
+                            'total_steps'  => $total_steps,
+                            'error'        => $processed['data']['error'] ?? '',
+                            'failed_code'  => $processed['data']['failed_code'] ?? '',
+                            'retry_count'  => $retry_count,
+                            'error_memory' => $error_memory,
+                        ] );
+                        $conversation_history[] = [
+                            'role'    => 'user',
+                            'content' => $current_message,
+                        ];
+                        continue;
+                    }
+                }
+
+                $retry_count  = 0;
+                $error_memory = [];
+                $last_result  = $execution_result;
+
+                if ( $step_index < $total_steps ) {
+                    $current_message = wp_json_encode( [
+                        'type'            => 'step_completed',
+                        'instruction'     => "Step {$step_index} completed successfully. Create a checkpoint and continue with step " . ( $step_index + 1 ) . ".",
+                        'completed_step'  => $step_index,
+                        'total_steps'     => $total_steps,
+                        'execution_result' => $execution_result,
+                    ] );
+                    $conversation_history[] = [
+                        'role'    => 'user',
+                        'content' => $current_message,
+                    ];
+                    continue;
+                }
+            }
+
+            // Handle execute type (simple execution).
+            if ( 'execute' === $processed['type'] ) {
+                $execution_result = $processed['data']['result'] ?? null;
+
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+
+                if ( isset( $processed['data']['execution_failed'] ) && $processed['data']['execution_failed'] ) {
+                    if ( $this->should_retry_execution( $processed, $retry_count ) ) {
+                        $retry_count++;
+                        $error_memory[] = [
+                            'error'   => $processed['data']['error'] ?? 'Unknown error',
+                            'code'    => $processed['data']['failed_code'] ?? '',
+                            'attempt' => $retry_count,
+                        ];
+
+                        $current_message = wp_json_encode( [
+                            'type'         => 'retry_execution',
+                            'instruction'  => 'Execution failed. Please analyze the error and generate corrected code.',
+                            'error'        => $processed['data']['error'] ?? '',
+                            'failed_code'  => $processed['data']['failed_code'] ?? '',
+                            'retry_count'  => $retry_count,
+                            'error_memory' => $error_memory,
+                        ] );
+                        $conversation_history[] = [
+                            'role'    => 'user',
+                            'content' => $current_message,
+                        ];
+                        continue;
+                    }
+                }
+
+                $retry_count  = 0;
+                $error_memory = [];
+                $last_result  = $execution_result;
+
+                if ( ! empty( $processed['continue_automatically'] ) ) {
+                    $current_message = wp_json_encode( [
+                        'type'             => 'execution_completed',
+                        'instruction'      => 'Code executed. Verify the result and respond to the user.',
+                        'execution_result' => $execution_result,
+                    ] );
+                    $conversation_history[] = [
+                        'role'    => 'user',
+                        'content' => $current_message,
+                    ];
+                    continue;
+                }
+            }
+
+            // Handle verify type.
+            if ( 'verify' === $processed['type'] ) {
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+
+                if ( ! empty( $processed['continue_automatically'] ) ) {
+                    $verification_passed = $processed['data']['passed'] ?? true;
+                    if ( $verification_passed ) {
+                        $current_message = wp_json_encode( [
+                            'type'        => 'verification_passed',
+                            'instruction' => 'Verification passed. Provide final response to user.',
+                        ] );
+                    } else {
+                        $current_message = wp_json_encode( [
+                            'type'        => 'verification_failed',
+                            'instruction' => 'Verification failed. Analyze and fix the issue.',
+                            'issues'      => $processed['data']['issues'] ?? [],
+                        ] );
+                    }
+                    $conversation_history[] = [
+                        'role'    => 'user',
+                        'content' => $current_message,
+                    ];
+                    continue;
+                }
+            }
+
+            // Handle compress_history type.
+            if ( 'compress_history' === $processed['type'] ) {
+                $conversation_history[] = [
+                    'role'    => 'assistant',
+                    'content' => wp_json_encode( $processed ),
+                ];
+
+                if ( ! empty( $processed['continue_automatically'] ) ) {
+                    $current_message = wp_json_encode( [
+                        'type'        => 'history_compressed',
+                        'instruction' => 'History compressed. Continue with the task.',
+                    ] );
+                    $conversation_history[] = [
+                        'role'    => 'user',
+                        'content' => $current_message,
+                    ];
+                    continue;
+                }
+            }
+
+            // Terminal states or no continue flag - end the loop.
+            if ( in_array( $processed['type'], [ 'complete', 'error', 'question', 'plan' ], true ) ) {
+                $processed['steps'] = $all_steps;
+                $debug_logger->end_session( $processed, $iteration );
+                return $processed;
+            }
+
+            // No continue flag - end loop.
+            if ( empty( $processed['continue_automatically'] ) ) {
+                $processed['steps'] = $all_steps;
+                $debug_logger->end_session( $processed, $iteration );
+                return $processed;
+            }
+        }
+
+        // Max iterations reached.
+        $max_iter_response = [
+            'type'    => 'error',
+            'step'    => 'implementation',
+            'status'  => __( 'Error', 'creator-core' ),
+            'message' => __( 'Maximum loop iterations reached. Task may be too complex.', 'creator-core' ),
+            'data'    => [],
+            'steps'   => $all_steps,
+        ];
+        $debug_logger->end_session( $max_iter_response, $iteration );
+        return $max_iter_response;
+    }
+
+    /**
+     * Get phase name from step type for display
+     *
+     * @param string $type Step type.
+     * @return string Phase name.
+     */
+    private function get_phase_from_type( string $type ): string {
+        $phase_map = [
+            'request_docs'     => 'discovery',
+            'roadmap'          => 'planning',
+            'plan'             => 'planning',
+            'execute_step'     => 'execution',
+            'execute'          => 'execution',
+            'checkpoint'       => 'execution',
+            'verify'           => 'verification',
+            'wp_cli'           => 'execution',
+            'compress_history' => 'analysis',
+            'question'         => 'analysis',
+            'complete'         => 'complete',
+            'error'            => 'error',
+        ];
+        return $phase_map[ $type ] ?? 'processing';
     }
 
     /**

@@ -292,109 +292,187 @@
 
         /**
          * Send message to an existing or new chat
-         * Uses the unified /creator/v1/chat endpoint
+         * Uses SSE streaming endpoint for real-time progress updates
          */
         sendMessageToChat: function(chatId, message) {
             const self = this;
 
-            // Build request data
-            const requestData = {
-                message: message || ''
-            };
-
-            // Include chat_id if we have one
+            // Build URL with query parameters for SSE (GET request)
+            const params = new URLSearchParams();
+            params.append('message', message || '');
             if (chatId) {
-                requestData.chat_id = chatId;
+                params.append('chat_id', chatId);
             }
+            // Add nonce for authentication
+            params.append('_wpnonce', creatorChat.restNonce);
 
-            // Include files if present
-            if (this.pendingFiles && this.pendingFiles.length > 0) {
-                requestData.files = this.pendingFiles;
-                this.pendingFiles = []; // Clear after including
+            const streamUrl = creatorChat.restUrl + 'chat/stream?' + params.toString();
+
+            // Track progress steps for final display
+            this.currentProgressSteps = [];
+
+            try {
+                // Create EventSource for SSE
+                this.eventSource = new EventSource(streamUrl, { withCredentials: true });
+
+                // Handle connection established
+                this.eventSource.addEventListener('connected', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('[CreatorChat] SSE connected:', data);
+                        if (data.chat_id) {
+                            self.chatId = data.chat_id;
+                            self.updateUrl(data.chat_id);
+                        }
+                        self.updateProgressMessage(data.message || 'Connesso...');
+                    } catch (e) {
+                        console.error('[CreatorChat] Error parsing connected event:', e);
+                    }
+                });
+
+                // Handle progress updates
+                this.eventSource.addEventListener('progress', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('[CreatorChat] Progress:', data);
+
+                        // Store step for final display
+                        if (data.step_data) {
+                            self.currentProgressSteps.push(data.step_data);
+                        }
+
+                        // Update the progress display
+                        self.updateProgressMessage(data.display_message || 'Elaborazione...');
+                    } catch (e) {
+                        console.error('[CreatorChat] Error parsing progress event:', e);
+                    }
+                });
+
+                // Handle completion
+                this.eventSource.addEventListener('complete', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('[CreatorChat] Complete:', data);
+
+                        // Close the connection
+                        self.closeEventSource();
+                        self.hideTypingIndicator();
+
+                        if (data.success) {
+                            // Update chat ID
+                            if (data.chat_id) {
+                                self.chatId = data.chat_id;
+                                self.updateUrl(data.chat_id);
+                            }
+
+                            // Extract message from structured response
+                            const aiResponse = data.response || {};
+                            const messageContent = aiResponse.message || 'No response message';
+
+                            // Use collected progress steps or response steps
+                            const steps = self.currentProgressSteps.length > 0
+                                ? self.currentProgressSteps
+                                : (aiResponse.steps || []);
+
+                            // Add AI response with progress steps
+                            self.addMessage({
+                                role: 'assistant',
+                                content: messageContent,
+                                timestamp: new Date().toISOString(),
+                                responseType: aiResponse.type || 'complete',
+                                step: aiResponse.step || 'complete',
+                                status: aiResponse.status || '',
+                                data: aiResponse.data || {},
+                                steps: steps,
+                                reasoning: aiResponse.reasoning || aiResponse.thinking || ''
+                            });
+
+                            // Handle plan confirmation
+                            if (aiResponse.type === 'plan' && aiResponse.requires_confirmation) {
+                                self.showPlanConfirmation(aiResponse);
+                            }
+
+                            // Handle roadmap confirmation
+                            if (aiResponse.type === 'roadmap' && aiResponse.requires_confirmation) {
+                                self.showRoadmapConfirmation(aiResponse);
+                            }
+                        } else {
+                            const errorMsg = data.message || 'Failed to process message';
+                            self.showError(errorMsg, self.isLicenseError(errorMsg));
+                        }
+                    } catch (e) {
+                        console.error('[CreatorChat] Error parsing complete event:', e);
+                        self.closeEventSource();
+                        self.hideTypingIndicator();
+                        self.showError('Error processing response');
+                    }
+                });
+
+                // Handle errors
+                this.eventSource.addEventListener('error', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.error('[CreatorChat] SSE error event:', data);
+                        self.closeEventSource();
+                        self.hideTypingIndicator();
+                        self.showError(data.message || 'Connection error', self.isLicenseError(data.message));
+                    } catch (e) {
+                        // Generic error handling
+                        console.error('[CreatorChat] SSE connection error:', e);
+                        self.closeEventSource();
+                        self.hideTypingIndicator();
+                        self.showError('Connection lost. Please try again.');
+                    }
+                });
+
+                // Handle generic EventSource errors (connection issues)
+                this.eventSource.onerror = function(error) {
+                    // Check if it's just the stream ending normally
+                    if (self.eventSource && self.eventSource.readyState === EventSource.CLOSED) {
+                        return; // Normal close, already handled by 'complete' event
+                    }
+                    console.error('[CreatorChat] EventSource error:', error);
+                    self.closeEventSource();
+                    self.hideTypingIndicator();
+                    self.showError('Connection error. Please try again.');
+                };
+
+            } catch (e) {
+                console.error('[CreatorChat] Failed to create EventSource:', e);
+                this.hideTypingIndicator();
+                this.showError('Failed to connect to server');
             }
+        },
 
-            $.ajax({
-                url: creatorChat.restUrl + 'chat',
-                type: 'POST',
-                contentType: 'application/json',
-                timeout: 600000, // 10 minute timeout for complex multi-step tasks
-                headers: {
-                    'X-WP-Nonce': creatorChat.restNonce
-                },
-                data: JSON.stringify(requestData),
-                success: function(response) {
-                    self.hideTypingIndicator();
+        /**
+         * Close EventSource connection
+         */
+        closeEventSource: function() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+            this.currentProgressSteps = [];
+        },
 
-                    if (response.success) {
-                        // Update chat ID (always returned from the endpoint)
-                        if (response.chat_id) {
-                            self.chatId = response.chat_id;
-                            self.updateUrl(response.chat_id);
-                        }
+        /**
+         * Update the progress message in the typing indicator
+         */
+        updateProgressMessage: function(message) {
+            const $indicator = $('#typing-indicator');
+            if ($indicator.length) {
+                // Update the message text
+                $indicator.find('.creator-progress-text').text(message);
 
-                        // Extract message from structured response
-                        const aiResponse = response.response || {};
-                        const messageContent = aiResponse.message || 'No response message';
-
-                        // Add AI response with reasoning/debug info
-                        self.addMessage({
-                            role: 'assistant',
-                            content: messageContent,
-                            timestamp: new Date().toISOString(),
-                            responseType: aiResponse.type || 'complete',
-                            step: aiResponse.step || 'complete',
-                            status: aiResponse.status || '',
-                            data: aiResponse.data || {},
-                            steps: aiResponse.steps || [],
-                            reasoning: aiResponse.reasoning || aiResponse.thinking || ''
-                        });
-
-                        // Handle plan confirmation
-                        if (aiResponse.type === 'plan' && aiResponse.requires_confirmation) {
-                            self.showPlanConfirmation(aiResponse);
-                        }
-
-                        // Handle roadmap confirmation
-                        if (aiResponse.type === 'roadmap' && aiResponse.requires_confirmation) {
-                            self.showRoadmapConfirmation(aiResponse);
-                        }
-
-                        // Handle checkpoint - update roadmap step status
-                        if (aiResponse.type === 'checkpoint' && aiResponse.data) {
-                            const completedStep = aiResponse.data.completed_step;
-                            if (completedStep) {
-                                self.updateRoadmapStep(completedStep, 'completed');
-                            }
-                            const nextStep = aiResponse.data.next_step;
-                            if (nextStep) {
-                                self.updateRoadmapStep(nextStep, 'executing');
-                            }
-                        }
-
-                        // Handle execute_step - show which step is being executed
-                        if (aiResponse.type === 'execute_step' && aiResponse.data) {
-                            const stepIndex = aiResponse.data.step_index;
-                            if (stepIndex) {
-                                self.updateRoadmapStep(stepIndex, 'executing');
-                            }
-                        }
-                    } else {
-                        const errorMsg = response.message || 'Failed to send message';
-                        self.showError(errorMsg, self.isLicenseError(errorMsg));
-                    }
-                },
-                error: function(xhr, status, error) {
-                    self.hideTypingIndicator();
-                    let errorMsg;
-                    if (status === 'timeout') {
-                        errorMsg = 'Request timed out. The AI service may be busy. Please try again.';
-                    } else {
-                        errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Failed to send message';
-                    }
-                    console.error('[CreatorChat] Send message error:', { status, error, xhr: xhr.status });
-                    self.showError(errorMsg, self.isLicenseError(errorMsg));
+                // Add to progress log
+                const $log = $indicator.find('.creator-progress-log');
+                if ($log.length) {
+                    const timestamp = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    $log.append(`<div class="creator-progress-log-item"><span class="time">${timestamp}</span> ${this.escapeHtml(message)}</div>`);
+                    // Scroll to bottom
+                    $log.scrollTop($log[0].scrollHeight);
                 }
-            });
+            }
         },
 
         /**
@@ -1140,17 +1218,22 @@
         },
 
         /**
-         * Show typing indicator
+         * Show typing indicator with real-time progress support
          */
         showTypingIndicator: function() {
             this.isTyping = true;
 
             const $indicator = $(`
                 <div class="creator-typing-indicator" id="typing-indicator">
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                    <span>Creator AI is thinking...</span>
+                    <div class="creator-progress-header">
+                        <div class="creator-progress-dots">
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+                        <span class="creator-progress-text">Creator AI sta elaborando...</span>
+                    </div>
+                    <div class="creator-progress-log"></div>
                 </div>
             `);
 
