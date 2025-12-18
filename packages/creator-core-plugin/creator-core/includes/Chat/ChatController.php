@@ -633,7 +633,7 @@ class ChatController {
 
             // Handle execute_step type.
             if ( 'execute_step' === $processed['type'] ) {
-                $execution_result = $processed['data']['result'] ?? null;
+                $execution_result = $processed['execution_result'] ?? null;
                 $step_index       = $processed['data']['step_index'] ?? 0;
                 $total_steps      = $processed['data']['total_steps'] ?? 0;
 
@@ -642,24 +642,26 @@ class ChatController {
                     'content' => wp_json_encode( $processed ),
                 ];
 
-                if ( isset( $processed['data']['execution_failed'] ) && $processed['data']['execution_failed'] ) {
-                    if ( $this->should_retry_execution( $processed, $retry_count ) ) {
+                // Check if execution failed.
+                if ( ! empty( $execution_result ) && empty( $execution_result['success'] ) ) {
+                    if ( $this->should_retry_execution( $execution_result, $retry_count ) ) {
                         $retry_count++;
                         $error_memory[] = [
-                            'step'    => $step_index,
-                            'error'   => $processed['data']['error'] ?? 'Unknown error',
-                            'code'    => $processed['data']['failed_code'] ?? '',
-                            'attempt' => $retry_count,
+                            'step'       => $step_index,
+                            'error'      => $execution_result['error'] ?? 'Unknown error',
+                            'code_tried' => substr( $processed['data']['code'] ?? '', 0, 500 ),
+                            'attempt'    => $retry_count,
                         ];
 
                         $current_message = wp_json_encode( [
-                            'type'         => 'retry_step',
+                            'type'         => 'step_execution_failed',
                             'instruction'  => "Step {$step_index} failed. Please analyze the error and generate corrected code.",
                             'step_index'   => $step_index,
                             'total_steps'  => $total_steps,
-                            'error'        => $processed['data']['error'] ?? '',
-                            'failed_code'  => $processed['data']['failed_code'] ?? '',
+                            'error'        => $execution_result['error'] ?? 'Unknown error',
+                            'output'       => $execution_result['output'] ?? '',
                             'retry_count'  => $retry_count,
+                            'max_retries'  => self::MAX_RETRY_ATTEMPTS,
                             'error_memory' => $error_memory,
                         ] );
                         $conversation_history[] = [
@@ -668,52 +670,55 @@ class ChatController {
                         ];
                         continue;
                     }
+                } else {
+                    // Reset retry count on success.
+                    $retry_count  = 0;
+                    $error_memory = [];
                 }
 
-                $retry_count  = 0;
-                $error_memory = [];
-                $last_result  = $execution_result;
+                $last_result = $execution_result;
 
-                if ( $step_index < $total_steps ) {
-                    $current_message = wp_json_encode( [
-                        'type'            => 'step_completed',
-                        'instruction'     => "Step {$step_index} completed successfully. Create a checkpoint and continue with step " . ( $step_index + 1 ) . ".",
-                        'completed_step'  => $step_index,
-                        'total_steps'     => $total_steps,
-                        'execution_result' => $execution_result,
-                    ] );
-                    $conversation_history[] = [
-                        'role'    => 'user',
-                        'content' => $current_message,
-                    ];
-                    continue;
-                }
+                // Build continuation message with step result.
+                $current_message = wp_json_encode( [
+                    'type'             => 'step_execution_result',
+                    'instruction'      => "Step {$step_index} executed. Report checkpoint with accumulated context, then continue to next step.",
+                    'completed_step'   => $step_index,
+                    'total_steps'      => $total_steps,
+                    'execution_result' => $execution_result,
+                ] );
+                $conversation_history[] = [
+                    'role'    => 'user',
+                    'content' => $current_message,
+                ];
+                continue;
             }
 
             // Handle execute type (simple execution).
             if ( 'execute' === $processed['type'] ) {
-                $execution_result = $processed['data']['result'] ?? null;
+                $execution_result = $processed['execution_result'] ?? null;
 
                 $conversation_history[] = [
                     'role'    => 'assistant',
                     'content' => wp_json_encode( $processed ),
                 ];
 
-                if ( isset( $processed['data']['execution_failed'] ) && $processed['data']['execution_failed'] ) {
-                    if ( $this->should_retry_execution( $processed, $retry_count ) ) {
+                // Check if execution failed.
+                if ( ! empty( $execution_result ) && empty( $execution_result['success'] ) ) {
+                    if ( $this->should_retry_execution( $execution_result, $retry_count ) ) {
                         $retry_count++;
                         $error_memory[] = [
-                            'error'   => $processed['data']['error'] ?? 'Unknown error',
-                            'code'    => $processed['data']['failed_code'] ?? '',
-                            'attempt' => $retry_count,
+                            'error'      => $execution_result['error'] ?? 'Unknown error',
+                            'code_tried' => substr( $processed['data']['code'] ?? '', 0, 500 ),
+                            'attempt'    => $retry_count,
                         ];
 
                         $current_message = wp_json_encode( [
-                            'type'         => 'retry_execution',
+                            'type'         => 'execution_failed',
                             'instruction'  => 'Execution failed. Please analyze the error and generate corrected code.',
-                            'error'        => $processed['data']['error'] ?? '',
-                            'failed_code'  => $processed['data']['failed_code'] ?? '',
+                            'error'        => $execution_result['error'] ?? 'Unknown error',
+                            'output'       => $execution_result['output'] ?? '',
                             'retry_count'  => $retry_count,
+                            'max_retries'  => self::MAX_RETRY_ATTEMPTS,
                             'error_memory' => $error_memory,
                         ] );
                         $conversation_history[] = [
@@ -722,11 +727,13 @@ class ChatController {
                         ];
                         continue;
                     }
+                } else {
+                    // Reset retry count on success.
+                    $retry_count  = 0;
+                    $error_memory = [];
                 }
 
-                $retry_count  = 0;
-                $error_memory = [];
-                $last_result  = $execution_result;
+                $last_result = $execution_result;
 
                 if ( ! empty( $processed['continue_automatically'] ) ) {
                     $current_message = wp_json_encode( [
