@@ -507,6 +507,8 @@ body.toplevel_page_creator-chat #wpbody-content {
 
 .creator-message-input:focus {
 	outline: none;
+	border-color: transparent;
+	box-shadow: none;
 }
 
 .creator-message-input::placeholder {
