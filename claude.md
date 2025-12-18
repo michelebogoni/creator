@@ -669,12 +669,46 @@ creator-core/
 - **Creator Logo**: Mostra il logo `creator-black.svg` (cerchio nero + freccia bianca) accanto al nome "Creator"
 - **Message Width Matching**: Messaggi Creator hanno stessa larghezza max (70%) dei messaggi utente
 - **ensureReadableMessage()**: Estrae messaggi leggibili da JSON, con fallback contestuali per tipo
+- **File Attachments**: Supporto per allegati multimediali
+  - `handleAttachClick()`: Apre il file picker
+  - `handleFileSelect()`: Legge i file come base64 e li aggiunge a `attachedFiles[]`
+  - `sendMessageWithFiles()`: Invia messaggi con allegati via POST (SSE non supporta file)
+  - **Limiti**: Max 5 file per messaggio, max 10MB per file
+  - **Tipi accettati**: `image/*`, PDF, DOC/DOCX, XLS/XLSX, TXT, JSON, PHP, JS, CSS, HTML
+  ```javascript
+  // Routing automatico: POST per file, SSE per solo testo
+  if (this.pendingFiles && this.pendingFiles.length > 0) {
+      this.sendMessageWithFiles(chatId, message, this.pendingFiles);
+  } else {
+      // Usa SSE per messaggi senza file
+      this.eventSource = new EventSource(streamUrl);
+  }
+  ```
 
 **ChatController.php** (`CreatorCore\Chat\ChatController`)
 - Gestisce l'endpoint REST `POST /wp-json/creator/v1/chat`
 - **SSE Streaming Endpoint**: `GET /wp-json/creator/v1/chat/stream` per progressi in tempo reale
 - Valida le richieste in ingresso
 - Orchestra il flusso della conversazione
+- **File Attachments Validation**: Metodo `validate_files()` per validare allegati
+  ```php
+  // Limiti
+  $max_files     = 5;
+  $max_file_size = 10 * 1024 * 1024; // 10MB
+
+  // Tipi MIME accettati
+  $allowed_types = [
+      'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+      'application/pdf',
+      'text/plain', 'text/html', 'text/css',
+      'application/javascript', 'application/json',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ];
+
+  // Files passati a execute_loop() e poi a ProxyClient
+  $final_response = $this->execute_loop($message, $context, ..., $files);
+  ```
 - Implementa loop handling per roadmap e checkpoint
 - **Loop Limit**: Massimo 100 iterazioni per task complessi (`MAX_LOOP_ITERATIONS = 100`)
 - **Error Memory System**: Sistema di memoria errori per retry intelligenti
@@ -726,9 +760,26 @@ creator-core/
 - Gestisce autenticazione JWT
 - Metodi principali:
   - `validate_license()`: Validazione licenza e ottenimento token
-  - `send_to_ai()`: Invio richieste AI con context
+  - `send_message()`: Invio richieste AI con context e file
   - `get_plugin_docs()`: Ricerca documentazione plugin
   - `refresh_token()`: Rinnovo automatico token scaduto
+- **File Attachments**: `send_message()` accetta parametro `$files` e lo include nel body
+  ```php
+  public function send_message(
+      string $message,
+      array $context,
+      array $conversation_history = [],
+      ?array $documentation = null,
+      array $files = []  // File allegati
+  ) {
+      $body = [
+          'task_type' => 'CODE_GEN',
+          'prompt'    => $message,
+          'context'   => $context,
+          'files'     => $files,  // Passati a Firebase
+      ];
+  }
+  ```
 - Implementa retry logic con exponential backoff
 - Logging completo errori network e HTTP
 
@@ -1138,6 +1189,11 @@ Il sistema è basato su un'architettura pulita e semplificata:
 9. **Message Validation**: Sistema `ensure_readable_message()` che garantisce messaggi user-friendly (mai JSON raw in chat)
 10. **Robust JSON Parsing**: Multi-strategy parsing (diretto, markdown, brace-balanced, UTF8 fallback) con debug logging
 11. **Consistent UI**: Logo Creator (`creator-black.svg`) e larghezze messaggi uniformi (70% max)
+12. **File Attachments**: Upload di file allegati nella chat
+    - Supporto immagini (PNG, JPEG, GIF, WebP), PDF, documenti Office, file di codice
+    - Max 5 file per messaggio, max 10MB per file
+    - Files inviati via POST (fallback da SSE), passati attraverso Firebase ai provider AI
+    - Utile per screenshot di errori, mockup design, documenti di specifiche
 
 ### Prossimi Sviluppi Potenziali
 
