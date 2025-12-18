@@ -293,6 +293,25 @@
 	border-radius: 0;
 }
 
+/* Thinking panel inside message content - adjust positioning */
+.creator-message-content .creator-thinking-panel {
+	margin: 0 0 1em 0;
+	font-size: 0.875em;
+}
+
+.creator-message-content .creator-thinking-header {
+	padding: 0.5em 0.75em;
+}
+
+.creator-message-content .creator-thinking-content {
+	padding: 0.5em 0.75em;
+	max-height: 12em;
+}
+
+.creator-message-content .creator-thinking-log-item {
+	padding: 0.2em 0;
+}
+
 /* Debug/Reasoning display above assistant response */
 .creator-message-debug {
 	font-size: 0.8125em;

@@ -547,8 +547,13 @@
                         </div>
             `;
 
-            // Add reasoning/debug above response for assistant messages
-            if (!isUser && message.reasoning) {
+            // Add thinking steps panel above response for assistant messages
+            if (!isUser && message.steps && message.steps.length > 0) {
+                html += this.renderThinkingSteps(message.steps);
+            }
+
+            // Add reasoning/debug above response for assistant messages (fallback)
+            if (!isUser && message.reasoning && (!message.steps || message.steps.length === 0)) {
                 html += `<div class="creator-message-debug">${this.escapeHtml(message.reasoning)}</div>`;
             }
 
@@ -573,6 +578,125 @@
             `;
 
             return html;
+        },
+
+        /**
+         * Render thinking steps panel
+         * Shows the AI's processing steps in a collapsible panel
+         */
+        renderThinkingSteps: function(steps) {
+            if (!steps || steps.length === 0) {
+                return '';
+            }
+
+            // Filter to only show steps with display_message
+            const displaySteps = steps.filter(step => step.display_message);
+
+            if (displaySteps.length === 0) {
+                return '';
+            }
+
+            const stepCount = displaySteps.length;
+            const uniqueId = 'thinking-' + Date.now();
+
+            let html = `
+                <div class="creator-thinking-panel" id="${uniqueId}">
+                    <div class="creator-thinking-header" onclick="CreatorChat.toggleThinkingPanel('${uniqueId}')">
+                        <span class="creator-thinking-icon">
+                            <span class="dashicons dashicons-lightbulb"></span>
+                        </span>
+                        <span class="creator-thinking-title">Pensiero di Creator</span>
+                        <span class="creator-thinking-badge">${stepCount}</span>
+                        <button type="button" class="creator-thinking-toggle">
+                            <span class="dashicons dashicons-arrow-down-alt2"></span>
+                        </button>
+                    </div>
+                    <div class="creator-thinking-content">
+                        <div class="creator-thinking-log">
+            `;
+
+            displaySteps.forEach(function(step, index) {
+                const phaseClass = CreatorChat.getPhaseClass(step.type);
+                const phaseLabel = CreatorChat.getPhaseLabel(step.type);
+
+                html += `
+                    <div class="creator-thinking-log-item">
+                        <span class="creator-thinking-log-phase ${phaseClass}">${phaseLabel}</span>
+                        <span class="creator-thinking-log-message">${CreatorChat.escapeHtml(step.display_message)}</span>
+                        <span class="creator-thinking-log-time">${index + 1}/${stepCount}</span>
+                    </div>
+                `;
+            });
+
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            return html;
+        },
+
+        /**
+         * Toggle thinking panel collapse state
+         */
+        toggleThinkingPanel: function(panelId) {
+            const panel = document.getElementById(panelId);
+            if (panel) {
+                panel.classList.toggle('collapsed');
+                const icon = panel.querySelector('.creator-thinking-toggle .dashicons');
+                if (icon) {
+                    if (panel.classList.contains('collapsed')) {
+                        icon.classList.remove('dashicons-arrow-down-alt2');
+                        icon.classList.add('dashicons-arrow-up-alt2');
+                    } else {
+                        icon.classList.remove('dashicons-arrow-up-alt2');
+                        icon.classList.add('dashicons-arrow-down-alt2');
+                    }
+                }
+            }
+        },
+
+        /**
+         * Get phase CSS class from step type
+         */
+        getPhaseClass: function(type) {
+            const phaseMap = {
+                'request_docs': 'discovery',
+                'roadmap': 'planning',
+                'plan': 'planning',
+                'execute_step': 'execution',
+                'execute': 'execution',
+                'checkpoint': 'execution',
+                'verify': 'verification',
+                'wp_cli': 'execution',
+                'compress_history': 'analysis',
+                'question': 'analysis',
+                'complete': 'verification',
+                'error': 'execution'
+            };
+            return phaseMap[type] || 'execution';
+        },
+
+        /**
+         * Get phase display label from step type
+         */
+        getPhaseLabel: function(type) {
+            const labelMap = {
+                'request_docs': 'RICERCA',
+                'roadmap': 'PIANO',
+                'plan': 'PIANO',
+                'execute_step': 'ESECUZIONE',
+                'execute': 'ESECUZIONE',
+                'checkpoint': 'PROGRESSO',
+                'verify': 'VERIFICA',
+                'wp_cli': 'CLI',
+                'compress_history': 'OTTIMIZZA',
+                'question': 'DOMANDA',
+                'complete': 'COMPLETO',
+                'error': 'ERRORE'
+            };
+            return labelMap[type] || 'PROCESSO';
         },
 
         /**
