@@ -52,9 +52,10 @@ class ProxyClient {
      * @param array       $context              The WordPress context data.
      * @param array       $conversation_history Previous messages in the conversation.
      * @param array|null  $documentation        Optional plugin documentation.
+     * @param array       $files                Optional file attachments.
      * @return array|WP_Error The response data or error.
      */
-    public function send_message( string $message, array $context, array $conversation_history = [], ?array $documentation = null ) {
+    public function send_message( string $message, array $context, array $conversation_history = [], ?array $documentation = null, array $files = [] ) {
         $site_token = get_option( 'creator_site_token', '' );
 
         if ( empty( $site_token ) ) {
@@ -91,6 +92,11 @@ class ProxyClient {
         // Add documentation if present.
         if ( ! empty( $documentation ) ) {
             $body['documentation'] = $documentation;
+        }
+
+        // Add file attachments if present.
+        if ( ! empty( $files ) ) {
+            $body['files'] = $files;
         }
 
         $response = wp_remote_post(
