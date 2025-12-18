@@ -217,16 +217,6 @@
 
 .creator-message-content {
 	flex: 1;
-	max-width: 100%;
-}
-
-/* User message content - constrained width */
-.creator-message-user .creator-message-content {
-	max-width: 70%;
-}
-
-/* Assistant message content - same width as user */
-.creator-message-assistant .creator-message-content {
 	max-width: 70%;
 }
 
