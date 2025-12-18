@@ -437,6 +437,29 @@ class ChatController {
             $loop_context = $context;
             if ( $last_result !== null ) {
                 $loop_context['last_result'] = $last_result;
+
+                // Flatten the result into top-level context for easier access.
+                // This allows AI-generated code to use $context['page_id'] instead of
+                // $context['last_result']['result']['page_id'].
+                if ( ! empty( $last_result['result'] ) && is_array( $last_result['result'] ) ) {
+                    foreach ( $last_result['result'] as $key => $value ) {
+                        // Don't overwrite existing context keys (site_info, accumulated, etc.).
+                        if ( ! isset( $loop_context[ $key ] ) ) {
+                            $loop_context[ $key ] = $value;
+                        }
+                    }
+                }
+            }
+
+            // Flatten accumulated context into top-level for easier access.
+            // This allows $context['page_id'] to work if it was set in a checkpoint.
+            if ( ! empty( $loop_context['accumulated'] ) && is_array( $loop_context['accumulated'] ) ) {
+                foreach ( $loop_context['accumulated'] as $key => $value ) {
+                    // Don't overwrite existing context keys.
+                    if ( ! isset( $loop_context[ $key ] ) ) {
+                        $loop_context[ $key ] = $value;
+                    }
+                }
             }
 
             // Send progress event - starting iteration.
@@ -849,6 +872,29 @@ class ChatController {
             $loop_context = $context;
             if ( $last_result !== null ) {
                 $loop_context['last_result'] = $last_result;
+
+                // Flatten the result into top-level context for easier access.
+                // This allows AI-generated code to use $context['page_id'] instead of
+                // $context['last_result']['result']['page_id'].
+                if ( ! empty( $last_result['result'] ) && is_array( $last_result['result'] ) ) {
+                    foreach ( $last_result['result'] as $key => $value ) {
+                        // Don't overwrite existing context keys (site_info, accumulated, etc.).
+                        if ( ! isset( $loop_context[ $key ] ) ) {
+                            $loop_context[ $key ] = $value;
+                        }
+                    }
+                }
+            }
+
+            // Flatten accumulated context into top-level for easier access.
+            // This allows $context['page_id'] to work if it was set in a checkpoint.
+            if ( ! empty( $loop_context['accumulated'] ) && is_array( $loop_context['accumulated'] ) ) {
+                foreach ( $loop_context['accumulated'] as $key => $value ) {
+                    // Don't overwrite existing context keys.
+                    if ( ! isset( $loop_context[ $key ] ) ) {
+                        $loop_context[ $key ] = $value;
+                    }
+                }
             }
 
             // Log AI request.
