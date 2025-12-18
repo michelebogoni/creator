@@ -506,12 +506,14 @@ class ChatController {
             $all_steps[] = $step_data;
 
             // Send progress event for this step.
+            // Include both display_message (short) and detailed_message (full explanation).
             $this->send_sse_event( 'progress', [
-                'iteration'       => $iteration,
-                'type'            => $processed['type'],
-                'phase'           => $this->get_phase_from_type( $processed['type'] ),
-                'display_message' => $display_message,
-                'step_data'       => $step_data,
+                'iteration'        => $iteration,
+                'type'             => $processed['type'],
+                'phase'            => $this->get_phase_from_type( $processed['type'] ),
+                'display_message'  => $display_message,
+                'detailed_message' => $processed['message'] ?? '',
+                'step_data'        => $step_data,
             ] );
 
             // Handle request_docs type - fetch documentation and continue.

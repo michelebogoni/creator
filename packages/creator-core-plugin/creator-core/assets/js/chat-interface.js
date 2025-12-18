@@ -345,7 +345,9 @@
                         }
 
                         // Append progress line to chat area
-                        self.appendProgressLine(data.display_message || 'Elaborazione...');
+                        // Use detailed_message if available, otherwise display_message
+                        const message = data.detailed_message || data.display_message || 'Elaborazione...';
+                        self.appendProgressLine(message);
                     } catch (e) {
                         console.error('[CreatorChat] Error parsing progress event:', e);
                     }
@@ -373,7 +375,8 @@
 
                             // Extract message from structured response
                             const aiResponse = data.response || {};
-                            const messageContent = aiResponse.message || 'No response message';
+                            // Ensure message is readable (not JSON)
+                            const messageContent = self.ensureReadableMessage(aiResponse.message, aiResponse);
 
                             // Add AI response (without steps - they're shown in progress)
                             self.addMessage({
@@ -512,6 +515,82 @@
                 this.eventSource = null;
             }
             this.currentProgressSteps = [];
+        },
+
+        /**
+         * Ensure message is human-readable, not JSON
+         * Extracts readable message from JSON if the response contains raw JSON
+         */
+        ensureReadableMessage: function(message, response) {
+            // If no message, try to extract from response
+            if (!message) {
+                message = response.status || 'No response message';
+            }
+
+            // If message is a string, check if it looks like JSON
+            if (typeof message === 'string') {
+                const trimmed = message.trim();
+
+                // Check if it starts with { or [ (likely JSON)
+                if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                    (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        // Try to extract readable message from parsed JSON
+                        if (parsed.message && typeof parsed.message === 'string') {
+                            return parsed.message;
+                        }
+                        if (parsed.status && typeof parsed.status === 'string') {
+                            return parsed.status;
+                        }
+                        // If we can't find a readable message, return a generic one based on type
+                        if (parsed.type) {
+                            return this.getGenericMessageForType(parsed.type, parsed);
+                        }
+                    } catch (e) {
+                        // Not valid JSON, return as-is
+                        return message;
+                    }
+                }
+            }
+
+            // If message is an object (shouldn't happen but just in case)
+            if (typeof message === 'object' && message !== null) {
+                if (message.message) return message.message;
+                if (message.status) return message.status;
+                return JSON.stringify(message);
+            }
+
+            return message;
+        },
+
+        /**
+         * Get a generic human-readable message for a response type
+         */
+        getGenericMessageForType: function(type, data) {
+            const typeMessages = {
+                'execute_step': 'Step eseguito con successo.',
+                'execute': 'Codice eseguito.',
+                'checkpoint': 'Checkpoint raggiunto.',
+                'verify': 'Verifica completata.',
+                'complete': 'Task completato.',
+                'error': 'Si è verificato un errore.',
+                'question': 'Ho una domanda per te.',
+                'plan': 'Ho creato un piano.',
+                'roadmap': 'Ho creato una roadmap.'
+            };
+
+            // For execute_step, try to get more specific message
+            if (type === 'execute_step' && data.data) {
+                const stepIndex = data.data.step_index || 0;
+                const totalSteps = data.data.total_steps || 0;
+                const stepTitle = data.data.step_title || '';
+                if (stepIndex && totalSteps) {
+                    return `Step ${stepIndex}/${totalSteps} completato${stepTitle ? ': ' + stepTitle : ''}.`;
+                }
+            }
+
+            return typeMessages[type] || 'Elaborazione completata.';
         },
 
         /**
