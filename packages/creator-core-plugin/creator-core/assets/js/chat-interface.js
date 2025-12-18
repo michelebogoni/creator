@@ -462,7 +462,7 @@
             const $progress = $(`
                 <div class="creator-message creator-message-progress" id="creator-progress-message">
                     <div class="creator-message-avatar">
-                        <svg class="creator-avatar-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><path d="M250,5C114.69,5,5,114.69,5,250s109.69,245,245,245,245-109.69,245-245S385.31,5,250,5ZM270.88,283.38l53.89,55.37c29.52,30.33,8.03,81.24-34.3,81.24h0c-12.92,0-25.29-5.22-34.3-14.48l-118.86-122.13c-18.08-18.58-18.08-48.18,0-66.76l118.86-122.13c9.01-9.26,21.38-14.48,34.3-14.48h0c42.32,0,63.82,50.91,34.3,81.24l-53.89,55.37c-18.08,18.58-18.08,48.18,0,66.76Z" fill="currentColor"/></svg>
+                        <svg class="creator-avatar-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><circle cx="250" cy="250" r="245"/><path d="M290.47,419.99h0c-12.92,0-25.29-5.22-34.3-14.48l-118.86-122.13c-18.08-18.58-18.08-48.18,0-66.76l118.86-122.13c9.01-9.26,21.38-14.48,34.3-14.48h0c42.32,0,63.82,50.91,34.3,81.24l-53.89,55.37c-18.08,18.58-18.08,48.18,0,66.76l53.89,55.37c29.52,30.33,8.03,81.24-34.3,81.24Z" style="fill:#fff"/></svg>
                     </div>
                     <div class="creator-message-content">
                         <div class="creator-message-header">
@@ -739,8 +739,8 @@
             if (isUser) {
                 html += `<img src="${creatorChat.userAvatar}" alt="${senderName}">`;
             } else {
-                // Creator logo SVG for assistant messages
-                html += `<svg class="creator-avatar-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><path d="M250,5C114.69,5,5,114.69,5,250s109.69,245,245,245,245-109.69,245-245S385.31,5,250,5ZM270.88,283.38l53.89,55.37c29.52,30.33,8.03,81.24-34.3,81.24h0c-12.92,0-25.29-5.22-34.3-14.48l-118.86-122.13c-18.08-18.58-18.08-48.18,0-66.76l118.86-122.13c9.01-9.26,21.38-14.48,34.3-14.48h0c42.32,0,63.82,50.91,34.3,81.24l-53.89,55.37c-18.08,18.58-18.08,48.18,0,66.76Z" fill="currentColor"/></svg>`;
+                // Creator logo SVG for assistant messages (creator-black.svg)
+                html += `<svg class="creator-avatar-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><circle cx="250" cy="250" r="245"/><path d="M290.47,419.99h0c-12.92,0-25.29-5.22-34.3-14.48l-118.86-122.13c-18.08-18.58-18.08-48.18,0-66.76l118.86-122.13c9.01-9.26,21.38-14.48,34.3-14.48h0c42.32,0,63.82,50.91,34.3,81.24l-53.89,55.37c-18.08,18.58-18.08,48.18,0,66.76l53.89,55.37c29.52,30.33,8.03,81.24-34.3,81.24Z" style="fill:#fff"/></svg>`;
             }
 
             html += `
