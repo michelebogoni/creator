@@ -305,13 +305,16 @@ class ChatController {
             // Log processed response.
             $debug_logger->log_processed_response( $processed, $iteration );
 
-            // Track all steps for debugging.
+            // Track all steps for user display (thinking panel).
             $all_steps[] = [
-                'iteration'   => $iteration,
-                'type'        => $processed['type'],
-                'step'        => $processed['step'] ?? '',
-                'status'      => $processed['status'] ?? '',
-                'retry_count' => $retry_count,
+                'iteration'       => $iteration,
+                'type'            => $processed['type'],
+                'step'            => $processed['step'] ?? '',
+                'status'          => $processed['status'] ?? '',
+                'message'         => $processed['message'] ?? '',
+                'retry_count'     => $retry_count,
+                'timestamp'       => current_time( 'mysql' ),
+                'display_message' => $this->get_step_display_message( $processed, $iteration ),
             ];
 
             // Handle request_docs type - fetch documentation and continue.
@@ -1048,6 +1051,125 @@ class ChatController {
                 [ '%s' ],
                 [ '%d' ]
             );
+        }
+    }
+
+    /**
+     * Get a user-friendly display message for a processing step
+     *
+     * Converts technical step data into human-readable messages for the thinking panel.
+     *
+     * @param array $processed The processed response.
+     * @param int   $iteration The iteration number.
+     * @return string User-friendly message.
+     */
+    private function get_step_display_message( array $processed, int $iteration ): string {
+        $type   = $processed['type'] ?? 'unknown';
+        $status = $processed['status'] ?? '';
+        $data   = $processed['data'] ?? [];
+
+        switch ( $type ) {
+            case 'request_docs':
+                $plugins = $data['plugins_needed'] ?? [];
+                if ( ! empty( $plugins ) ) {
+                    return sprintf(
+                        /* translators: %s: plugin names */
+                        __( 'Researching documentation for: %s', 'creator-core' ),
+                        implode( ', ', $plugins )
+                    );
+                }
+                return __( 'Researching plugin documentation...', 'creator-core' );
+
+            case 'roadmap':
+                $total = $data['total_steps'] ?? 0;
+                if ( $total > 0 ) {
+                    return sprintf(
+                        /* translators: %d: number of steps */
+                        __( 'Created roadmap with %d steps', 'creator-core' ),
+                        $total
+                    );
+                }
+                return __( 'Creating execution roadmap...', 'creator-core' );
+
+            case 'execute_step':
+                $step_index = $data['step_index'] ?? 0;
+                $total      = $data['total_steps'] ?? 0;
+                $step_title = $data['step_title'] ?? '';
+                if ( $step_index && $total ) {
+                    if ( $step_title ) {
+                        return sprintf(
+                            /* translators: 1: step number, 2: total steps, 3: step title */
+                            __( 'Executing step %1$d/%2$d: %3$s', 'creator-core' ),
+                            $step_index,
+                            $total,
+                            $step_title
+                        );
+                    }
+                    return sprintf(
+                        /* translators: 1: step number, 2: total steps */
+                        __( 'Executing step %1$d of %2$d', 'creator-core' ),
+                        $step_index,
+                        $total
+                    );
+                }
+                return __( 'Executing step...', 'creator-core' );
+
+            case 'checkpoint':
+                $completed = $data['completed_step'] ?? 0;
+                $total     = $data['total_steps'] ?? 0;
+                if ( $completed && $total ) {
+                    $percentage = round( ( $completed / $total ) * 100 );
+                    return sprintf(
+                        /* translators: 1: percentage, 2: completed steps, 3: total steps */
+                        __( 'Progress: %1$d%% (%2$d/%3$d steps completed)', 'creator-core' ),
+                        $percentage,
+                        $completed,
+                        $total
+                    );
+                }
+                return __( 'Checkpoint reached', 'creator-core' );
+
+            case 'execute':
+                return __( 'Executing code...', 'creator-core' );
+
+            case 'verify':
+                return __( 'Verifying changes...', 'creator-core' );
+
+            case 'wp_cli':
+                $command = $data['command'] ?? '';
+                if ( $command ) {
+                    return sprintf(
+                        /* translators: %s: WP-CLI command */
+                        __( 'Running WP-CLI: %s', 'creator-core' ),
+                        $command
+                    );
+                }
+                return __( 'Running WP-CLI command...', 'creator-core' );
+
+            case 'compress_history':
+                return __( 'Optimizing conversation history...', 'creator-core' );
+
+            case 'question':
+                return __( 'Preparing clarification question...', 'creator-core' );
+
+            case 'plan':
+                return __( 'Creating action plan...', 'creator-core' );
+
+            case 'complete':
+                return __( 'Task completed', 'creator-core' );
+
+            case 'error':
+                return __( 'Error encountered', 'creator-core' );
+
+            default:
+                if ( $status ) {
+                    return $status;
+                }
+                return sprintf(
+                    /* translators: %s: step type */
+                    __( 'Processing: %s', 'creator-core' ),
+                    $type
+                );
         }
     }
 }
