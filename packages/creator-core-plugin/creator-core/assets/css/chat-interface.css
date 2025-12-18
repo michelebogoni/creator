@@ -208,28 +208,11 @@
 	border-radius: 50%;
 }
 
-/* Hide AI avatar - Creator writes directly */
-.creator-message-assistant .creator-message-avatar {
-	display: none;
-}
-
-.creator-ai-avatar {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+/* Creator logo SVG avatar */
+.creator-avatar-logo {
 	width: 2.25em;
 	height: 2.25em;
-	border-radius: 50%;
-	background: var(--creator-gray-800);
-	color: var(--creator-white);
-	font-weight: 700;
-	font-size: 1em;
-}
-
-.creator-ai-avatar .dashicons {
-	font-size: 1.25em;
-	width: 1.25em;
-	height: 1.25em;
+	color: var(--creator-gray-800);
 }
 
 .creator-message-content {
@@ -242,9 +225,9 @@
 	max-width: 70%;
 }
 
-/* Assistant message content - full width */
+/* Assistant message content - same width as user */
 .creator-message-assistant .creator-message-content {
-	max-width: 100%;
+	max-width: 70%;
 }
 
 .creator-message-header {
@@ -252,11 +235,6 @@
 	align-items: center;
 	gap: 0.5em;
 	margin-bottom: 0.5em;
-}
-
-/* Hide header for assistant (Creator writes directly) */
-.creator-message-assistant .creator-message-header {
-	display: none;
 }
 
 .creator-message-sender {
@@ -565,9 +543,35 @@
 }
 
 .creator-message-progress .creator-progress-status {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
 	font-size: 0.75em;
 	color: var(--creator-gray-400);
 	font-style: italic;
+}
+
+/* Typing dots in progress status */
+.creator-typing-dots {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.2em;
+}
+
+.creator-typing-dots .dot {
+	width: 0.35em;
+	height: 0.35em;
+	border-radius: 50%;
+	background: var(--creator-gray-400);
+	animation: typing 1.4s infinite ease-in-out both;
+}
+
+.creator-typing-dots .dot:nth-child(1) { animation-delay: -0.32s; }
+.creator-typing-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+
+/* Hide typing dots when completed */
+.creator-message-progress.creator-progress-completed .creator-typing-dots {
+	display: none;
 }
 
 .creator-progress-lines {

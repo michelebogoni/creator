@@ -461,11 +461,20 @@
 
             const $progress = $(`
                 <div class="creator-message creator-message-progress" id="creator-progress-message">
-                    <div class="creator-message-avatar"></div>
+                    <div class="creator-message-avatar">
+                        <svg class="creator-avatar-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><path d="M250,5C114.69,5,5,114.69,5,250s109.69,245,245,245,245-109.69,245-245S385.31,5,250,5ZM270.88,283.38l53.89,55.37c29.52,30.33,8.03,81.24-34.3,81.24h0c-12.92,0-25.29-5.22-34.3-14.48l-118.86-122.13c-18.08-18.58-18.08-48.18,0-66.76l118.86-122.13c9.01-9.26,21.38-14.48,34.3-14.48h0c42.32,0,63.82,50.91,34.3,81.24l-53.89,55.37c-18.08,18.58-18.08,48.18,0,66.76Z" fill="currentColor"/></svg>
+                    </div>
                     <div class="creator-message-content">
                         <div class="creator-message-header">
                             <span class="creator-message-sender">Creator</span>
-                            <span class="creator-progress-status">sta elaborando...</span>
+                            <span class="creator-progress-status">
+                                <span class="creator-typing-dots">
+                                    <span class="dot"></span>
+                                    <span class="dot"></span>
+                                    <span class="dot"></span>
+                                </span>
+                                sta elaborando...
+                            </span>
                         </div>
                         <div class="creator-progress-lines"></div>
                     </div>
@@ -730,8 +739,8 @@
             if (isUser) {
                 html += `<img src="${creatorChat.userAvatar}" alt="${senderName}">`;
             } else {
-                // No avatar for assistant - writes directly
-                html += '';
+                // Creator logo SVG for assistant messages
+                html += `<svg class="creator-avatar-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><path d="M250,5C114.69,5,5,114.69,5,250s109.69,245,245,245,245-109.69,245-245S385.31,5,250,5ZM270.88,283.38l53.89,55.37c29.52,30.33,8.03,81.24-34.3,81.24h0c-12.92,0-25.29-5.22-34.3-14.48l-118.86-122.13c-18.08-18.58-18.08-48.18,0-66.76l118.86-122.13c9.01-9.26,21.38-14.48,34.3-14.48h0c42.32,0,63.82,50.91,34.3,81.24l-53.89,55.37c-18.08,18.58-18.08,48.18,0,66.76Z" fill="currentColor"/></svg>`;
             }
 
             html += `
@@ -1336,20 +1345,10 @@
         },
 
         /**
-         * Show typing indicator (simple dots under input)
+         * Show typing indicator (disable send button while processing)
          */
         showTypingIndicator: function() {
             this.isTyping = true;
-
-            const $indicator = $(`
-                <div class="creator-typing-indicator" id="typing-indicator">
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                    <div class="dot"></div>
-                </div>
-            `);
-
-            $('.creator-input-info').prepend($indicator);
             $('.creator-send-btn').prop('disabled', true);
         },
 
@@ -1358,8 +1357,6 @@
          */
         hideTypingIndicator: function() {
             this.isTyping = false;
-            $('#typing-indicator').remove();
-
             const hasValue = $('#creator-message-input').val().trim().length > 0;
             $('.creator-send-btn').prop('disabled', !hasValue);
         },
