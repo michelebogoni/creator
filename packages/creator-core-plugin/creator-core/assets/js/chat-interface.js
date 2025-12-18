@@ -293,9 +293,16 @@
         /**
          * Send message to an existing or new chat
          * Uses SSE streaming endpoint for real-time progress updates
+         * Falls back to POST for messages with file attachments
          */
         sendMessageToChat: function(chatId, message) {
             const self = this;
+
+            // If we have files attached, use POST (SSE can't send files via GET)
+            if (this.pendingFiles && this.pendingFiles.length > 0) {
+                this.sendMessageWithFiles(chatId, message, this.pendingFiles);
+                return;
+            }
 
             // Build URL with query parameters for SSE (GET request)
             const params = new URLSearchParams();
@@ -450,6 +457,110 @@
                 this.removeProgressElement();
                 this.showError('Failed to connect to server');
             }
+        },
+
+        /**
+         * Send message with file attachments via POST
+         * Used when files are attached (SSE/GET can't send files)
+         */
+        sendMessageWithFiles: function(chatId, message, files) {
+            const self = this;
+
+            // Create progress element
+            this.currentProgressSteps = [];
+            this.createProgressElement();
+            this.appendProgressLine('Caricamento file in corso...');
+
+            // Prepare files data (base64 encoded)
+            const filesData = files.map(f => ({
+                name: f.name,
+                type: f.type,
+                size: f.size,
+                data: f.base64.split(',')[1] // Remove data:mime;base64, prefix
+            }));
+
+            // Build request data
+            const requestData = {
+                message: message || '',
+                files: filesData
+            };
+
+            if (chatId) {
+                requestData.chat_id = chatId;
+            }
+
+            this.appendProgressLine('Invio messaggio con ' + files.length + ' allegat' + (files.length === 1 ? 'o' : 'i') + '...');
+
+            // Send via AJAX POST
+            $.ajax({
+                url: creatorChat.restUrl + 'chat',
+                method: 'POST',
+                headers: {
+                    'X-WP-Nonce': creatorChat.restNonce
+                },
+                contentType: 'application/json',
+                data: JSON.stringify(requestData),
+                success: function(response) {
+                    self.hideTypingIndicator();
+                    self.finalizeProgressElement();
+
+                    if (response.success) {
+                        // Update chat ID
+                        if (response.chat_id) {
+                            self.chatId = response.chat_id;
+                            self.updateUrl(response.chat_id);
+                        }
+
+                        // Extract message from structured response
+                        const aiResponse = response.response || {};
+                        const messageContent = self.ensureReadableMessage(aiResponse.message, aiResponse);
+
+                        // Show progress steps if available
+                        if (aiResponse.steps && aiResponse.steps.length > 0) {
+                            aiResponse.steps.forEach(function(step) {
+                                const stepMsg = step.display_message || step.message || 'Step completato';
+                                self.appendProgressLine(stepMsg);
+                            });
+                        }
+
+                        // Add AI response
+                        self.addMessage({
+                            role: 'assistant',
+                            content: messageContent,
+                            timestamp: new Date().toISOString(),
+                            responseType: aiResponse.type || 'complete',
+                            step: aiResponse.step || 'complete',
+                            status: aiResponse.status || '',
+                            data: aiResponse.data || {},
+                            steps: [],
+                            reasoning: aiResponse.reasoning || aiResponse.thinking || ''
+                        });
+
+                        // Handle plan confirmation
+                        if (aiResponse.type === 'plan' && aiResponse.requires_confirmation) {
+                            self.showPlanConfirmation(aiResponse);
+                        }
+
+                        // Handle roadmap confirmation
+                        if (aiResponse.type === 'roadmap' && aiResponse.requires_confirmation) {
+                            self.showRoadmapConfirmation(aiResponse);
+                        }
+                    } else {
+                        const errorMsg = response.message || 'Failed to process message';
+                        self.showError(errorMsg, self.isLicenseError(errorMsg));
+                    }
+                },
+                error: function(xhr) {
+                    self.hideTypingIndicator();
+                    self.removeProgressElement();
+                    let errorMsg = 'Network error. Please try again.';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        errorMsg = response.message || errorMsg;
+                    } catch (e) {}
+                    self.showError(errorMsg, self.isLicenseError(errorMsg));
+                }
+            });
         },
 
         /**
@@ -1491,7 +1602,7 @@
         handleFileSelect: function(e) {
             const files = e.target.files;
             const self = this;
-            const maxFiles = creatorChat.maxFilesPerMessage || 3;
+            const maxFiles = creatorChat.maxFilesPerMessage || 5;
             const maxSize = creatorChat.maxFileSize || 10 * 1024 * 1024;
 
             if (!files || files.length === 0) return;

@@ -178,6 +178,10 @@ class ChatController {
         $message      = $request->get_param( 'message' );
         $chat_id      = $request->get_param( 'chat_id' );
         $confirm_plan = $request->get_param( 'confirm_plan' );
+        $files        = $request->get_param( 'files' ) ?? [];
+
+        // Validate and sanitize files.
+        $files = $this->validate_files( $files );
 
         // Validate license.
         $site_token = get_option( 'creator_site_token', '' );
@@ -193,8 +197,13 @@ class ChatController {
             // Get or create chat.
             $chat_id = $this->get_or_create_chat( $chat_id );
 
-            // Save user message.
-            $this->save_message( $chat_id, 'user', $message );
+            // Save user message (with file info if present).
+            $message_to_save = $message;
+            if ( ! empty( $files ) ) {
+                $file_names      = array_column( $files, 'name' );
+                $message_to_save = $message . "\n\n[Allegati: " . implode( ', ', $file_names ) . ']';
+            }
+            $this->save_message( $chat_id, 'user', $message_to_save );
 
             // Initialize components.
             $context_loader   = new ContextLoader();
@@ -219,7 +228,7 @@ class ChatController {
                 $message = 'Procedi con il piano.';
             }
 
-            // Execute the multi-step loop.
+            // Execute the multi-step loop (pass files to be forwarded to AI).
             $final_response = $this->execute_loop(
                 $message,
                 $context,
@@ -227,7 +236,8 @@ class ChatController {
                 $proxy_client,
                 $response_handler,
                 $chat_id,
-                $debug_logger
+                $debug_logger,
+                $files
             );
 
             // Save assistant response - save FULL JSON for AI context, not just message.
@@ -846,6 +856,7 @@ class ChatController {
      * @param ResponseHandler $response_handler     Response handler instance.
      * @param int             $chat_id              Chat ID.
      * @param DebugLogger     $debug_logger         Debug logger instance.
+     * @param array           $files                Optional file attachments for the first message.
      * @return array Final response after loop completes.
      */
     private function execute_loop(
@@ -855,7 +866,8 @@ class ChatController {
         ProxyClient $proxy_client,
         ResponseHandler $response_handler,
         int $chat_id,
-        DebugLogger $debug_logger
+        DebugLogger $debug_logger,
+        array $files = []
     ): array {
         $iteration        = 0;
         $documentation    = null;
@@ -864,6 +876,7 @@ class ChatController {
         $last_result      = null;
         $retry_count      = 0;
         $error_memory     = []; // Accumulates errors during retries, cleared on success.
+        $pending_files    = $files; // Files to send with first AI call only.
 
         while ( $iteration < self::MAX_LOOP_ITERATIONS ) {
             $iteration++;
@@ -906,13 +919,17 @@ class ChatController {
                 $iteration
             );
 
-            // Call the AI.
+            // Call the AI (pass files only on first iteration, then clear them).
             $proxy_response = $proxy_client->send_message(
                 $current_message,
                 $loop_context,
                 $conversation_history,
-                $documentation
+                $documentation,
+                $pending_files
             );
+
+            // Clear files after first call - they should only be sent once.
+            $pending_files = [];
 
             // Log AI response.
             $debug_logger->log_ai_response( $proxy_response, $iteration );
@@ -1803,5 +1820,76 @@ class ChatController {
                     $type
                 );
         }
+    }
+
+    /**
+     * Validate and sanitize uploaded files
+     *
+     * @param array $files Array of file data from request.
+     * @return array Validated files array.
+     */
+    private function validate_files( array $files ): array {
+        if ( empty( $files ) ) {
+            return [];
+        }
+
+        $max_files     = 5;
+        $max_file_size = 10 * 1024 * 1024; // 10MB.
+        $allowed_types = [
+            'image/png',
+            'image/jpeg',
+            'image/jpg',
+            'image/gif',
+            'image/webp',
+            'application/pdf',
+            'text/plain',
+            'text/html',
+            'text/css',
+            'application/javascript',
+            'application/json',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ];
+
+        $validated = [];
+
+        foreach ( $files as $index => $file ) {
+            // Limit number of files.
+            if ( count( $validated ) >= $max_files ) {
+                break;
+            }
+
+            // Validate required fields.
+            if ( empty( $file['name'] ) || empty( $file['type'] ) || empty( $file['data'] ) ) {
+                continue;
+            }
+
+            // Validate file type.
+            if ( ! in_array( $file['type'], $allowed_types, true ) ) {
+                continue;
+            }
+
+            // Validate file size (base64 is ~33% larger than original).
+            $data_size = strlen( $file['data'] ) * 0.75;
+            if ( $data_size > $max_file_size ) {
+                continue;
+            }
+
+            // Validate base64 encoding.
+            if ( base64_decode( $file['data'], true ) === false ) {
+                continue;
+            }
+
+            $validated[] = [
+                'name'   => sanitize_file_name( $file['name'] ),
+                'type'   => $file['type'],
+                'size'   => $file['size'] ?? $data_size,
+                'base64' => $file['data'], // Firebase expects 'base64' field.
+            ];
+        }
+
+        return $validated;
     }
 }
