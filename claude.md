@@ -665,6 +665,22 @@ creator-core/
 - Valida le richieste in ingresso
 - Orchestra il flusso della conversazione
 - Implementa loop handling per roadmap e checkpoint
+- **Loop Limit**: Massimo 100 iterazioni per task complessi (`MAX_LOOP_ITERATIONS = 100`)
+- **Error Memory System**: Sistema di memoria errori per retry intelligenti
+  ```php
+  $error_memory = []; // Accumula errori durante i retry
+
+  // Quando uno step fallisce:
+  $error_memory[] = [
+      'attempt'    => $retry_count,
+      'error'      => $last_result['error'],
+      'code_tried' => substr($processed['data']['code'], 0, 500),
+  ];
+
+  // Passato all'AI nel messaggio di retry per evitare approcci già falliti
+  // Viene svuotato dopo ogni step completato con successo
+  ```
+- **Retry Logic**: Massimo 3 tentativi per step (`MAX_RETRY_ATTEMPTS = 3`), con error memory per evitare ripetizioni
 
 #### 2. ConversationManager
 
@@ -766,6 +782,21 @@ Utente inserisce licenza → Form submit a options.php
   - `error`: Gestione errori
   - `request_docs`: Richiesta documentazione plugin
   - `wp_cli`: Esecuzione comandi WP-CLI
+- **Message Validation System** (`ensure_readable_message()`):
+  - Garantisce che i messaggi mostrati all'utente siano sempre leggibili
+  - Rileva automaticamente JSON nei campi message e genera messaggi user-friendly
+  - Fallback messaggi contestuali basati sul tipo di risposta:
+    - `execute_step`: "Executing step X of Y: [step_title]"
+    - `checkpoint`: "Progress: X of Y steps completed (Z%)"
+    - `execute`/`verify`/`wp_cli`: Messaggi descrittivi appropriati
+    - `complete`: "Task completed successfully."
+  - Applicato a tutti gli handler: `handle_message_response`, `handle_execute_step_response`, `handle_checkpoint_response`, `handle_execute_response`, `handle_verify_response`, `handle_wp_cli_response`
+- **JSON Parsing Robustness** (`parse_ai_content()`):
+  - Parsing diretto JSON
+  - Estrazione da markdown code blocks
+  - Estrazione da testo misto (brace-balanced)
+  - Tentativo con `JSON_INVALID_UTF8_SUBSTITUTE` per problemi encoding
+  - **Debug logging** quando parsing fallisce (errore + preview content in `debug.log`)
 
 #### 9. CodeExecutor
 
@@ -1049,6 +1080,10 @@ cd functions && npm run serve
 - ✅ Debug panel con conversation history
 - ✅ Rollback system con snapshot
 - ✅ Database tables e migrations
+- ✅ **Error Memory System**: Retry intelligenti che evitano approcci già falliti
+- ✅ **Loop Limit 100**: Supporto task complessi fino a 100 iterazioni
+- ✅ **Message Validation**: Messaggi sempre leggibili (mai JSON raw in chat)
+- ✅ **JSON Parsing Robusto**: Multi-strategy parsing con fallback UTF8 e debug logging
 
 #### Test Coverage
 - ✅ 121 test cases Firebase (unit + integration)
@@ -1070,6 +1105,9 @@ Il sistema è basato su un'architettura pulita e semplificata:
    - **Plugin-specific prompts** - istruzioni specializzate per Elementor, WooCommerce, ACF
 6. **Security First**: 26+ funzioni pericolose bloccate, whitelist/blacklist per WP-CLI
 7. **Extended Timeouts**: 10 minuti per task multi-step complessi (es. pagine Elementor con 14+ step)
+8. **Error Memory System**: Retry intelligenti con memoria degli errori precedenti per evitare approcci già falliti
+9. **Message Validation**: Sistema `ensure_readable_message()` che garantisce messaggi user-friendly (mai JSON raw in chat)
+10. **Robust JSON Parsing**: Multi-strategy parsing (diretto, markdown, brace-balanced, UTF8 fallback) con debug logging
 
 ### Prossimi Sviluppi Potenziali
 
