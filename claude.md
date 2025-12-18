@@ -817,12 +817,20 @@ Utente inserisce licenza → Form submit a options.php
 **CodeExecutor.php** (`CreatorCore\Executor\CodeExecutor`)
 - Esegue codice PHP generato dall'AI via `eval()`
 - **Context Injection**: Riceve il context completo dal ResponseHandler, disponibile come variabile `$context` nel codice eseguito
+- **Context Flattening** (implementato in ChatController): I risultati degli step precedenti vengono automaticamente appiattiti nel context di primo livello:
   ```php
-  // Il codice AI può accedere a:
-  $context['accumulated_context']  // Contesto accumulato dai step precedenti
-  $context['wordpress']           // Informazioni WordPress
-  $context['plugins']             // Plugin installati
-  // etc.
+  // Se Step 1 ritorna: return ['page_id' => 202, 'page_url' => 'http://...'];
+  // Step 2 può accedere direttamente a:
+  $context['page_id']     // 202 (appiattito da last_result['result'])
+  $context['page_url']    // http://... (appiattito)
+
+  // Struttura completa disponibile:
+  $context['last_result']          // Risultato completo dello step precedente
+  $context['accumulated']          // Contesto accumulato dai checkpoint
+  $context['site_info']            // Informazioni WordPress
+
+  // I risultati vengono appiattiti SOLO se non sovrascrivono chiavi esistenti
+  // Priorità: chiavi originali > last_result['result'] > accumulated
   ```
 - Security features:
   - Blacklist di 26+ funzioni pericolose (exec, shell_exec, eval, system, etc.)
