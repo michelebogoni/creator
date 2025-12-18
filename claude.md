@@ -651,17 +651,28 @@ creator-core/
 
 **chat-interface.js** (Frontend)
 - Gestisce l'UI della chat e le interazioni utente
-- **AJAX Timeout**: Configurato a **10 minuti** (600000ms) per supportare task complessi multi-step
+- **SSE Real-time Progress**: Usa EventSource invece di AJAX per ricevere progressi in tempo reale
   ```javascript
-  $.ajax({
-      timeout: 600000, // 10 minute timeout for complex multi-step tasks
-      // ...
+  // Connessione SSE per streaming progressi
+  this.eventSource = new EventSource(streamUrl, { withCredentials: true });
+
+  // Eventi gestiti: connected, progress, complete, error
+  this.eventSource.addEventListener('progress', function(event) {
+      const data = JSON.parse(event.data);
+      self.appendProgressLine(data.detailed_message || data.display_message);
   });
   ```
-- Questo timeout esteso è necessario perché operazioni complesse (es. creazione pagine Elementor con 14+ step) possono richiedere diversi minuti
+- **Progress Display in Chat Area**: I progressi vengono mostrati direttamente nell'area chat (non sotto l'input)
+  - `createProgressElement()`: Crea elemento con logo Creator e "sta elaborando..." con dots animati
+  - `appendProgressLine()`: Aggiunge ogni step come nuova riga di testo grigio
+  - `finalizeProgressElement()`: Al completamento, rende il progresso più sbiadito (opacity 0.7)
+- **Creator Logo**: Mostra il logo `creator-black.svg` (cerchio nero + freccia bianca) accanto al nome "Creator"
+- **Message Width Matching**: Messaggi Creator hanno stessa larghezza max (70%) dei messaggi utente
+- **ensureReadableMessage()**: Estrae messaggi leggibili da JSON, con fallback contestuali per tipo
 
 **ChatController.php** (`CreatorCore\Chat\ChatController`)
 - Gestisce l'endpoint REST `POST /wp-json/creator/v1/chat`
+- **SSE Streaming Endpoint**: `GET /wp-json/creator/v1/chat/stream` per progressi in tempo reale
 - Valida le richieste in ingresso
 - Orchestra il flusso della conversazione
 - Implementa loop handling per roadmap e checkpoint
@@ -681,6 +692,9 @@ creator-core/
   // Viene svuotato dopo ogni step completato con successo
   ```
 - **Retry Logic**: Massimo 3 tentativi per step (`MAX_RETRY_ATTEMPTS = 3`), con error memory per evitare ripetizioni
+- **SSE Progress Events**: Invia eventi `connected`, `progress`, `complete`, `error` durante l'elaborazione
+  - `progress`: Include `display_message` (breve) e `detailed_message` (spiegazione completa AI)
+  - `complete`: Contiene la risposta finale con tutti gli step eseguiti
 
 #### 2. ConversationManager
 
@@ -1069,7 +1083,10 @@ cd functions && npm run serve
 
 #### Plugin WordPress (100%)
 - ✅ Chat interface con UI completa
-- ✅ **Extended AJAX timeout** (10 minuti) per task multi-step complessi
+- ✅ **SSE Streaming**: Progressi in tempo reale via Server-Sent Events (`/chat/stream`)
+- ✅ **Real-time Progress Display**: Messaggi di progresso nell'area chat (non sotto input)
+- ✅ **Creator Logo**: Logo `creator-black.svg` accanto al nome "Creator" nei messaggi
+- ✅ **Matching Message Widths**: Messaggi Creator e utente con stessa larghezza max (70%)
 - ✅ Universal PHP Engine con security validation
 - ✅ **Context injection** nel CodeExecutor per accesso a `$context` dal codice AI
 - ✅ Sistema micro-step per operazioni complesse
@@ -1104,10 +1121,15 @@ Il sistema è basato su un'architettura pulita e semplificata:
    - **Cache completeness check** - ri-ricerca automatica se docs incompleti
    - **Plugin-specific prompts** - istruzioni specializzate per Elementor, WooCommerce, ACF
 6. **Security First**: 26+ funzioni pericolose bloccate, whitelist/blacklist per WP-CLI
-7. **Extended Timeouts**: 10 minuti per task multi-step complessi (es. pagine Elementor con 14+ step)
+7. **SSE Real-time Streaming**: Progressi in tempo reale via Server-Sent Events
+   - Endpoint `GET /chat/stream` per streaming eventi
+   - Eventi: `connected`, `progress`, `complete`, `error`
+   - Messaggi dettagliati mostrati nell'area chat durante elaborazione
+   - Utente vede "Sto configurando la Hero Section..." invece di "Creator AI is thinking..."
 8. **Error Memory System**: Retry intelligenti con memoria degli errori precedenti per evitare approcci già falliti
 9. **Message Validation**: Sistema `ensure_readable_message()` che garantisce messaggi user-friendly (mai JSON raw in chat)
 10. **Robust JSON Parsing**: Multi-strategy parsing (diretto, markdown, brace-balanced, UTF8 fallback) con debug logging
+11. **Consistent UI**: Logo Creator (`creator-black.svg`) e larghezze messaggi uniformi (70% max)
 
 ### Prossimi Sviluppi Potenziali
 
