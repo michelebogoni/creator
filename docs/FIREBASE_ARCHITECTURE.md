@@ -284,8 +284,6 @@ functions/
 │   │   └── rateLimit.ts         # Rate limiting
 │   ├── config/
 │   │   └── models.ts            # Configurazione modelli AI
-│   ├── scripts/
-│   │   └── cleanupPluginDocsCache.ts  # Cleanup cache vecchie versioni X.Y.Z
 │   ├── types/
 │   │   ├── License.ts
 │   │   ├── Route.ts
