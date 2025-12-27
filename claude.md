@@ -405,13 +405,6 @@ Il sistema normalizza tutte le versioni dei plugin al formato **X.Y** (major.min
 - `normalize_plugin_version()` in `ProxyClient.php` (WordPress)
 - Document ID formato: `{plugin_slug}:{normalized_version}` (es: `elementor:3.34`)
 
-**Script di pulizia cache**:
-Dopo il deployment, eseguire `cleanupPluginDocsCache.ts` per eliminare le entry con versioni complete (X.Y.Z) che non verranno più utilizzate:
-```bash
-cd functions
-npx ts-node src/scripts/cleanupPluginDocsCache.ts
-```
-
 **Timeout documentazione**:
 Il timeout per le richieste di documentazione è stato aumentato da 60 a **300 secondi** (5 minuti) per permettere ricerche AI complete senza interruzioni.
 
@@ -595,8 +588,6 @@ functions/
 │   │   ├── jwt.ts                    # Gestione JWT
 │   │   ├── secrets.ts                # Definizione secrets
 │   │   └── logger.ts                 # Logging strutturato
-│   ├── scripts/
-│   │   └── cleanupPluginDocsCache.ts # Script pulizia cache versioni X.Y.Z
 │   ├── middleware/
 │   │   ├── auth.ts                   # Autenticazione JWT
 │   │   └── rateLimit.ts              # Rate limiting

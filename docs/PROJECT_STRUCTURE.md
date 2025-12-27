@@ -169,16 +169,6 @@ Business logic services.
 
 ---
 
-### /functions/src/scripts/
-
-Maintenance and utility scripts.
-
-| File | Description |
-|------|-------------|
-| `cleanupPluginDocsCache.ts` | **Cache cleanup script** - Deletes old plugin docs entries with X.Y.Z format versions (superseded by X.Y version matching). Run via Firebase Functions shell: `firebase functions:shell` then `cleanupPluginDocsCache()` |
-
----
-
 ### /functions/src/types/
 
 TypeScript type definitions.
