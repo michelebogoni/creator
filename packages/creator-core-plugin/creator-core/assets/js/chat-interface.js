@@ -176,10 +176,13 @@
 
         /**
          * Get selected model
+         * NOTE: Model selection UI is not currently implemented in frontend.
+         * This code is preserved for future implementation.
+         * Default is 'claude' - Gemini is not used at this time.
          */
         getSelectedModel: function() {
             const selected = $('input[name="chat_model"]:checked').val();
-            return selected || $('.creator-chat-container').data('model') || 'gemini';
+            return selected || $('.creator-chat-container').data('model') || 'claude';
         },
 
         /**

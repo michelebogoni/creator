@@ -186,8 +186,10 @@ export const routeRequest = onRequest(
 
       const sanitizedPrompt = sanitizePrompt(body.prompt);
 
-      // Validate model if provided (default to gemini)
-      const requestedModel = (body.model as string) || "gemini";
+      // Validate model if provided (default to claude)
+      // NOTE: Model selection UI is not currently implemented in frontend
+      // but the code supports it for future implementation
+      const requestedModel = (body.model as string) || "claude";
       if (!isValidProvider(requestedModel)) {
         logger.warn("Invalid model", { model: requestedModel });
         res.status(400).json({
