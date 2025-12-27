@@ -120,11 +120,11 @@ Utility libraries and helpers.
 | File | Description |
 |------|-------------|
 | `index.ts` | Barrel export for all library modules |
-| `firestore.ts` | **Firestore database operations** - CRUD operations for licenses, audit logs, rate limits, cost tracking, and plugin docs cache. Includes functions: `getLicenseByKey()`, `updateLicense()`, `incrementTokensUsed()`, `createAuditLog()`, `getRateLimitCount()`, `incrementRateLimitCounter()`, `checkAndIncrementRateLimit()`, `updateCostTracking()`, `getCostTracking()`, analytics functions, and plugin docs operations |
+| `firestore.ts` | **Firestore database operations** - CRUD operations for licenses, audit logs, rate limits, cost tracking, and plugin docs cache. Includes functions: `getLicenseByKey()`, `updateLicense()`, `incrementTokensUsed()`, `createAuditLog()`, `getRateLimitCount()`, `incrementRateLimitCounter()`, `checkAndIncrementRateLimit()`, `updateCostTracking()`, `getCostTracking()`, `normalizePluginVersion()` (X.Y version matching), analytics functions, and plugin docs operations |
 | `jwt.ts` | **JWT handling** - Token creation and verification for site authentication. Functions: `createToken()`, `verifyToken()`, `extractBearerToken()` |
 | `jwt.test.ts` | Unit tests for JWT operations |
 | `logger.ts` | **Structured logging** - Creates Logger instances with context for Cloud Functions logging |
-| `secrets.ts` | **Google Cloud Secrets** - Defines secret references for API keys (Gemini, Claude, OpenAI, JWT) using Firebase Functions params |
+| `secrets.ts` | **Google Cloud Secrets** - Defines secret references for API keys (Gemini, Claude, JWT) using Firebase Functions params |
 
 ---
 
@@ -165,7 +165,17 @@ Business logic services.
 | `licensing.ts` | **License validation service** - Business logic for license verification, quota checking, and status validation. Functions: `validateLicenseKey()`, `checkQuota()`, `isLicenseExpired()` |
 | `licensing.test.ts` | Unit tests for licensing service |
 | `modelService.ts` | **AI Model routing service** - Orchestrates AI requests with primary/fallback logic. Selects provider based on request, handles retries, and manages fallback to secondary provider |
-| `pluginDocsResearch.ts` | **Plugin documentation research** - Uses AI to research WordPress plugin documentation when not in cache. Includes `PluginDocsResearchService` class, research prompts, and `KNOWN_PLUGIN_DOCS` fallback data for popular plugins |
+| `pluginDocsResearch.ts` | **Plugin documentation research** - Uses Claude AI to research comprehensive WordPress plugin documentation when not in cache. Includes `PluginDocsResearchService` class, research prompts for code examples, best practices, and data structures. Normalizes versions to X.Y format |
+
+---
+
+### /functions/src/scripts/
+
+Maintenance and utility scripts.
+
+| File | Description |
+|------|-------------|
+| `cleanupPluginDocsCache.ts` | **Cache cleanup script** - Deletes old plugin docs entries with X.Y.Z format versions (superseded by X.Y version matching). Run via Firebase Functions shell: `firebase functions:shell` then `cleanupPluginDocsCache()` |
 
 ---
 

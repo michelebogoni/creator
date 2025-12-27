@@ -109,17 +109,26 @@ Tracking costi mensili per licenza.
 
 Cache centralizzata documentazione plugin WordPress.
 
+**NOTA IMPORTANTE - Version Matching X.Y:**
+Le versioni sono normalizzate al formato X.Y (es: `6.2.5` → `6.2`). Questo riduce la frammentazione della cache - gli aggiornamenti patch non richiedono nuova ricerca AI.
+
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
 | `plugin_slug` | string | Es: `advanced-custom-fields` |
-| `plugin_version` | string | Es: `6.2.5` |
+| `plugin_version` | string | Formato X.Y, es: `6.2` (normalizzato da `6.2.5`) |
 | `docs_url` | string | URL documentazione ufficiale |
-| `main_functions` | string[] | Funzioni principali |
+| `functions_url` | string | URL reference funzioni |
+| `main_functions` | string[] | Funzioni principali con signature |
 | `api_reference` | string | URL API reference |
 | `version_notes` | string[] | Note versione |
+| `description` | string | Descrizione dettagliata plugin |
+| `code_examples` | string[] | Esempi di codice funzionanti |
+| `best_practices` | string[] | Best practices e linee guida |
+| `data_structures` | string[] | Strutture dati (meta keys, JSON schemas) |
+| `component_types` | object[] | Tipi componenti per page builders |
 | `cached_at` | Timestamp | Data cache |
 | `cache_hits` | number | Contatore utilizzi |
-| `source` | string | `ai_research` \| `manual` \| `fallback` |
+| `source` | string | `ai_research` \| `manual` |
 | `research_meta` | object | Metadati ricerca AI |
 
 ---
@@ -201,13 +210,14 @@ Ritorna risposta AI
 ```
 POST /api/plugin-docs/research
       ↓
+Normalizza versione a X.Y (es: 3.34.0 → 3.34)
+      ↓
 Check cache (plugin_docs_cache)
       ↓
 Se cache miss:
-  ├→ Check fallback docs (plugin noti)
-  └→ Usa Gemini per ricerca
+  └→ Usa Claude per ricerca AI completa
       ↓
-Salva risultato in cache
+Salva risultato in cache (con versione X.Y)
       ↓
 Ritorna documentazione
 ```
@@ -260,12 +270,12 @@ functions/
 │   ├── services/
 │   │   ├── modelService.ts      # Logica AI con fallback
 │   │   ├── licensing.ts         # Validazione licenze
-│   │   └── pluginDocsResearch.ts
+│   │   └── pluginDocsResearch.ts # Ricerca docs con AI
 │   ├── providers/
-│   │   ├── gemini.ts            # Provider Gemini
-│   │   └── claude.ts            # Provider Claude
+│   │   ├── gemini.ts            # Provider Gemini (fallback)
+│   │   └── claude.ts            # Provider Claude (primario)
 │   ├── lib/
-│   │   ├── firestore.ts         # Operazioni database
+│   │   ├── firestore.ts         # Operazioni database + normalizePluginVersion()
 │   │   ├── jwt.ts               # Gestione JWT
 │   │   ├── secrets.ts           # Definizione secrets
 │   │   └── logger.ts            # Logging
@@ -274,6 +284,8 @@ functions/
 │   │   └── rateLimit.ts         # Rate limiting
 │   ├── config/
 │   │   └── models.ts            # Configurazione modelli AI
+│   ├── scripts/
+│   │   └── cleanupPluginDocsCache.ts  # Cleanup cache vecchie versioni X.Y.Z
 │   ├── types/
 │   │   ├── License.ts
 │   │   ├── Route.ts
