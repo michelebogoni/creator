@@ -17,6 +17,7 @@ import {
   incrementPluginDocsCacheHits,
   getPluginDocsStats,
   getPluginDocsAllVersions,
+  normalizePluginVersion,
   db,
   COLLECTIONS,
 } from "../../lib/firestore";
@@ -70,9 +71,9 @@ export const getPluginDocsApi = functions
       // Path format: /plugin-docs/:plugin_slug/:version
       const pathParts = req.path.split("/").filter(Boolean);
       const pluginSlug = pathParts[0];
-      const pluginVersion = pathParts[1];
+      const rawVersion = pathParts[1];
 
-      if (!pluginSlug || !pluginVersion) {
+      if (!pluginSlug || !rawVersion) {
         res.status(400).json({
           success: false,
           error: "Missing plugin_slug or version in path",
@@ -80,7 +81,14 @@ export const getPluginDocsApi = functions
         return;
       }
 
-      logger.info("Getting plugin docs", { pluginSlug, pluginVersion });
+      // Normalize version to X.Y format
+      const pluginVersion = normalizePluginVersion(rawVersion);
+
+      logger.info("Getting plugin docs", {
+        pluginSlug,
+        rawVersion,
+        normalizedVersion: pluginVersion,
+      });
 
       // Get from cache
       const docs = await getPluginDocs(pluginSlug, pluginVersion);
@@ -177,9 +185,13 @@ export const savePluginDocsApi = functions
         return;
       }
 
+      // Normalize version to X.Y format
+      const normalizedVersion = normalizePluginVersion(body.plugin_version);
+
       logger.info("Saving plugin docs", {
         pluginSlug: body.plugin_slug,
-        pluginVersion: body.plugin_version,
+        rawVersion: body.plugin_version,
+        normalizedVersion,
       });
 
       // Check if already exists
@@ -389,9 +401,13 @@ export const researchPluginDocsApi = functions
         return;
       }
 
+      // Normalize version to X.Y format to reduce cache fragmentation
+      const normalizedVersion = normalizePluginVersion(body.plugin_version);
+
       logger.info("Researching plugin docs", {
         pluginSlug: body.plugin_slug,
-        pluginVersion: body.plugin_version,
+        rawVersion: body.plugin_version,
+        normalizedVersion,
       });
 
       // Check if this is a WordPress Core docs request
@@ -400,7 +416,7 @@ export const researchPluginDocsApi = functions
         if (wpDocs) {
           logger.info("Returning WordPress Core docs", {
             topic: body.plugin_slug,
-            version: body.plugin_version,
+            version: normalizedVersion,
           });
 
           // Return WordPress Core docs without caching (they're static)
@@ -410,7 +426,7 @@ export const researchPluginDocsApi = functions
             source: "wordpress_core",
             data: {
               plugin_slug: body.plugin_slug,
-              plugin_version: body.plugin_version,
+              plugin_version: normalizedVersion,
               docs_url: wpDocs.docs_url,
               api_reference: wpDocs.api_reference,
               main_functions: wpDocs.main_functions,
@@ -434,7 +450,8 @@ export const researchPluginDocsApi = functions
       }
 
       // Check cache first - but only return if documentation is comprehensive
-      const cached = await getPluginDocs(body.plugin_slug, body.plugin_version);
+      // Use normalizedVersion for cache lookup
+      const cached = await getPluginDocs(body.plugin_slug, normalizedVersion);
       const isComplete = cached &&
         cached.code_examples && cached.code_examples.length > 0 &&
         cached.best_practices && cached.best_practices.length > 0 &&
@@ -442,7 +459,7 @@ export const researchPluginDocsApi = functions
 
       if (cached && isComplete) {
         // Increment cache hits
-        incrementPluginDocsCacheHits(body.plugin_slug, body.plugin_version).catch(
+        incrementPluginDocsCacheHits(body.plugin_slug, normalizedVersion).catch(
           (err) => {
             logger.warn("Failed to increment cache hits", { error: err.message });
           }
@@ -481,14 +498,19 @@ export const researchPluginDocsApi = functions
         logger
       );
 
-      const result = await researchService.research(body);
+      // Pass normalized version to research service
+      const researchRequest = {
+        ...body,
+        plugin_version: normalizedVersion,
+      };
+      const result = await researchService.research(researchRequest);
 
       if (!result.success) {
         // Create a basic fallback entry
         const wpOrgUrl = `https://wordpress.org/plugins/${body.plugin_slug}/`;
         const fallbackEntry = await savePluginDocs({
           plugin_slug: body.plugin_slug,
-          plugin_version: body.plugin_version,
+          plugin_version: normalizedVersion,
           docs_url: wpOrgUrl,
           main_functions: [],
           source: "fallback",
@@ -505,7 +527,7 @@ export const researchPluginDocsApi = functions
       }
 
       // Get the cached entry
-      const entry = await getPluginDocs(body.plugin_slug, body.plugin_version);
+      const entry = await getPluginDocs(body.plugin_slug, normalizedVersion);
 
       res.status(201).json({
         success: true,

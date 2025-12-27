@@ -16,7 +16,7 @@
 
 import { ModelService, ModelServiceKeys } from "./modelService";
 import { Logger } from "../lib/logger";
-import { savePluginDocs, getPluginDocs } from "../lib/firestore";
+import { savePluginDocs, getPluginDocs, normalizePluginVersion } from "../lib/firestore";
 import {
   ResearchPluginDocsRequest,
   ResearchPluginDocsResponse,
@@ -166,14 +166,18 @@ export class PluginDocsResearchService {
   async research(
     request: ResearchPluginDocsRequest
   ): Promise<ResearchPluginDocsResponse> {
-    const { plugin_slug, plugin_version, plugin_name, plugin_uri } = request;
+    const { plugin_slug, plugin_name, plugin_uri } = request;
+
+    // Normalize version to X.Y format
+    const plugin_version = normalizePluginVersion(request.plugin_version);
 
     this.logger.info("Starting comprehensive plugin docs research", {
       plugin_slug,
-      plugin_version,
+      rawVersion: request.plugin_version,
+      normalizedVersion: plugin_version,
     });
 
-    // Check cache first
+    // Check cache first (using normalized version)
     const cached = await getPluginDocs(plugin_slug, plugin_version);
     if (cached && this.isDocumentationComplete(cached)) {
       this.logger.info("Complete plugin docs found in cache", { plugin_slug });

@@ -306,10 +306,12 @@ Cache centralizzata documentazione plugin WordPress e **WordPress Core API**.
 
 > **PRINCIPIO ARCHITETTURALE**: Il sistema NON usa fallback hardcodati. Tutta la documentazione dei plugin viene ricercata dinamicamente tramite AI research, garantendo informazioni sempre aggiornate e complete.
 
+> **VERSION MATCHING X.Y**: Il sistema utilizza solo le prime due parti della versione (major.minor) per la cache. Questo riduce la frammentazione della cache ed evita ricerche AI non necessarie per aggiornamenti patch (es: 3.33.4 → 3.34.0 ora usano entrambi la documentazione "3.33" o "3.34").
+
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
 | `plugin_slug` | string | Es: `advanced-custom-fields` o `wordpress-core/media` |
-| `plugin_version` | string | Es: `6.2.5` o `6.7` (per WP Core) |
+| `plugin_version` | string | **Formato X.Y** (solo major.minor). Es: `6.2` o `6.7` (per WP Core) |
 | `docs_url` | string | URL documentazione ufficiale |
 | `functions_url` | string | URL documentazione funzioni (opzionale) |
 | `main_functions` | string[] | **TUTTE** le funzioni principali (senza limite) |
@@ -380,6 +382,38 @@ AI genera codice CORRETTO che registra l'immagine nella Media Library
 ### Sistema AI Research per Plugin Documentation
 
 Il sistema utilizza un approccio **100% dinamico** per la documentazione dei plugin. Nessun fallback hardcodato.
+
+#### Version Matching X.Y (Major.Minor Only)
+
+Il sistema normalizza tutte le versioni dei plugin al formato **X.Y** (major.minor), ignorando le parti patch (Z) e build (W). Questo approccio è basato sull'osservazione che la documentazione dei plugin raramente cambia tra versioni patch.
+
+**Esempi di normalizzazione**:
+- `3.34.0` → `3.34`
+- `6.2.5` → `6.2`
+- `1.0.0.1` → `1.0`
+- `2.0` → `2.0`
+- `latest` → `latest`
+
+**Vantaggi**:
+1. **Riduzione cache fragmentation**: Non si creano entry separate per 3.33.4, 3.33.5, 3.33.6
+2. **Meno ricerche AI**: Aggiornamenti patch non triggherano nuove ricerche costose
+3. **Cache hit rate maggiore**: Più utenti condividono la stessa documentazione
+4. **Timeout ridotti**: Meno ricerche = meno attese per l'utente
+
+**Implementazione**:
+- `normalizePluginVersion()` in `firestore.ts` (Firebase)
+- `normalize_plugin_version()` in `ProxyClient.php` (WordPress)
+- Document ID formato: `{plugin_slug}:{normalized_version}` (es: `elementor:3.34`)
+
+**Script di pulizia cache**:
+Dopo il deployment, eseguire `cleanupPluginDocsCache.ts` per eliminare le entry con versioni complete (X.Y.Z) che non verranno più utilizzate:
+```bash
+cd functions
+npx ts-node src/scripts/cleanupPluginDocsCache.ts
+```
+
+**Timeout documentazione**:
+Il timeout per le richieste di documentazione è stato aumentato da 60 a **300 secondi** (5 minuti) per permettere ricerche AI complete senza interruzioni.
 
 #### Principi Architetturali
 
@@ -557,10 +591,12 @@ functions/
 │   │   ├── gemini.ts                 # Provider Gemini
 │   │   └── claude.ts                 # Provider Claude
 │   ├── lib/
-│   │   ├── firestore.ts              # Operazioni database
+│   │   ├── firestore.ts              # Operazioni database + normalizePluginVersion()
 │   │   ├── jwt.ts                    # Gestione JWT
 │   │   ├── secrets.ts                # Definizione secrets
 │   │   └── logger.ts                 # Logging strutturato
+│   ├── scripts/
+│   │   └── cleanupPluginDocsCache.ts # Script pulizia cache versioni X.Y.Z
 │   ├── middleware/
 │   │   ├── auth.ts                   # Autenticazione JWT
 │   │   └── rateLimit.ts              # Rate limiting

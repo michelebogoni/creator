@@ -44,6 +44,39 @@ class ProxyClient {
     }
 
     /**
+     * Normalize plugin version to X.Y format (major.minor only)
+     *
+     * This reduces cache fragmentation by ignoring patch (Z) and build (W) version numbers.
+     * Plugin documentation rarely changes between patch versions.
+     *
+     * Examples:
+     * - "3.34.0" -> "3.34"
+     * - "6.2.5" -> "6.2"
+     * - "1.0.0.1" -> "1.0"
+     * - "2.0" -> "2.0"
+     * - "latest" -> "latest"
+     *
+     * @param string|null $version Full version string (e.g., "3.34.0").
+     * @return string Normalized version (e.g., "3.34").
+     */
+    public function normalize_plugin_version( ?string $version ): string {
+        if ( empty( $version ) || 'latest' === $version ) {
+            return $version ?? '0.0';
+        }
+
+        // Split by dots and take only first two parts (X.Y).
+        $parts = explode( '.', $version );
+
+        if ( count( $parts ) < 2 ) {
+            // If only one part, add .0.
+            return $parts[0] . '.0';
+        }
+
+        // Return X.Y only.
+        return $parts[0] . '.' . $parts[1];
+    }
+
+    /**
      * Send a chat message to the AI proxy
      *
      * Uses the /api/ai/route-request endpoint which returns structured JSON responses.
@@ -192,12 +225,15 @@ class ProxyClient {
             return null;
         }
 
+        // Normalize version to X.Y format to reduce cache fragmentation.
+        $normalized_version = $this->normalize_plugin_version( $version );
+
         // Use the research endpoint which handles cache + AI research.
         $endpoint = $this->proxy_url . '/api/plugin-docs/research';
 
         $body = [
             'plugin_slug'    => $plugin_slug,
-            'plugin_version' => $version ?? 'latest',
+            'plugin_version' => $normalized_version,
         ];
 
         if ( $plugin_name ) {
@@ -205,14 +241,16 @@ class ProxyClient {
         }
 
         $this->log_plugin_docs_debug( $plugin_slug, 'Requesting docs', [
-            'endpoint' => $endpoint,
-            'body'     => $body,
+            'endpoint'           => $endpoint,
+            'raw_version'        => $version,
+            'normalized_version' => $normalized_version,
+            'body'               => $body,
         ] );
 
         $response = wp_remote_post(
             $endpoint,
             [
-                'timeout'     => 60, // Longer timeout for AI research.
+                'timeout'     => 300, // Longer timeout for AI research (5 minutes).
                 'headers'     => [
                     'Content-Type'  => 'application/json',
                     'Authorization' => 'Bearer ' . $site_token,
