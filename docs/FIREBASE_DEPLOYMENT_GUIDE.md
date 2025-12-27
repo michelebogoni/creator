@@ -225,8 +225,12 @@ git reset --hard origin/<branch>
 │   │   │   └── plugin-docs/
 │   │   │       └── pluginDocs.ts        # Plugin docs cache API
 │   │   ├── services/
-│   │   │   └── modelService.ts          # AI model service
+│   │   │   ├── modelService.ts          # AI model service
+│   │   │   └── pluginDocsResearch.ts    # AI docs research
+│   │   ├── scripts/
+│   │   │   └── cleanupPluginDocsCache.ts # Cache cleanup script
 │   │   ├── lib/
+│   │   │   ├── firestore.ts             # DB ops + normalizePluginVersion()
 │   │   │   └── secrets.ts               # Secret definitions
 │   │   └── index.ts                     # Function exports
 │   ├── .eslintrc.js                     # ESLint configuration
@@ -253,6 +257,13 @@ gcloud secrets get-iam-policy <SECRET_NAME> --project creator-ai-proxy
 
 # Test function locally
 cd functions && npm run serve
+
+# Run maintenance scripts via Firebase Functions shell
+firebase functions:shell --project creator-ai-proxy
+# Then in the shell:
+# > admin.initializeApp()
+# > const db = admin.firestore()
+# > cleanupPluginDocsCache()
 ```
 
 ## Contact / Resources
