@@ -49,6 +49,11 @@
 	--creator-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* Hide WordPress admin footer in chat page */
+#wpfooter {
+	display: none !important;
+}
+
 /* ============================================
    WordPress Admin Override
    ============================================ */
