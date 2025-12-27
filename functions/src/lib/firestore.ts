@@ -603,17 +603,54 @@ import {
 } from "../types/PluginDocs";
 
 /**
+ * Normalizes a plugin version to X.Y format (major.minor only)
+ *
+ * This reduces cache fragmentation by ignoring patch (Z) and build (W) version numbers.
+ * Plugin documentation rarely changes between patch versions, so we cache by major.minor.
+ *
+ * Examples:
+ * - "3.34.0" -> "3.34"
+ * - "6.2.5" -> "6.2"
+ * - "1.0.0.1" -> "1.0"
+ * - "2.0" -> "2.0"
+ * - "latest" -> "latest"
+ * - "" -> "0.0"
+ *
+ * @param {string} version - Full version string (e.g., "3.34.0")
+ * @returns {string} Normalized version (e.g., "3.34")
+ */
+export function normalizePluginVersion(version: string): string {
+  if (!version || version === "latest") {
+    return version || "0.0";
+  }
+
+  // Split by dots and take only first two parts (X.Y)
+  const parts = version.split(".");
+
+  if (parts.length < 2) {
+    // If only one part, add .0
+    return `${parts[0]}.0`;
+  }
+
+  // Return X.Y only
+  return `${parts[0]}.${parts[1]}`;
+}
+
+/**
  * Gets the document ID for a plugin docs entry
  *
+ * Uses normalized X.Y version for cache key to reduce fragmentation.
+ *
  * @param {string} pluginSlug - Plugin slug
- * @param {string} pluginVersion - Plugin version
+ * @param {string} pluginVersion - Plugin version (will be normalized to X.Y)
  * @returns {string} Document ID
  */
 export function getPluginDocsDocId(
   pluginSlug: string,
   pluginVersion: string
 ): string {
-  return `${pluginSlug}:${pluginVersion}`;
+  const normalizedVersion = normalizePluginVersion(pluginVersion);
+  return `${pluginSlug}:${normalizedVersion}`;
 }
 
 /**
@@ -666,13 +703,16 @@ export async function getPluginDocs(
 export async function savePluginDocs(
   data: CreatePluginDocsData
 ): Promise<PluginDocsEntry> {
+  // Normalize version to X.Y format
+  const normalizedVersion = normalizePluginVersion(data.plugin_version);
   const docId = getPluginDocsDocId(data.plugin_slug, data.plugin_version);
   const docRef = db.collection(COLLECTIONS.PLUGIN_DOCS_CACHE).doc(docId);
 
   // Build entry with only defined values (Firestore doesn't accept undefined)
+  // Store normalized version in the document
   const entry: PluginDocsEntry = {
     plugin_slug: data.plugin_slug,
-    plugin_version: data.plugin_version,
+    plugin_version: normalizedVersion,
     docs_url: data.docs_url,
     main_functions: data.main_functions,
     cached_at: Timestamp.now(),
