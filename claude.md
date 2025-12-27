@@ -669,6 +669,10 @@ creator-core/
 - **Creator Logo**: Mostra il logo `creator-black.svg` (cerchio nero + freccia bianca) accanto al nome "Creator"
 - **Message Width Matching**: Messaggi Creator hanno stessa larghezza max (70%) dei messaggi utente
 - **ensureReadableMessage()**: Estrae messaggi leggibili da JSON, con fallback contestuali per tipo
+- **loadConversationHistory()**: Carica e renderizza i messaggi storici quando si apre una chat esistente
+  - Chiamata da `init()` se `creatorChat.conversationHistory` contiene messaggi
+  - Nasconde automaticamente il messaggio di benvenuto
+  - I messaggi vengono passati dal PHP tramite `wp_localize_script()`
 - **File Attachments**: Supporto per allegati multimediali
   - `handleAttachClick()`: Apre il file picker
   - `handleFileSelect()`: Legge i file come base64 e li aggiunge a `attachedFiles[]`
@@ -729,6 +733,13 @@ creator-core/
 - **SSE Progress Events**: Invia eventi `connected`, `progress`, `complete`, `error` durante l'elaborazione
   - `progress`: Include `display_message` (breve) e `detailed_message` (spiegazione completa AI)
   - `complete`: Contiene la risposta finale con tutti gli step eseguiti
+- **IMPORTANTE - Bug Fix execute_loop (Dicembre 2025)**:
+  - Nel metodo `execute_loop` (non-streaming, usato per messaggi con file allegati), i gestori `execute_step` e `execute` devono leggere il risultato dell'esecuzione da `$processed['execution_result']`
+  - **SBAGLIATO**: `$processed['data']['result']` → sempre null!
+  - **CORRETTO**: `$processed['execution_result']` → contiene il risultato effettivo
+  - ResponseHandler salva il risultato in `$processed['execution_result']`, non in `$processed['data']['result']`
+  - Questo bug causava loop infiniti: l'AI non capiva che lo step era completato perché riceveva null come risultato
+  - **Perché accadeva solo con file allegati**: POST `/chat` usa `execute_loop` (bug), mentre GET `/chat/stream` usa `execute_loop_streaming` (funzionava correttamente)
 
 #### 2. ConversationManager
 
@@ -1160,6 +1171,7 @@ cd functions && npm run serve
 - ✅ **Loop Limit 100**: Supporto task complessi fino a 100 iterazioni
 - ✅ **Message Validation**: Messaggi sempre leggibili (mai JSON raw in chat)
 - ✅ **JSON Parsing Robusto**: Multi-strategy parsing con fallback UTF8 e debug logging
+- ✅ **Chat History Loading**: Caricamento messaggi storici quando si apre una vecchia chat
 
 #### Test Coverage
 - ✅ 121 test cases Firebase (unit + integration)
