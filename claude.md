@@ -497,6 +497,44 @@ DEFAULT_ROUTING = {
 
 Se Claude fallisce per qualsiasi motivo (rate limit, errore API, timeout), il sistema prova automaticamente Gemini come fallback, garantendo alta disponibilità del servizio.
 
+#### Selezione Modello UI (Non Implementata)
+
+> **NOTA IMPORTANTE**: La selezione del modello da parte dell'utente è **attualmente non implementata** nell'interfaccia frontend, ma il codice per supportarla esiste e viene mantenuto per una possibile implementazione futura.
+
+**Stato attuale:**
+- **Default**: Claude (`claude-opus-4-5-20251101`)
+- **Gemini non usato**: Al momento Gemini viene usato solo come fallback automatico se Claude fallisce
+- **UI assente**: L'interfaccia chat non mostra alcun toggle per selezionare Gemini o Claude
+
+**Codice esistente per selezione modello:**
+
+1. **Frontend** (`chat-interface.js:183-186`):
+   ```javascript
+   getSelectedModel: function() {
+       const selected = $('input[name="chat_model"]:checked').val();
+       return selected || $('.creator-chat-container').data('model') || 'claude';
+   }
+   ```
+
+2. **Backend** (`routeRequest.ts:189-192`):
+   ```typescript
+   // Validate model if provided (default to claude)
+   // NOTE: Model selection UI is not currently implemented in frontend
+   // but the code supports it for future implementation
+   const requestedModel = (body.model as string) || "claude";
+   ```
+
+3. **Event Handler** (`chat-interface.js:88`):
+   ```javascript
+   $('input[name="chat_model"]').on('change', this.handleModelToggle.bind(this));
+   ```
+
+**Per implementare la selezione modello in futuro:**
+1. Aggiungere radio buttons o toggle switch nell'HTML della chat interface (PHP)
+2. I radio buttons devono avere `name="chat_model"` e valori `gemini` o `claude`
+3. Il codice JavaScript esistente gestirà automaticamente la selezione
+4. Il valore selezionato verrà passato al backend via il parametro `model` nel body della richiesta
+
 ### Struttura Directory Firebase
 
 ```
